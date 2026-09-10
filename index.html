@@ -224,6 +224,13 @@
   .news-tag.dim{ font-weight:600; opacity:.8; }
   .news-tag.src{ color:var(--text); font-weight:600; text-transform:none; letter-spacing:0; }
   .news-tag.prod{ color:var(--accent); }
+  .news-tag.lane{ color:#5eb3f6; }
+  .news-tag.breaking{ color:#fff; background:var(--bad); padding:1px 6px; border-radius:4px; }
+  .news-lane.breaking.on{ background:#3a1d1a; color:#ff8a7a; border-color:var(--bad); }
+  .news-imp{ position:relative; }
+  .news-trend{ font-size:9.5px; font-weight:700; margin-top:3px; padding:1px 0; border-top:1px solid var(--border); color:var(--text-dim); }
+  .news-trend.warm{ color:var(--accent); }
+  .news-trend.hot{ color:#ff8a7a; }
 </style>
 </head>
 <body>
@@ -2252,12 +2259,16 @@ const NEWS_MIN_CONF = 50;
 const NEWS_WINDOW_MS = 24 * 3600 * 1000;
 const NEWS_HISTORY_DAYS = 14;
 const NEWS_PRODUCTS = ['ALL', 'SBM', 'CORN', 'WHEAT', 'FREIGHT', 'MACRO'];
+// The desk's reading lanes. BREAKING is a flag on top of a lane (a port attack is POLITICS *and*
+// breaking), so it is a filter of its own rather than a fifth category.
+const NEWS_CATEGORIES = ['ALL', 'BREAKING', 'POLITICS', 'AGRI', 'REPORTS', 'MACRO'];
 
 let newsDocs = [];                 // newest first, as delivered by Firestore
 let newsMeta = null;
 let newsUnsub = null;
 let newsMetaUnsub = null;
 let newsUI = {
+  category: 'ALL',       // wire filter: reading lane (or BREAKING flag)
   product: 'ALL',        // wire filter
   minImpactOn: false,    // "50+" chip
   search: '',
@@ -2303,6 +2314,11 @@ function newsQualifies(s){
 }
 function newsForProduct(product){
   return product === 'ALL' ? newsDocs : newsDocs.filter(s => s.product === product);
+}
+function newsForCategory(rows, category){
+  if (category === 'ALL') return rows;
+  if (category === 'BREAKING') return rows.filter(s => s.breaking === true);
+  return rows.filter(s => s.category === category);
 }
 
 // Trailing-24h reading ending at `endMs` over an ascending-sorted array of qualifying stories.
@@ -2475,7 +2491,17 @@ function renderNewsWire(){
   const wrap = document.createElement('div');
   wrap.className = 'news-wire';
 
-  // controls
+  // controls — row 1: reading lane, row 2: product + 50+ + search
+  const laneBar = document.createElement('div');
+  laneBar.className = 'news-bar';
+  for (const c of NEWS_CATEGORIES){
+    const chip = document.createElement('span');
+    chip.className = 'month-chip news-lane' + (newsUI.category === c ? ' on' : '') + (c === 'BREAKING' ? ' breaking' : '');
+    chip.textContent = c;
+    chip.addEventListener('click', () => { newsUI.category = c; renderNewsBody(); });
+    laneBar.appendChild(chip);
+  }
+  wrap.appendChild(laneBar);
   const bar = document.createElement('div');
   bar.className = 'news-bar';
   for (const p of NEWS_PRODUCTS){
@@ -2503,8 +2529,9 @@ function renderNewsWire(){
   // rows
   const list = document.createElement('div');
   list.id = 'newsList';
-  let rows = newsForProduct(newsUI.product);
+  let rows = newsForCategory(newsForProduct(newsUI.product), newsUI.category);
   if (newsUI.minImpactOn) rows = rows.filter(s => s.impact >= NEWS_MIN_IMPACT);
+  rows = rows.slice().sort((a, b) => b.ms - a.ms);   // newest first, always
   const countEl = document.createElement('div');
   countEl.className = 'news-count';
   countEl.id = 'newsCount';
@@ -2512,7 +2539,7 @@ function renderNewsWire(){
   for (const s of rows){
     const row = document.createElement('div');
     row.className = 'news-row';
-    row.dataset.text = `${s.headline} ${s.summary || ''} ${s.source || ''} ${s.country || ''} ${s.eventType || ''}`.toLowerCase();
+    row.dataset.text = `${s.headline} ${s.summary || ''} ${s.source || ''} ${s.country || ''} ${s.eventType || ''} ${s.category || ''} ${(s.sources || []).join(' ')}`.toLowerCase();
     const dirClass = s.direction === 'BULLISH' ? 'bull' : s.direction === 'BEARISH' ? 'bear' : 'neu';
     const time = document.createElement('div');
     time.className = 'news-time';
@@ -2521,6 +2548,15 @@ function renderNewsWire(){
     imp.className = 'news-imp ' + dirClass;
     imp.textContent = s.impact;
     imp.title = `impact ${s.impact} · confidence ${s.confidence}`;
+    // trend = how many publishers carry this event; the event counts ONCE in net impact.
+    const trend = Math.max(1, Number(s.trend || s.sourceCount || 1));
+    if (trend > 1){
+      const tr = document.createElement('div');
+      tr.className = 'news-trend' + (trend >= 10 ? ' hot' : trend >= 5 ? ' warm' : '');
+      tr.textContent = '×' + trend;
+      tr.title = `trend ${trend}: carried by ${trend} publishers` + (Array.isArray(s.sources) && s.sources.length ? ' — ' + s.sources.slice(0, 12).join(', ') : '');
+      imp.appendChild(tr);
+    }
     const main = document.createElement('div');
     main.className = 'news-main';
     const a = document.createElement('a');
@@ -2539,10 +2575,12 @@ function renderNewsWire(){
     const tags = document.createElement('div');
     tags.className = 'news-tags';
     const tag = (txt, cls) => { const t = document.createElement('span'); t.className = 'news-tag ' + (cls || ''); t.textContent = txt; tags.appendChild(t); };
+    if (s.breaking === true) tag('BREAKING', 'breaking');
     tag(s.direction, dirClass);
     tag(`conf ${s.confidence}`, 'dim');
-    tag(s.source + (s.sourceCount > 1 ? ` +${s.sourceCount - 1}` : ''), 'src');
+    tag(s.source + (trend > 1 ? ` +${trend - 1}` : ''), 'src');
     tag(s.product, 'prod');
+    if (s.category) tag(s.category, 'lane');
     if (s.country) tag(s.country, 'dim');
     if (s.eventType) tag(s.eventType, 'dim');
     if (s.feed === 'sites') tag('site', 'dim');

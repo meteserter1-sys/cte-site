@@ -47,7 +47,7 @@ kullandıkça ödemeli. Günde ~500 başlık için aylık birkaç dolar.)
 3. Depo → **Settings → Secrets and variables → Actions → New repository secret**:
    * `FIREBASE_SERVICE_ACCOUNT` → 2. adımdaki JSON'un tamamı
    * `ANTHROPIC_API_KEY` → 3. adımdaki anahtar
-4. İsteğe bağlı **Variables**: `CLAUDE_MODEL` (varsayılan `claude-sonnet-4-5`),
+4. İsteğe bağlı **Variables**: `CLAUDE_MODEL` (varsayılan `claude-sonnet-5`),
    `NEWS_MAX_NEW` (çalıştırma başına en fazla kaç yeni haber sınıflandırılsın, varsayılan 80).
 5. Depo → **Actions** → *CTE newsfeed* → **Run workflow** ile ilk çalıştırmayı elle tetikle.
    Log'da `wrote N docs to Firestore` görmelisin. Sonrası her 30 dakikada otomatik.
@@ -75,6 +75,23 @@ python newsfeed/collector.py --dry-run --mock      # Claude'suz, Firestore'suz: 
 set ANTHROPIC_API_KEY=...                           # Windows cmd
 python newsfeed/collector.py --dry-run             # gerçek sınıflandırma, yazmadan
 ```
+
+## Kaynaklar, kategoriler, trend (masayla kararlaştırıldı)
+
+* **Kaynak:** Google News RSS aramaları, 6 dil — İngilizce, Rusça, Ukraynaca, Portekizce (BR),
+  İspanyolca (AR), Çince. Sorgular `GOOGLE_NEWS_QUERIES` listesinde. Seçilmiş yayıncı listesi
+  (`SITE_FEEDS`) şimdilik boş; masa listeyi verince açılacak.
+* **Kategori** (okuma şeridi, sayfada çip): POLITICS (politika, tarife, yasak, savaş, saldırı),
+  AGRI (mahsul, hasat, hava, verim, ekim, G/E, kapanış stokları, ihracat rakamları),
+  REPORTS (USDA, NOAA, CONAB, Bolsa de Cereales, IKAR, SovEcon, IGC, FAO — kaynağı kurum olan),
+  MACRO (navlun, Brent, enerji, Fed, DXY, VIX, kur). **BREAKING** ayrı bir bayrak: kategorinin
+  üstüne gelir, sayfada ayrı çip; modelden 10'da 1'den az beklenir.
+* **Trend:** aynı olayı kaç yayıncı veriyorsa o sayı. Google'ın birebir aynı başlığı getirdiği
+  yayıncılar + kümelemenin bağladığı farklı başlıklı raporlar. Olay **bir kez** etki katar;
+  trend sadece "buna bak" sinyalidir, aritmetiğe girmez.
+* **Kümeleme:** aynı ürün + aynı yön + aynı ülke + 36 saat içinde + İngilizce özetlerin
+  ortak kelime oranı ≥ %50 → aynı olay. İlk gelen rapor olayın başlığı olur, diğerleri
+  `trend`/`sources`'a eklenir. Eşik: `CLUSTER_OVERLAP`, pencere: `CLUSTER_HOURS`.
 
 ## Ayarlanabilir şeyler
 
