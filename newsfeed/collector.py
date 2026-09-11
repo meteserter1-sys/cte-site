@@ -80,7 +80,10 @@ GOOGLE_NEWS_QUERIES = [
     ('site:noticiasagricolas.com.br soja OR milho OR trigo',                            'pt-BR', 'BR', 'BR:pt-419'),
     # ── WORLD: war, politics, trade policy ──
     ('"Black Sea" grain OR "grain corridor" OR "grain exports" Ukraine Russia',         'en-US', 'US', 'US:en'),
-    ('(Houthi OR "Red Sea" OR "Bab-el-Mandeb" OR "Suez Canal") (vessel OR tanker OR ship OR shipping OR attack OR strike OR missile OR drone OR explosion)',
+    # Broad on purpose: Houthi/Bab-el-Mandeb/Mocha are specific enough on their own that an AND
+    # with "vessel/attack" words was dropping real coverage ("Why Yemen's Mocha port matters for
+    # global trade" has neither) — 2026-09-11, after finding Houthi coverage missing entirely.
+    ('Houthi OR "Bab-el-Mandeb" OR "Bab al-Mandeb" OR "Mocha port" OR "Red Sea shipping" OR "Red Sea security" OR "Suez Canal"',
                                                                                          'en-US', 'US', 'US:en'),
     ('пшеница экспорт OR урожай зерна OR "зерновой коридор" OR ИКАР',                   'ru', 'RU', 'RU:ru'),
     ('соя OR "соевый шрот" OR кукуруза экспорт OR порт Новороссийск зерно',             'ru', 'RU', 'RU:ru'),
@@ -107,6 +110,13 @@ SITE_FEEDS: list[tuple[str, str]] = [
     ('IGC via World Grain',           'https://www.world-grain.com/rss/topic/1069-igc-international-grains-council'),
     ('Karen Braun (X)',               'https://rss.xcancel.com/kannbwx/rss'),
     ('Andrey Sizov (X)',              'https://rss.xcancel.com/sizov_andre/rss'),
+    # FREIGHT — dedicated trade press; the Google News keyword queries above miss most of what
+    # these actually publish (dry-bulk rates, canal/strait disruption, vessel supply). Added
+    # 2026-09-11 after comparing against the desk's Inoreader: FreightWaves and Lloyd's List were
+    # both completely absent. FreightWaves' RSS is a general firehose (trucking included, not
+    # just ocean freight) — the classifier's own FREIGHT/SKIP rules do the filtering, same as
+    # every other broad source here.
+    ('FreightWaves',                  'https://www.freightwaves.com/news/feed'),
 ]
 
 PRODUCTS = ('SBM', 'CORN', 'WHEAT', 'FREIGHT', 'MACRO')
@@ -525,9 +535,13 @@ could would may might will can up down out about per vs
 export exports exporting exporter exporters import imports importing importer importers supply supplies demand
 price prices market markets grain grains crop crops trade trading shipment shipments
 wheat corn maize soybean soybeans soy soymeal meal sbm freight
-russia russian russias ukraine ukrainian brazil brazilian argentina argentine argentinian china chinese
 key main major big large ample tight amid seen hint hints hinting implies implying pointing adding adds
 threat threatens threatening risk risks routine update signal signals'''.split())
+# Country/region names (China, Russia, Brazil, ...) are deliberately NOT stopwords: they are
+# often the one word that ties two differently-worded reports of the very same event together
+# (e.g. two outlets both covering "China buys US soybeans" on the same day). The `same_event()`
+# country gate below only fires when BOTH docs carry a tagged country, so it isn't a substitute
+# for this signal on its own.
 
 
 def event_tokens(doc: dict) -> list[str]:
