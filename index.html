@@ -305,21 +305,21 @@
 </header>
 
 <div class="tabs">
-  <div class="tab active" data-tab="vietnam">Vietnam</div>
+  <div class="tab active" data-tab="newstab">News</div>
+  <div class="tab" data-tab="vietnam">Vietnam</div>
   <div class="tab" data-tab="malaysia">Malaysia</div>
   <div class="tab" data-tab="indonesia">Indonesia</div>
   <div class="tab" data-tab="inputtab">Input</div>
   <div class="tab" data-tab="historytab">History</div>
-  <div class="tab" data-tab="newstab">News</div>
 </div>
 
 <main>
-  <section id="vietnam" class="active"></section>
+  <section id="newstab" class="active"></section>
+  <section id="vietnam"></section>
   <section id="malaysia"></section>
   <section id="indonesia"></section>
   <section id="inputtab"></section>
   <section id="historytab"></section>
-  <section id="newstab"></section>
 </main>
 
 <div class="save-pill" id="savePill">Saved</div>
@@ -2114,6 +2114,12 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 
+// News is the default landing tab — render it once on load without waiting for a click.
+{
+  const startTab = document.querySelector('.tab.active');
+  if (startTab && startTab.dataset.tab === 'newstab') renderNewsTab();
+}
+
 document.querySelectorAll('.subtab').forEach(tab => {
   tab.addEventListener('click', () => {
     const scope = tab.closest('section');
@@ -2320,7 +2326,7 @@ const NEWS_MIN_IMPACT = 50;
 const NEWS_MIN_CONF = 50;
 const NEWS_WINDOW_MS = 24 * 3600 * 1000;
 const NEWS_HISTORY_DAYS = 10;
-const NEWS_PRODUCTS = ['ALL', 'SBM', 'CORN', 'WHEAT', 'FREIGHT', 'MACRO'];
+const NEWS_PRODUCTS = ['ALL', 'WHEAT', 'CORN', 'SBM', 'FREIGHT', 'MACRO'];
 const NEWS_TZ = 'Asia/Ho_Chi_Minh';
 // Web-push public key from Firebase Console → Cloud Messaging → Web Push certificates.
 // Public by design (it is the "VAPID public key"); paste it here once generated.
@@ -2625,7 +2631,7 @@ function renderNewsTab(){
     el.appendChild(clocks);
     const meta = document.createElement('div');
     meta.className = 'news-meta';
-    meta.innerHTML = `<span>Direction is a <b>price argument</b>, not sentiment — green argues the CFR cost up, red argues it down. Net impact = signed impact over a trailing 24h (impact ≥ ${NEWS_MIN_IMPACT}, confidence ≥ ${NEWS_MIN_CONF}). Times in Vietnam.</span>` +
+    meta.innerHTML = `<span></span>` +
       `<span class="news-meta-right"><span id="newsLastRun" class="news-lastrun">${newsLastRunLabel()}</span><button class="hbtn news-alerts-btn" id="newsAlertsBtn" title="Push alerts for BREAKING or impact ≥ 75">🔔 Alerts</button></span>`;
     el.appendChild(meta);
     const body = document.createElement('div');
@@ -2645,7 +2651,7 @@ function renderNewsBody(){
   const body = document.getElementById('newsBody');
   if (!body) return;
   if (!newsDocs.length){
-    body.innerHTML = '<div class="note">No events yet. The collector (GitHub Actions → <b>newsfeed/collector.py</b>) writes classified headlines into the Firestore <b>news</b> collection every 10 minutes; once it has run, they appear here automatically.</div>';
+    body.innerHTML = '<div class="note">No events yet.</div>';
     return;
   }
   // keep each lane box's own scroll position across live re-renders
