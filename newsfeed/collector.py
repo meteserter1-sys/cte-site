@@ -80,6 +80,8 @@ GOOGLE_NEWS_QUERIES = [
     ('site:noticiasagricolas.com.br soja OR milho OR trigo',                            'pt-BR', 'BR', 'BR:pt-419'),
     # ── WORLD: war, politics, trade policy ──
     ('"Black Sea" grain OR "grain corridor" OR "grain exports" Ukraine Russia',         'en-US', 'US', 'US:en'),
+    ('(Houthi OR "Red Sea" OR "Bab-el-Mandeb" OR "Suez Canal") (vessel OR tanker OR ship OR shipping OR attack OR strike OR missile OR drone OR explosion)',
+                                                                                         'en-US', 'US', 'US:en'),
     ('пшеница экспорт OR урожай зерна OR "зерновой коридор" OR ИКАР',                   'ru', 'RU', 'RU:ru'),
     ('соя OR "соевый шрот" OR кукуруза экспорт OR порт Новороссийск зерно',             'ru', 'RU', 'RU:ru'),
     ('експорт зерна OR пшениця OR кукурудза OR "зерновий коридор" OR порт Одеса',      'uk', 'UA', 'UA:uk'),
@@ -247,7 +249,11 @@ same order as the input, nothing else. Fields:
   "i"          : the input index (integer)
   "product"    : one of "SBM","CORN","WHEAT","FREIGHT","MACRO","SKIP"
                  SBM = soybeans / soybean meal / crush / soy oil complex / feed demand (hog, poultry herds)
-                 FREIGHT = dry bulk rates, FFA, bunker fuel, canals, port congestion, vessel supply
+                 FREIGHT = dry bulk rates, FFA, bunker fuel, canals, port congestion, vessel supply.
+                           Red Sea / Suez Canal / Bab-el-Mandeb disruption (Houthi attacks, vessel
+                           strikes, rerouting via the Cape of Good Hope) is FREIGHT — it raises transit
+                           time and cost on Asia-bound trade lanes. Classify it as FREIGHT regardless of
+                           country; do not SKIP it as "Yemen/Israel/Iran domestic news".
                  MACRO = only macro that reaches the grain complex: Brent and natural gas (fertiliser,
                          biofuel), Fed rate / dollar index (export competitiveness), BRL and ARS
                          (farmer selling), VIX only when it is a broad commodity risk-off
