@@ -30,9 +30,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: newsfeed/.cache
-          key: newsfeed-seen-${{ github.run_id }}
+          key: newsfeed-v3-${{ github.run_id }}
           restore-keys: |
-            newsfeed-seen-
+            newsfeed-v3-
 
       - name: Collect, classify, write to Firestore
         env:
@@ -48,4 +48,4 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: newsfeed/.cache
-          key: newsfeed-seen-${{ github.run_id }}
+          key: newsfeed-v3-${{ github.run_id }}
