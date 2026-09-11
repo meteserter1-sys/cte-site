@@ -291,6 +291,41 @@ story must get the same kind of score every time."""
 FEEDBACK_HINT = ''
 
 
+# Forcing the reply through a tool call (instead of asking the model to type out a JSON code
+# block) means the API itself guarantees a parseable, schema-shaped object every time — no more
+# markdown fences, commentary, or truncated/malformed JSON to regex out of free text.
+CLASSIFY_TOOL = {
+    'name': 'classify_headlines',
+    'description': "Return the desk's classification for every headline in the batch, same order as the input.",
+    'input_schema': {
+        'type': 'object',
+        'properties': {
+            'items': {
+                'type': 'array',
+                'items': {
+                    'type': 'object',
+                    'properties': {
+                        'i': {'type': 'integer', 'description': 'the input index'},
+                        'product': {'type': 'string', 'enum': list(PRODUCTS) + ['SKIP']},
+                        'direction': {'type': 'string', 'enum': ['BULLISH', 'BEARISH', 'NEUTRAL']},
+                        'impact': {'type': 'integer'},
+                        'confidence': {'type': 'integer'},
+                        'country': {'type': 'string', 'description': 'ISO-3166 alpha-2, or "" if global'},
+                        'category': {'type': 'string', 'enum': list(CATEGORIES)},
+                        'breaking': {'type': 'boolean'},
+                        'eventType': {'type': 'string', 'enum': list(EVENT_TYPES)},
+                        'summary': {'type': 'string'},
+                    },
+                    'required': ['i', 'product', 'direction', 'impact', 'confidence',
+                                 'country', 'category', 'breaking', 'eventType', 'summary'],
+                },
+            },
+        },
+        'required': ['items'],
+    },
+}
+
+
 def classify_with_claude(batch: list[dict], model: str) -> list[dict]:
     import anthropic  # local import so --mock works without the package configured
 
@@ -299,7 +334,7 @@ def classify_with_claude(batch: list[dict], model: str) -> list[dict]:
     for i, s in enumerate(batch):
         snippet = f' | {s["snippet"][:200]}' if s.get('snippet') else ''
         lines.append(f'{i}. [{s["source"]}] {s["headline"]}{snippet}')
-    user = 'Headlines:\n' + '\n'.join(lines) + '\n\nReturn the JSON array now.'
+    user = 'Headlines:\n' + '\n'.join(lines) + '\n\nClassify every headline above by calling classify_headlines.'
 
     # No `temperature`: the 1.x SDK dropped it. Determinism comes from the prompt's
     # "same kind of story → same kind of score" rule and the round-number instruction.
@@ -307,13 +342,16 @@ def classify_with_claude(batch: list[dict], model: str) -> list[dict]:
         model=model,
         max_tokens=4000,
         system=SYSTEM_PROMPT + FEEDBACK_HINT,
+        tools=[CLASSIFY_TOOL],
+        tool_choice={'type': 'tool', 'name': 'classify_headlines'},
         messages=[{'role': 'user', 'content': user}],
     )
-    text = ''.join(b.text for b in resp.content if getattr(b, 'type', '') == 'text')
-    m = re.search(r'\[.*\]', text, re.S)
-    if not m:
-        raise ValueError('no JSON array in model response: ' + text[:200])
-    return json.loads(m.group(0))
+    for block in resp.content:
+        if getattr(block, 'type', '') == 'tool_use' and block.name == 'classify_headlines':
+            items = block.input.get('items')
+            if isinstance(items, list):
+                return items
+    raise ValueError('model did not call classify_headlines: ' + repr(resp.stop_reason))
 
 
 def classify_mock(batch: list[dict]) -> list[dict]:
