@@ -182,22 +182,35 @@
   }
   /* ── News tab ─────────────────────────────────────────────────────────── */
   @media (max-width:560px){ .tab{ font-size:11.5px; padding:8px 4px; } }
-  .news-meta{ display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; color:var(--text-dim); font-size:11.5px; line-height:1.5; margin-bottom:12px; }
+  .news-clocks{ display:grid; grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)); gap:6px; margin-bottom:10px; }
+  .news-clock{ background:var(--panel); border:1px solid var(--border); border-radius:7px; padding:6px 8px; }
+  .news-clock-name{ font-size:9.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-dim); font-weight:700; }
+  .news-clock-time{ font-family:var(--mono); font-size:15px; font-weight:700; color:var(--text); margin-top:1px; white-space:nowrap; }
+  .news-cbot .news-clock-time{ font-size:11px; display:flex; align-items:center; gap:6px; letter-spacing:.04em; }
+  .news-cbot-dot{ width:9px; height:9px; border-radius:50%; background:#6b7c8d; flex-shrink:0; }
+  .news-cbot.open .news-cbot-dot{ background:var(--good); box-shadow:0 0 6px rgba(47,158,111,.8); }
+  .news-cbot.open .news-clock-time{ color:var(--good); }
+  .news-cbot.pause .news-cbot-dot{ background:#e0883a; box-shadow:0 0 6px rgba(224,136,58,.8); }
+  .news-cbot.pause .news-clock-time{ color:#e0883a; }
+  .news-cbot.closed .news-clock-time{ color:var(--text-dim); }
+  .news-meta{ display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; color:var(--text-dim); font-size:11.5px; line-height:1.5; margin-bottom:12px; align-items:center; }
   .news-meta b{ color:var(--text); }
+  .news-meta-right{ display:flex; align-items:center; gap:10px; }
   .news-lastrun{ font-family:var(--mono); font-size:10.5px; white-space:nowrap; }
-  .news-tiles{ display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:8px; margin-bottom:12px; }
-  .news-tile{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px 10px 8px; cursor:pointer; }
+  .news-alerts-btn{ padding:5px 9px; font-size:11px; }
+  .news-tiles{ display:grid; grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)); gap:8px; margin-bottom:10px; }
+  .news-tile{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 10px 7px; cursor:pointer; }
   .news-tile:hover{ border-color:var(--accent); }
   .news-tile.sel{ border-color:var(--accent); background:var(--accent-soft); }
-  .news-tile-name{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); font-weight:700; }
-  .news-tile-val{ font-family:var(--mono); font-size:20px; font-weight:700; margin:2px 0; color:var(--text-dim); }
+  .news-tile-name{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); font-weight:700; }
+  .news-tile-val{ font-family:var(--mono); font-size:19px; font-weight:700; margin:1px 0; color:var(--text-dim); }
   .news-tile.pos .news-tile-val{ color:var(--good); }
   .news-tile.neg .news-tile-val{ color:var(--bad); }
-  .news-tile-sub{ font-size:10.5px; color:var(--text-dim); font-family:var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .news-chart{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px 8px 4px; margin-bottom:14px; }
-  .news-chart-head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; padding:0 4px 6px; }
+  .news-tile-sub{ font-size:10px; color:var(--text-dim); font-family:var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .news-chart{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 8px 2px; margin-bottom:10px; }
+  .news-chart-head{ display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; padding:0 4px 4px; }
   .news-chart-title{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); font-weight:700; }
-  .news-chart-latest{ font-family:var(--mono); font-size:18px; font-weight:700; color:var(--text-dim); }
+  .news-chart-latest{ font-family:var(--mono); font-size:17px; font-weight:700; color:var(--text-dim); }
   .news-chart-latest.pos{ color:var(--good); } .news-chart-latest.neg{ color:var(--bad); }
   .news-chart-sub{ font-size:11px; color:var(--text-dim); font-family:var(--mono); }
   .news-svg{ display:block; }
@@ -205,20 +218,50 @@
   .news-grid{ stroke:var(--border); stroke-width:1; }
   .news-zero{ stroke:var(--text-dim); stroke-width:1; stroke-dasharray:4 4; }
   .news-line{ fill:none; stroke:#5eb3f6; stroke-width:1.8; stroke-linejoin:round; stroke-linecap:round; }
+  /* breaking ticker */
+  .news-ticker{ display:flex; align-items:stretch; background:#2a1512; border:1px solid var(--bad); border-radius:7px; overflow:hidden; margin-bottom:10px; height:30px; }
+  .news-ticker-label{ background:var(--bad); color:#fff; font-size:10.5px; font-weight:800; letter-spacing:.12em; padding:0 10px; display:flex; align-items:center; flex-shrink:0; }
+  .news-ticker-track{ flex:1; overflow:hidden; position:relative; }
+  .news-ticker-inner{ display:inline-flex; gap:40px; white-space:nowrap; padding-left:100%; animation:news-scroll linear infinite; align-items:center; height:100%; }
+  .news-ticker-track:hover .news-ticker-inner{ animation-play-state:paused; }
+  .news-ticker-item{ color:#ffd9d3; font-size:12px; font-weight:600; text-decoration:none; }
+  .news-ticker-item.bull{ color:#9be3bf; } .news-ticker-item.bear{ color:#ffb0a6; }
+  .news-ticker-item:hover{ text-decoration:underline; }
+  @keyframes news-scroll{ from{ transform:translateX(0); } to{ transform:translateX(-50%); } }
+  /* upcoming releases */
+  .news-events{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:10px; }
+  .news-box-head{ display:flex; align-items:baseline; gap:8px; padding-bottom:6px; border-bottom:1px solid var(--border); margin-bottom:6px; }
+  .news-box-title{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); font-weight:700; }
+  .news-box-sub{ font-size:10.5px; color:var(--text-dim); flex:1; }
+  .news-box-count{ font-family:var(--mono); font-size:10.5px; color:var(--text-dim); }
+  .news-events-list{ display:grid; grid-template-columns:repeat(auto-fit, minmax(330px, 1fr)); gap:3px 18px; }
+  .news-event{ display:flex; gap:8px; align-items:baseline; font-size:11.5px; padding:2px 0; }
+  .news-event-when{ font-family:var(--mono); color:var(--text-dim); font-size:10.5px; white-space:nowrap; min-width:118px; }
+  .news-event-name{ color:var(--text); flex:1; }
+  .news-event-rel{ font-family:var(--mono); color:var(--text-dim); font-size:10.5px; }
+  .news-event.soon .news-event-rel, .news-event.soon .news-event-when{ color:var(--accent); }
+  /* controls + lanes */
   .news-bar{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:8px; }
   .news-search{ flex:1; min-width:140px; background:var(--input-bg); border:1px solid var(--border); color:var(--text); font-family:var(--mono); font-size:12px; padding:6px 9px; border-radius:14px; }
   .news-search:focus{ outline:none; border-color:var(--accent); }
   .news-count{ font-size:10.5px; color:var(--text-dim); font-family:var(--mono); margin:2px 2px 6px; }
-  .news-row{ display:grid; grid-template-columns:58px 40px 1fr; gap:8px; padding:9px 2px; border-bottom:1px solid var(--border); align-items:start; }
-  .news-time{ font-family:var(--mono); font-size:10.5px; color:var(--text-dim); line-height:1.3; padding-top:3px; white-space:pre-line; }
-  .news-imp{ font-family:var(--mono); font-size:12.5px; font-weight:700; text-align:center; padding:4px 0; border-radius:5px; border:1px solid var(--border); color:var(--text-dim); background:var(--panel); }
+  .news-lanes{ display:grid; grid-template-columns:1fr; gap:10px; }
+  @media (min-width:1100px){ .news-lanes{ grid-template-columns:1fr 1fr 1fr; } }
+  .news-lane-box{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 10px 4px; display:flex; flex-direction:column; }
+  .news-lane-list{ height:440px; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-right:2px; }
+  .news-row{ display:grid; grid-template-columns:44px 40px 1fr 26px; gap:8px; padding:8px 2px; border-bottom:1px solid var(--border); align-items:start; }
+  .news-row.liked{ background:rgba(47,158,111,.06); }
+  .news-time{ font-family:var(--mono); font-size:10px; color:var(--text-dim); line-height:1.3; padding-top:3px; white-space:pre-line; }
+  .news-imp{ font-family:var(--mono); font-size:12.5px; font-weight:700; text-align:center; padding:4px 0; border-radius:5px; border:1px solid var(--border); color:var(--text-dim); background:var(--panel-2); position:relative; }
   .news-imp.bull{ border-color:var(--good); color:var(--good); }
   .news-imp.bear{ border-color:var(--bad); color:var(--bad); }
+  .news-trend{ font-size:9.5px; font-weight:700; margin-top:3px; padding:1px 0; border-top:1px solid var(--border); color:var(--text-dim); }
+  .news-trend.warm{ color:var(--accent); } .news-trend.hot{ color:#ff8a7a; }
   .news-main{ min-width:0; }
-  .news-headline{ color:var(--text); font-weight:600; font-size:13px; line-height:1.35; text-decoration:none; display:block; }
+  .news-headline{ color:var(--text); font-weight:600; font-size:12.5px; line-height:1.35; text-decoration:none; display:block; }
   .news-headline:hover{ color:var(--accent); }
-  .news-summary{ color:var(--text-dim); font-size:12px; line-height:1.4; margin-top:3px; }
-  .news-tags{ display:flex; flex-wrap:wrap; gap:4px 8px; margin-top:4px; font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+  .news-summary{ color:var(--text-dim); font-size:11.5px; line-height:1.4; margin-top:3px; }
+  .news-tags{ display:flex; flex-wrap:wrap; gap:3px 8px; margin-top:4px; font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
   .news-tag{ color:var(--text-dim); }
   .news-tag.bull{ color:var(--good); } .news-tag.bear{ color:var(--bad); } .news-tag.neu{ color:var(--text-dim); }
   .news-tag.dim{ font-weight:600; opacity:.8; }
@@ -226,11 +269,15 @@
   .news-tag.prod{ color:var(--accent); }
   .news-tag.lane{ color:#5eb3f6; }
   .news-tag.breaking{ color:#fff; background:var(--bad); padding:1px 6px; border-radius:4px; }
-  .news-lane.breaking.on{ background:#3a1d1a; color:#ff8a7a; border-color:var(--bad); }
-  .news-imp{ position:relative; }
-  .news-trend{ font-size:9.5px; font-weight:700; margin-top:3px; padding:1px 0; border-top:1px solid var(--border); color:var(--text-dim); }
-  .news-trend.warm{ color:var(--accent); }
-  .news-trend.hot{ color:#ff8a7a; }
+  .news-votes{ display:flex; flex-direction:column; gap:4px; align-items:center; padding-top:2px; }
+  .news-vote{ background:transparent; border:1px solid transparent; border-radius:5px; font-size:13px; line-height:1; padding:3px 2px; cursor:pointer; opacity:.45; }
+  .news-vote:hover{ opacity:1; border-color:var(--border); }
+  .news-vote.on{ opacity:1; border-color:var(--accent); background:var(--accent-soft); }
+  /* history */
+  .news-archive-top{ margin-top:8px; }
+  .news-archive-row{ display:flex; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid var(--border); font-size:12px; }
+  .news-archive-row .news-imp{ width:34px; flex-shrink:0; padding:2px 0; font-size:11.5px; }
+  .news-archive-head{ flex:1; color:var(--text); }
 </style>
 </head>
 <body>
@@ -280,7 +327,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, orderBy, getDocs, limit } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, orderBy, getDocs, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDd4ldLMPWLdy2AigeeEU5dtNnmvQh2NQk",
@@ -1633,10 +1680,14 @@ async function logTodaySnapshot(){
   btn.disabled = true;
   btn.textContent = 'Saving…';
   try{
+    // The day's market-news reading travels with the snapshot (news docs themselves are pruned after 10 days).
+    let newsBlock = null;
+    try{ await subscribeNews(); newsBlock = newsDocs.length ? buildNewsSnapshot() : null; }catch(e){ console.error('news snapshot skipped', e); }
     await setDoc(doc(LOGS_COLLECTION, key), {
       json: JSON.stringify(state),
       loggedAt: new Date().toISOString(),
-      note: note || ''
+      note: note || '',
+      news: newsBlock
     });
     btn.textContent = 'Saved ✓';
     setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1500);
@@ -1716,6 +1767,7 @@ function jumpToNearestDate(pickedDateStr){
 let currentArchiveState = null;
 let currentArchiveDateKey = null;
 let currentArchiveNote = '';
+let currentArchiveNews = null;
 let historyVisibleMonths = [];
 let previousArchiveState = null;
 let previousArchiveDateKey = null;
@@ -1747,6 +1799,7 @@ async function openHistoryDate(dateKey){
     currentArchiveState = archivedState;
     currentArchiveDateKey = dateKey;
     currentArchiveNote = data.note || '';
+    currentArchiveNews = data.news || null;
     historyVisibleMonths = (archivedState.visibleMonths && archivedState.visibleMonths.length)
       ? [...archivedState.visibleMonths]
       : defaultVisibleMonths();
@@ -1968,6 +2021,8 @@ function renderArchiveDetail(container){
     null,
     (k, i) => (P && P.indonesia && P.indonesia[k]) ? P.indonesia[k][i] : null
   ));
+
+  renderArchiveNews(container, currentArchiveNews);
 }
 
 function renderHistoryTab(){
@@ -2240,86 +2295,102 @@ function handleExcelImport(e){
 // NEWS TAB — market news wire + trailing-24h net impact
 // ---------------------------------------------------------------------------
 // Data arrives pre-classified from the collector (newsfeed/collector.py) in the
-// Firestore `news` collection: one document per story carrying product /
-// direction / impact / confidence / summary. This page never scores anything —
-// it listens, filters, and does the arithmetic:
+// Firestore `news` collection: one document per EVENT carrying product /
+// direction / impact / confidence / category / breaking / trend / summary.
+// This page never scores anything — it listens, filters, and does the arithmetic:
 //
-//   qualifying story  = impact >= NEWS_MIN_IMPACT && confidence >= NEWS_MIN_CONF
+//   qualifying event  = impact >= NEWS_MIN_IMPACT && confidence >= NEWS_MIN_CONF
 //   signed impact     = +impact (BULLISH) | -impact (BEARISH) | 0 (NEUTRAL)
 //   net impact (t)    = sum of signed impact over the trailing 24h ending at t
 //   balance %         = net impact / sum of |impact| in the same window
 //
 // Direction is a PRICE argument, not sentiment: BULLISH = argues the CFR cost UP.
+//
+// Layout (agreed with the desk): clocks + CBOT LIVE → tiles + chart → breaking
+// ticker → upcoming releases → three fixed boxes (World / Crop / Macro) with their
+// own scroll → 👍 👎 on every row. Times are shown in Vietnam time.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const NEWS_COLLECTION = collection(db, 'news');
 const NEWS_META_REF = doc(db, 'news_meta', 'status');
+const NEWS_MUTED_REF = doc(db, 'news_meta', 'muted');
+const NEWS_FEEDBACK = collection(db, 'news_feedback');
+const NEWS_DEVICES = collection(db, 'news_devices');
 const NEWS_MIN_IMPACT = 50;
 const NEWS_MIN_CONF = 50;
 const NEWS_WINDOW_MS = 24 * 3600 * 1000;
-const NEWS_HISTORY_DAYS = 14;
+const NEWS_HISTORY_DAYS = 10;
 const NEWS_PRODUCTS = ['ALL', 'SBM', 'CORN', 'WHEAT', 'FREIGHT', 'MACRO'];
-// The desk's reading lanes. BREAKING is a flag on top of a lane (a port attack is POLITICS *and*
-// breaking), so it is a filter of its own rather than a fifth category.
-const NEWS_CATEGORIES = ['ALL', 'BREAKING', 'POLITICS', 'AGRI', 'REPORTS', 'MACRO'];
+const NEWS_TZ = 'Asia/Ho_Chi_Minh';
+// Web-push public key from Firebase Console → Cloud Messaging → Web Push certificates.
+// Public by design (it is the "VAPID public key"); paste it here once generated.
+const NEWS_VAPID_KEY = 'BNwixm6sFWzxS2O92z0qm1-t22LH8ovlEot6WRrhgXJv1nuxewVRsLSGywCbPNooBO9CYJfr07cjz5jMy53oqYY';
+
+// The three boxes and the categories that feed them.
+const NEWS_LANES = [
+  { key: 'world', title: 'World News', sub: 'war · politics · trade policy', cats: ['POLITICS'] },
+  { key: 'crop',  title: 'Crop News',  sub: 'crop · weather · reports · demand', cats: ['AGRI', 'REPORTS'] },
+  { key: 'macro', title: 'Macro',      sub: 'freight · energy · rates · FX', cats: ['MACRO'] },
+];
 
 let newsDocs = [];                 // newest first, as delivered by Firestore
 let newsMeta = null;
+let newsMuted = [];
+let newsVotes = {};                // id -> 'like' | 'dislike'
 let newsUnsub = null;
-let newsMetaUnsub = null;
-let newsUI = {
-  category: 'ALL',       // wire filter: reading lane (or BREAKING flag)
-  product: 'ALL',        // wire filter
-  minImpactOn: false,    // "50+" chip
-  search: '',
-  chartProduct: 'SBM'    // net-impact chart selector
-};
+let newsLoaded = null;             // promise resolved after the first snapshot
+let newsClockTimer = null;
+let newsUI = { product: 'ALL', search: '', chartProduct: 'SBM', minImpactOn: false };
 
 function subscribeNews(){
-  if (newsUnsub) return;
+  if (newsUnsub) return newsLoaded;
+  let resolveLoaded;
+  newsLoaded = new Promise(r => { resolveLoaded = r; });
   const since = Date.now() - NEWS_HISTORY_DAYS * 24 * 3600 * 1000;
-  const q = query(NEWS_COLLECTION, orderBy('ms', 'desc'), limit(300));
+  const q = query(NEWS_COLLECTION, orderBy('ms', 'desc'), limit(400));
   newsUnsub = onSnapshot(q, (snap) => {
     newsDocs = [];
     snap.forEach(d => {
       const x = d.data();
       if (x && typeof x.ms === 'number' && x.ms >= since) newsDocs.push(x);
     });
+    resolveLoaded();
     renderNewsBody();
   }, (err) => {
     console.error('news subscription failed', err);
+    resolveLoaded();
     const body = document.getElementById('newsBody');
     if (body) body.innerHTML = '<div class="note">Could not load the news feed. If this is the first deployment, make sure the Firestore rules allow reading the <b>news</b> collection (see newsfeed/firestore.rules).</div>';
   });
-  newsMetaUnsub = onSnapshot(NEWS_META_REF, (snap) => {
+  onSnapshot(NEWS_META_REF, (snap) => {
     newsMeta = snap.exists() ? snap.data() : null;
     const el = document.getElementById('newsLastRun');
     if (el) el.textContent = newsLastRunLabel();
   }, () => {});
+  onSnapshot(NEWS_MUTED_REF, (snap) => {
+    newsMuted = snap.exists() ? (snap.data().sources || []) : [];
+    const el = document.getElementById('newsMuted');
+    if (el) el.textContent = newsMuted.length ? `muted sources: ${newsMuted.join(', ')}` : '';
+  }, () => {});
+  onSnapshot(NEWS_FEEDBACK, (snap) => {
+    newsVotes = {};
+    snap.forEach(d => { const v = d.data(); if (v && v.vote) newsVotes[d.id] = v.vote; });
+    renderNewsBody();
+  }, () => {});
+  return newsLoaded;
 }
 
 function newsLastRunLabel(){
   if (!newsMeta || !newsMeta.lastRunMs) return 'collector: no run recorded yet';
-  const age = Date.now() - newsMeta.lastRunMs;
-  const mins = Math.round(age / 60000);
-  const when = mins < 60 ? `${mins} min ago` : mins < 2880 ? `${Math.round(mins / 60)} h ago` : `${Math.round(mins / 1440)} d ago`;
-  return `collector: last run ${when} · ${newsMeta.written || 0} new`;
+  const mins = Math.round((Date.now() - newsMeta.lastRunMs) / 60000);
+  const when = mins < 1 ? 'just now' : mins < 60 ? `${mins} min ago` : mins < 2880 ? `${Math.round(mins / 60)} h ago` : `${Math.round(mins / 1440)} d ago`;
+  return `updated ${when} · ${newsMeta.written || 0} new`;
 }
 
-function newsSigned(s){
-  return s.direction === 'BULLISH' ? s.impact : s.direction === 'BEARISH' ? -s.impact : 0;
-}
-function newsQualifies(s){
-  return s.impact >= NEWS_MIN_IMPACT && s.confidence >= NEWS_MIN_CONF;
-}
-function newsForProduct(product){
-  return product === 'ALL' ? newsDocs : newsDocs.filter(s => s.product === product);
-}
-function newsForCategory(rows, category){
-  if (category === 'ALL') return rows;
-  if (category === 'BREAKING') return rows.filter(s => s.breaking === true);
-  return rows.filter(s => s.category === category);
-}
+function newsSigned(s){ return s.direction === 'BULLISH' ? s.impact : s.direction === 'BEARISH' ? -s.impact : 0; }
+function newsQualifies(s){ return s.impact >= NEWS_MIN_IMPACT && s.confidence >= NEWS_MIN_CONF; }
+function newsForProduct(product){ return product === 'ALL' ? newsDocs : newsDocs.filter(s => s.product === product); }
+function newsVisible(s){ return newsVotes[s.id] !== 'dislike'; }     // a 👎 hides the row
 
 // Trailing-24h reading ending at `endMs` over an ascending-sorted array of qualifying stories.
 function newsWindowStats(asc, endMs){
@@ -2351,38 +2422,166 @@ function newsSeries(product){
   return { pts, now, count: asc.length };
 }
 
-function newsFmtTime(ms){
-  const d = new Date(ms);
-  const mon = MONTHS_FULL[d.getMonth()];
-  const pad = n => String(n).padStart(2, '0');
-  return `${pad(d.getDate())}-${mon} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+// Compact reading for the History snapshot: one number per product + the day's top events.
+function buildNewsSnapshot(){
+  const out = { asOf: Date.now(), tz: NEWS_TZ, products: {}, top: [] };
+  for (const p of NEWS_PRODUCTS.filter(p => p !== 'ALL')){
+    const { now } = newsSeries(p);
+    out.products[p] = { net: now.net, bull: now.bull, bear: now.bear, n: now.n, balance: now.balance };
+  }
+  const dayAgo = Date.now() - NEWS_WINDOW_MS;
+  out.top = newsDocs.filter(s => s.ms >= dayAgo).sort((a, b) => b.impact - a.impact).slice(0, 5)
+    .map(s => ({ headline: s.headline, direction: s.direction, impact: s.impact, product: s.product, trend: s.trend || 1, breaking: !!s.breaking }));
+  return out;
 }
-function newsFmtSigned(v){
-  const r = Math.round(v);
-  return (r > 0 ? '+' : '') + r.toLocaleString('en-US');
+
+// ── Time helpers (Vietnam clock everywhere on this page) ─────────────────────
+function newsFmt(ms, opts){
+  return new Intl.DateTimeFormat('en-GB', { timeZone: NEWS_TZ, ...opts }).format(new Date(ms));
+}
+function newsFmtTime(ms){
+  return newsFmt(ms, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '');
+}
+function newsFmtSigned(v){ const r = Math.round(v); return (r > 0 ? '+' : '') + r.toLocaleString('en-US'); }
+
+// ── Clocks + CBOT session state ──────────────────────────────────────────────
+const NEWS_CLOCKS = [
+  ['VIETNAM', 'Asia/Ho_Chi_Minh'], ['ISTANBUL', 'Europe/Istanbul'],
+  ['CHICAGO', 'America/Chicago'], ['BUENOS AIRES', 'America/Argentina/Buenos_Aires'],
+];
+// CME grain holidays (full closes). Update each December.
+const CBOT_HOLIDAYS = ['2026-01-01', '2026-01-19', '2026-02-16', '2026-04-03', '2026-05-25', '2026-06-19',
+  '2026-07-03', '2026-09-07', '2026-11-26', '2026-12-25', '2027-01-01', '2027-01-18', '2027-02-15', '2027-03-26',
+  '2027-05-31', '2027-06-18', '2027-07-05', '2027-09-06', '2027-11-25', '2027-12-24'];
+// Grains: Sun–Thu 19:00 → 07:45 CT (overnight), Mon–Fri 08:30 → 13:20 CT (day); 07:45–08:30 is the pause.
+function cbotState(now = new Date()){
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(now);
+  const get = t => parts.find(p => p.type === t)?.value;
+  const wd = get('weekday'); const hh = parseInt(get('hour'), 10) % 24; const mm = parseInt(get('minute'), 10);
+  const ymd = `${get('year')}-${get('month')}-${get('day')}`;
+  const t = hh * 60 + mm;
+  if (CBOT_HOLIDAYS.includes(ymd)) return { state: 'closed', label: 'CLOSED · holiday' };
+  if (wd === 'Sat') return { state: 'closed', label: 'CLOSED · weekend' };
+  if (wd === 'Sun') return t >= 19 * 60 ? { state: 'open', label: 'LIVE · overnight' } : { state: 'closed', label: 'CLOSED · opens 19:00 CT' };
+  if (t < 7 * 60 + 45) return { state: 'open', label: 'LIVE · overnight' };
+  if (t < 8 * 60 + 30) return { state: 'pause', label: 'PAUSE · reopens 08:30 CT' };
+  if (t < 13 * 60 + 20) return { state: 'open', label: 'LIVE · day session' };
+  if (wd === 'Fri') return { state: 'closed', label: 'CLOSED · weekend' };
+  if (t < 19 * 60) return { state: 'closed', label: 'CLOSED · opens 19:00 CT' };
+  return { state: 'open', label: 'LIVE · overnight' };
+}
+function renderNewsClocks(){
+  const el = document.getElementById('newsClocks');
+  if (!el) return;
+  const now = new Date();
+  const cells = NEWS_CLOCKS.map(([name, tz]) => {
+    const t = new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(now);
+    return `<div class="news-clock"><div class="news-clock-name">${name}</div><div class="news-clock-time">${t}</div></div>`;
+  }).join('');
+  const st = cbotState(now);
+  el.innerHTML = cells + `<div class="news-clock news-cbot ${st.state}"><div class="news-clock-name">CBOT</div><div class="news-clock-time"><span class="news-cbot-dot"></span>${st.label}</div></div>`;
+}
+
+// ── Upcoming releases (deterministic calendar; no LLM) ───────────────────────
+// Fixed dates: USDA WASDE 2026 (12:00 ET) and FOMC decision days 2026-27 (14:00 ET).
+const NEWS_FIXED_EVENTS = [
+  ...['2026-01-12', '2026-02-10', '2026-03-10', '2026-04-09', '2026-05-12', '2026-06-11', '2026-07-10', '2026-08-12', '2026-09-11', '2026-10-09', '2026-11-10', '2026-12-10']
+    .map(d => ({ date: d, timeET: '12:00', name: 'USDA WASDE', lane: 'REPORTS' })),
+  { date: '2026-09-30', timeET: '12:00', name: 'USDA Grain Stocks (Sep 1)', lane: 'REPORTS' },
+  { date: '2027-01-12', timeET: '12:00', name: 'USDA WASDE + Grain Stocks', lane: 'REPORTS' },
+  { date: '2027-03-31', timeET: '12:00', name: 'USDA Prospective Plantings + Grain Stocks', lane: 'REPORTS' },
+  { date: '2027-06-30', timeET: '12:00', name: 'USDA Acreage + Grain Stocks', lane: 'REPORTS' },
+  ...['2026-09-16', '2026-10-28', '2026-12-09', '2027-01-27', '2027-03-17', '2027-04-28', '2027-06-09', '2027-07-28', '2027-09-15', '2027-10-27', '2027-12-08']
+    .map(d => ({ date: d, timeET: '14:00', name: 'FOMC rate decision', lane: 'MACRO' })),
+];
+// Weekly recurrences (ET). Crop Progress runs April–November.
+const NEWS_WEEKLY_EVENTS = [
+  { weekday: 1, timeET: '16:00', name: 'USDA Crop Progress', lane: 'REPORTS', months: [4, 5, 6, 7, 8, 9, 10, 11] },
+  { weekday: 4, timeET: '08:30', name: 'USDA Export Sales', lane: 'REPORTS' },
+  { weekday: 4, timeET: '14:00', name: 'Bolsa de Cereales BA weekly (~)', lane: 'REPORTS' },
+];
+function etToUtcMs(dateStr, timeET){
+  // New York offset: EDT (−4) second Sunday of March → first Sunday of November, else EST (−5).
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const [hh, mi] = timeET.split(':').map(Number);
+  const nthSunday = (year, month, n) => { const first = new Date(Date.UTC(year, month - 1, 1)); const off = (7 - first.getUTCDay()) % 7; return 1 + off + 7 * (n - 1); };
+  const dstStart = Date.UTC(y, 2, nthSunday(y, 3, 2), 7);       // 02:00 EST = 07:00 UTC
+  const dstEnd = Date.UTC(y, 10, nthSunday(y, 11, 1), 6);       // 02:00 EDT = 06:00 UTC
+  const local = Date.UTC(y, m - 1, d, hh, mi);
+  const isDst = local + 5 * 3600000 >= dstStart && local + 4 * 3600000 < dstEnd;
+  return local + (isDst ? 4 : 5) * 3600000;
+}
+function upcomingEvents(n = 6){
+  const now = Date.now();
+  const out = [];
+  for (const e of NEWS_FIXED_EVENTS){
+    const ms = etToUtcMs(e.date, e.timeET);
+    if (ms >= now - 3600000) out.push({ ...e, ms });
+  }
+  // next 21 days of weekly events
+  const day0 = new Date(now); day0.setUTCHours(0, 0, 0, 0);
+  for (let k = 0; k < 21; k++){
+    const dt = new Date(day0.getTime() + k * 86400000);
+    const dateStr = dt.toISOString().slice(0, 10);
+    for (const w of NEWS_WEEKLY_EVENTS){
+      if (dt.getUTCDay() !== w.weekday) continue;
+      if (w.months && !w.months.includes(dt.getUTCMonth() + 1)) continue;
+      const ms = etToUtcMs(dateStr, w.timeET);
+      if (ms >= now - 3600000) out.push({ ...w, ms });
+    }
+  }
+  // monthly approximations
+  const monthly = [{ day: 10, timeET: '09:00', name: 'CONAB grain survey (~)', lane: 'REPORTS' }, { day: 22, timeET: '10:00', name: 'IGC Grain Market Report (~)', lane: 'REPORTS' }];
+  for (let k = 0; k < 2; k++){
+    const dt = new Date(Date.UTC(day0.getUTCFullYear(), day0.getUTCMonth() + k, 1));
+    for (const m of monthly){
+      const dateStr = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(m.day).padStart(2, '0')}`;
+      const ms = etToUtcMs(dateStr, m.timeET);
+      if (ms >= now - 3600000) out.push({ ...m, ms });
+    }
+  }
+  return out.sort((a, b) => a.ms - b.ms).slice(0, n);
+}
+function renderNewsEvents(){
+  const box = document.createElement('div');
+  box.className = 'news-events';
+  const head = document.createElement('div');
+  head.className = 'news-box-head';
+  head.innerHTML = '<span class="news-box-title">Upcoming releases</span><span class="news-box-sub">Vietnam time · (~) approximate</span>';
+  box.appendChild(head);
+  const list = document.createElement('div');
+  list.className = 'news-events-list';
+  for (const e of upcomingEvents(6)){
+    const hrs = (e.ms - Date.now()) / 3600000;
+    const rel = hrs < 1 ? 'now' : hrs < 24 ? `in ${Math.round(hrs)} h` : `in ${Math.round(hrs / 24)} d`;
+    const row = document.createElement('div');
+    row.className = 'news-event' + (hrs < 24 ? ' soon' : '');
+    row.innerHTML = `<span class="news-event-when">${newsFmt(e.ms, { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '')}</span>` +
+      `<span class="news-event-name">${e.name}</span><span class="news-event-rel">${rel}</span>`;
+    list.appendChild(row);
+  }
+  box.appendChild(list);
+  return box;
 }
 
 // ── SVG line chart (no library: keeps the app a single file) ────────────────
 function newsChartSvg(pts, width, height){
-  const padL = 44, padR = 12, padT = 14, padB = 26;
+  const padL = 44, padR = 12, padT = 10, padB = 24;
   const w = width - padL - padR, h = height - padT - padB;
   const real = pts.filter(p => !p.gap);
-  if (real.length < 2) return `<div class="note">Not enough qualifying stories yet to draw the trailing 24h line (needs impact ≥ ${NEWS_MIN_IMPACT} and confidence ≥ ${NEWS_MIN_CONF}).</div>`;
+  if (real.length < 2) return `<div class="note">Not enough qualifying events yet to draw the trailing 24h line (needs impact ≥ ${NEWS_MIN_IMPACT} and confidence ≥ ${NEWS_MIN_CONF}).</div>`;
   const xMin = real[0].ms, xMax = real[real.length - 1].ms;
   let yMin = Math.min(0, ...real.map(p => p.net)), yMax = Math.max(0, ...real.map(p => p.net));
   if (yMax === yMin){ yMax += 50; yMin -= 50; }
   const span = yMax - yMin; yMax += span * 0.1; yMin -= span * 0.1;
   const X = ms => padL + (xMax === xMin ? w / 2 : (ms - xMin) / (xMax - xMin) * w);
   const Y = v => padT + (yMax - v) / (yMax - yMin) * h;
-
-  // path with gaps
   let d = '', pen = false;
   for (const p of pts){
     if (p.gap){ pen = false; continue; }
     d += (pen ? ' L' : ' M') + X(p.ms).toFixed(1) + ' ' + Y(p.net).toFixed(1);
     pen = true;
   }
-  // fill above/below zero for the last continuous run would be noisy; keep a plain line.
   const y0 = Y(0);
   const ticks = [];
   const step = niceStep((yMax - yMin) / 4);
@@ -2395,7 +2594,7 @@ function newsChartSvg(pts, width, height){
   for (let i = 0; i < nX; i++){
     const ms = xMin + (xMax - xMin) * i / (nX - 1);
     const anchor = i === 0 ? 'start' : i === nX - 1 ? 'end' : 'middle';
-    xt.push(`<text x="${X(ms).toFixed(1)}" y="${height - 8}" text-anchor="${anchor}" class="news-axis">${newsFmtTime(ms)}</text>`);
+    xt.push(`<text x="${X(ms).toFixed(1)}" y="${height - 6}" text-anchor="${anchor}" class="news-axis">${newsFmtTime(ms)}</text>`);
   }
   const last = real[real.length - 1];
   const lastColor = last.net > 0 ? 'var(--good)' : last.net < 0 ? 'var(--bad)' : 'var(--text-dim)';
@@ -2420,18 +2619,24 @@ function renderNewsTab(){
   if (!el.dataset.built){
     el.innerHTML = '';
     el.dataset.built = '1';
-    el.appendChild(sectionTitle('Market News · Price Sentiment'));
+    const clocks = document.createElement('div');
+    clocks.id = 'newsClocks';
+    clocks.className = 'news-clocks';
+    el.appendChild(clocks);
     const meta = document.createElement('div');
     meta.className = 'news-meta';
-    meta.innerHTML = `<span>Direction is a <b>price argument</b>, not sentiment — green argues the CFR cost up, red argues it down. ` +
-      `Net impact = signed impact summed over a trailing 24h window (impact ≥ ${NEWS_MIN_IMPACT}, confidence ≥ ${NEWS_MIN_CONF}).</span>` +
-      `<span id="newsLastRun" class="news-lastrun">${newsLastRunLabel()}</span>`;
+    meta.innerHTML = `<span>Direction is a <b>price argument</b>, not sentiment — green argues the CFR cost up, red argues it down. Net impact = signed impact over a trailing 24h (impact ≥ ${NEWS_MIN_IMPACT}, confidence ≥ ${NEWS_MIN_CONF}). Times in Vietnam.</span>` +
+      `<span class="news-meta-right"><span id="newsLastRun" class="news-lastrun">${newsLastRunLabel()}</span><button class="hbtn news-alerts-btn" id="newsAlertsBtn" title="Push alerts for BREAKING or impact ≥ 75">🔔 Alerts</button></span>`;
     el.appendChild(meta);
     const body = document.createElement('div');
     body.id = 'newsBody';
     body.innerHTML = '<div class="note">Loading news…</div>';
     el.appendChild(body);
+    document.getElementById('newsAlertsBtn').addEventListener('click', enableNewsAlerts);
+    updateAlertsButton();
   }
+  renderNewsClocks();
+  if (!newsClockTimer) newsClockTimer = setInterval(renderNewsClocks, 1000);
   subscribeNews();
   if (newsDocs.length) renderNewsBody();
 }
@@ -2440,15 +2645,30 @@ function renderNewsBody(){
   const body = document.getElementById('newsBody');
   if (!body) return;
   if (!newsDocs.length){
-    body.innerHTML = '<div class="note">No stories yet. The collector (GitHub Actions → <b>newsfeed/collector.py</b>) writes classified headlines into the Firestore <b>news</b> collection every 30 minutes; once it has run, they appear here automatically.</div>';
+    body.innerHTML = '<div class="note">No events yet. The collector (GitHub Actions → <b>newsfeed/collector.py</b>) writes classified headlines into the Firestore <b>news</b> collection every 10 minutes; once it has run, they appear here automatically.</div>';
     return;
   }
-  const scrollTop = body.scrollTop;
+  // keep each lane box's own scroll position across live re-renders
+  const scrolls = {};
+  body.querySelectorAll('.news-lane-list').forEach(l => { scrolls[l.dataset.lane] = l.scrollTop; });
   body.innerHTML = '';
   body.appendChild(renderNewsSummary());
   body.appendChild(renderNewsChart());
-  body.appendChild(renderNewsWire());
-  body.scrollTop = scrollTop;
+  const ticker = renderNewsTicker();
+  if (ticker) body.appendChild(ticker);
+  body.appendChild(renderNewsEvents());
+  body.appendChild(renderNewsControls());
+  const lanes = document.createElement('div');
+  lanes.className = 'news-lanes';
+  for (const lane of NEWS_LANES) lanes.appendChild(renderNewsLane(lane));
+  body.appendChild(lanes);
+  const muted = document.createElement('div');
+  muted.id = 'newsMuted';
+  muted.className = 'news-count';
+  muted.textContent = newsMuted.length ? `muted sources: ${newsMuted.join(', ')}` : '';
+  body.appendChild(muted);
+  body.querySelectorAll('.news-lane-list').forEach(l => { if (scrolls[l.dataset.lane]) l.scrollTop = scrolls[l.dataset.lane]; });
+  applyNewsFilter();
 }
 
 // Summary tiles: trailing-24h reading "now" for every product.
@@ -2462,8 +2682,8 @@ function renderNewsSummary(){
     tile.className = 'news-tile ' + tone + (newsUI.chartProduct === p ? ' sel' : '');
     tile.innerHTML = `<div class="news-tile-name">${p}</div>` +
       `<div class="news-tile-val">${now.n ? newsFmtSigned(now.net) : '—'}</div>` +
-      `<div class="news-tile-sub">${now.n ? `${now.bull}▲ ${now.bear}▼ · ${now.n} in 24h · bal ${now.balance > 0 ? '+' : ''}${now.balance}%` : 'no qualifying story in 24h'}</div>`;
-    tile.title = `${count} qualifying ${p} stories in the last ${NEWS_HISTORY_DAYS} days — click to chart`;
+      `<div class="news-tile-sub">${now.n ? `${now.bull}▲ ${now.bear}▼ · ${now.n} in 24h · bal ${now.balance > 0 ? '+' : ''}${now.balance}%` : 'no qualifying event in 24h'}</div>`;
+    tile.title = `${count} qualifying ${p} events in the last ${NEWS_HISTORY_DAYS} days — click to chart`;
     tile.addEventListener('click', () => { newsUI.chartProduct = p; renderNewsBody(); });
     wrap.appendChild(tile);
   }
@@ -2478,30 +2698,45 @@ function renderNewsChart(){
   head.className = 'news-chart-head';
   head.innerHTML = `<span class="news-chart-title">${newsUI.chartProduct} · trailing 24h net impact</span>` +
     `<span class="news-chart-latest ${now.net > 0 ? 'pos' : now.net < 0 ? 'neg' : ''}">${now.n ? newsFmtSigned(now.net) : '—'}</span>` +
-    `<span class="news-chart-sub">${now.bull} bullish / ${now.bear} bearish · ${now.n} stories · ${count} in ${NEWS_HISTORY_DAYS}d</span>`;
+    `<span class="news-chart-sub">${now.bull} bullish / ${now.bear} bearish · ${now.n} events · ${count} in ${NEWS_HISTORY_DAYS}d</span>`;
   box.appendChild(head);
   const svgWrap = document.createElement('div');
   const width = Math.max(320, Math.min(900, (document.getElementById('newstab')?.clientWidth || 360) - 24));
-  svgWrap.innerHTML = newsChartSvg(pts, width, 190);
+  svgWrap.innerHTML = newsChartSvg(pts, width, 150);
   box.appendChild(svgWrap);
   return box;
 }
 
-function renderNewsWire(){
-  const wrap = document.createElement('div');
-  wrap.className = 'news-wire';
+// Breaking ticker: the newest breaking events of the last 48h, scrolling like a news channel.
+function renderNewsTicker(){
+  const since = Date.now() - 48 * 3600 * 1000;
+  const items = newsDocs.filter(s => s.breaking === true && s.ms >= since && newsVisible(s)).sort((a, b) => b.ms - a.ms).slice(0, 12);
+  if (!items.length) return null;
+  const bar = document.createElement('div');
+  bar.className = 'news-ticker';
+  const label = document.createElement('span');
+  label.className = 'news-ticker-label';
+  label.textContent = 'BREAKING';
+  const track = document.createElement('div');
+  track.className = 'news-ticker-track';
+  const inner = document.createElement('div');
+  inner.className = 'news-ticker-inner';
+  const mk = () => items.map(s => {
+    const a = document.createElement('a');
+    a.className = 'news-ticker-item ' + (s.direction === 'BULLISH' ? 'bull' : s.direction === 'BEARISH' ? 'bear' : 'neu');
+    a.href = s.url || '#'; a.target = '_blank'; a.rel = 'noopener';
+    a.textContent = `${newsFmtTime(s.ms)} · ${s.product} ${s.direction === 'BULLISH' ? '▲' : s.direction === 'BEARISH' ? '▼' : '•'} ${s.impact} · ${s.headline}`;
+    return a;
+  });
+  mk().forEach(a => inner.appendChild(a));
+  mk().forEach(a => inner.appendChild(a));      // duplicated so the loop is seamless
+  inner.style.animationDuration = Math.max(20, items.length * 9) + 's';
+  track.appendChild(inner);
+  bar.appendChild(label); bar.appendChild(track);
+  return bar;
+}
 
-  // controls — row 1: reading lane, row 2: product + 50+ + search
-  const laneBar = document.createElement('div');
-  laneBar.className = 'news-bar';
-  for (const c of NEWS_CATEGORIES){
-    const chip = document.createElement('span');
-    chip.className = 'month-chip news-lane' + (newsUI.category === c ? ' on' : '') + (c === 'BREAKING' ? ' breaking' : '');
-    chip.textContent = c;
-    chip.addEventListener('click', () => { newsUI.category = c; renderNewsBody(); });
-    laneBar.appendChild(chip);
-  }
-  wrap.appendChild(laneBar);
+function renderNewsControls(){
   const bar = document.createElement('div');
   bar.className = 'news-bar';
   for (const p of NEWS_PRODUCTS){
@@ -2514,7 +2749,7 @@ function renderNewsWire(){
   const min = document.createElement('span');
   min.className = 'month-chip' + (newsUI.minImpactOn ? ' on' : '');
   min.textContent = `${NEWS_MIN_IMPACT}+`;
-  min.title = `Only stories with impact ≥ ${NEWS_MIN_IMPACT}`;
+  min.title = `Only events with impact ≥ ${NEWS_MIN_IMPACT}`;
   min.addEventListener('click', () => { newsUI.minImpactOn = !newsUI.minImpactOn; renderNewsBody(); });
   bar.appendChild(min);
   const search = document.createElement('input');
@@ -2524,88 +2759,197 @@ function renderNewsWire(){
   search.value = newsUI.search;
   search.addEventListener('input', () => { newsUI.search = search.value; applyNewsFilter(); });
   bar.appendChild(search);
-  wrap.appendChild(bar);
+  return bar;
+}
 
-  // rows
-  const list = document.createElement('div');
-  list.id = 'newsList';
-  let rows = newsForCategory(newsForProduct(newsUI.product), newsUI.category);
+function renderNewsLane(lane){
+  const box = document.createElement('div');
+  box.className = 'news-lane-box';
+  let rows = newsForProduct(newsUI.product).filter(s => lane.cats.includes(s.category) && newsVisible(s));
   if (newsUI.minImpactOn) rows = rows.filter(s => s.impact >= NEWS_MIN_IMPACT);
-  rows = rows.slice().sort((a, b) => b.ms - a.ms);   // newest first, always
-  const countEl = document.createElement('div');
-  countEl.className = 'news-count';
-  countEl.id = 'newsCount';
-  wrap.appendChild(countEl);
-  for (const s of rows){
-    const row = document.createElement('div');
-    row.className = 'news-row';
-    row.dataset.text = `${s.headline} ${s.summary || ''} ${s.source || ''} ${s.country || ''} ${s.eventType || ''} ${s.category || ''} ${(s.sources || []).join(' ')}`.toLowerCase();
-    const dirClass = s.direction === 'BULLISH' ? 'bull' : s.direction === 'BEARISH' ? 'bear' : 'neu';
-    const time = document.createElement('div');
-    time.className = 'news-time';
-    time.textContent = newsFmtTime(s.ms);
-    const imp = document.createElement('div');
-    imp.className = 'news-imp ' + dirClass;
-    imp.textContent = s.impact;
-    imp.title = `impact ${s.impact} · confidence ${s.confidence}`;
-    // trend = how many publishers carry this event; the event counts ONCE in net impact.
-    const trend = Math.max(1, Number(s.trend || s.sourceCount || 1));
-    if (trend > 1){
-      const tr = document.createElement('div');
-      tr.className = 'news-trend' + (trend >= 10 ? ' hot' : trend >= 5 ? ' warm' : '');
-      tr.textContent = '×' + trend;
-      tr.title = `trend ${trend}: carried by ${trend} publishers` + (Array.isArray(s.sources) && s.sources.length ? ' — ' + s.sources.slice(0, 12).join(', ') : '');
-      imp.appendChild(tr);
-    }
-    const main = document.createElement('div');
-    main.className = 'news-main';
-    const a = document.createElement('a');
-    a.className = 'news-headline';
-    a.href = s.url || '#';
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.textContent = s.headline;
-    main.appendChild(a);
-    if (s.summary){
-      const sum = document.createElement('div');
-      sum.className = 'news-summary';
-      sum.textContent = s.summary;
-      main.appendChild(sum);
-    }
-    const tags = document.createElement('div');
-    tags.className = 'news-tags';
-    const tag = (txt, cls) => { const t = document.createElement('span'); t.className = 'news-tag ' + (cls || ''); t.textContent = txt; tags.appendChild(t); };
-    if (s.breaking === true) tag('BREAKING', 'breaking');
-    tag(s.direction, dirClass);
-    tag(`conf ${s.confidence}`, 'dim');
-    tag(s.source + (trend > 1 ? ` +${trend - 1}` : ''), 'src');
-    tag(s.product, 'prod');
-    if (s.category) tag(s.category, 'lane');
-    if (s.country) tag(s.country, 'dim');
-    if (s.eventType) tag(s.eventType, 'dim');
-    if (s.feed === 'sites') tag('site', 'dim');
-    main.appendChild(tags);
-    row.appendChild(time); row.appendChild(imp); row.appendChild(main);
-    list.appendChild(row);
+  rows = rows.slice().sort((a, b) => b.ms - a.ms);
+  const head = document.createElement('div');
+  head.className = 'news-box-head';
+  head.innerHTML = `<span class="news-box-title">${lane.title}</span><span class="news-box-sub">${lane.sub}</span><span class="news-box-count" data-lane-count="${lane.key}">${rows.length}</span>`;
+  box.appendChild(head);
+  const list = document.createElement('div');
+  list.className = 'news-lane-list';
+  list.dataset.lane = lane.key;
+  if (!rows.length){
+    list.innerHTML = '<div class="note">Nothing in this lane for the current filter.</div>';
   }
-  wrap.appendChild(list);
-  setTimeout(applyNewsFilter, 0);
-  return wrap;
+  for (const s of rows) list.appendChild(renderNewsRow(s));
+  box.appendChild(list);
+  return box;
+}
+
+function renderNewsRow(s){
+  const row = document.createElement('div');
+  row.className = 'news-row' + (newsVotes[s.id] === 'like' ? ' liked' : '');
+  row.dataset.text = `${s.headline} ${s.summary || ''} ${s.source || ''} ${s.country || ''} ${s.eventType || ''} ${s.category || ''} ${(s.sources || []).join(' ')}`.toLowerCase();
+  const dirClass = s.direction === 'BULLISH' ? 'bull' : s.direction === 'BEARISH' ? 'bear' : 'neu';
+  const time = document.createElement('div');
+  time.className = 'news-time';
+  time.textContent = newsFmtTime(s.ms).replace(' ', '\n');
+  const imp = document.createElement('div');
+  imp.className = 'news-imp ' + dirClass;
+  imp.textContent = s.impact;
+  imp.title = `impact ${s.impact} · confidence ${s.confidence}`;
+  const trend = Math.max(1, Number(s.trend || s.sourceCount || 1));
+  if (trend > 1){
+    const tr = document.createElement('div');
+    tr.className = 'news-trend' + (trend >= 10 ? ' hot' : trend >= 5 ? ' warm' : '');
+    tr.textContent = '×' + trend;
+    tr.title = `trend ${trend}: carried by ${trend} publishers` + (Array.isArray(s.sources) && s.sources.length ? ' — ' + s.sources.slice(0, 12).join(', ') : '');
+    imp.appendChild(tr);
+  }
+  const main = document.createElement('div');
+  main.className = 'news-main';
+  const a = document.createElement('a');
+  a.className = 'news-headline';
+  a.href = s.url || '#'; a.target = '_blank'; a.rel = 'noopener';
+  a.textContent = s.headline;
+  main.appendChild(a);
+  if (s.summary){
+    const sum = document.createElement('div');
+    sum.className = 'news-summary';
+    sum.textContent = s.summary;
+    main.appendChild(sum);
+  }
+  const tags = document.createElement('div');
+  tags.className = 'news-tags';
+  const tag = (txt, cls) => { const t = document.createElement('span'); t.className = 'news-tag ' + (cls || ''); t.textContent = txt; tags.appendChild(t); };
+  if (s.breaking === true) tag('BREAKING', 'breaking');
+  tag(s.direction, dirClass);
+  tag(`conf ${s.confidence}`, 'dim');
+  tag(s.source + (trend > 1 ? ` +${trend - 1}` : ''), 'src');
+  tag(s.product, 'prod');
+  if (s.category) tag(s.category, 'lane');
+  if (s.country) tag(s.country, 'dim');
+  if (s.eventType) tag(s.eventType, 'dim');
+  main.appendChild(tags);
+  const votes = document.createElement('div');
+  votes.className = 'news-votes';
+  const mkVote = (kind, glyph, title) => {
+    const b = document.createElement('button');
+    b.className = 'news-vote' + (newsVotes[s.id] === kind ? ' on' : '');
+    b.textContent = glyph; b.title = title;
+    b.addEventListener('click', (e) => { e.preventDefault(); voteNews(s, kind); });
+    return b;
+  };
+  votes.appendChild(mkVote('like', '👍', 'Good call — more like this'));
+  votes.appendChild(mkVote('dislike', '👎', 'Not wanted — hide and teach the classifier'));
+  row.appendChild(time); row.appendChild(imp); row.appendChild(main); row.appendChild(votes);
+  return row;
+}
+
+async function voteNews(s, kind){
+  const same = newsVotes[s.id] === kind;
+  try{
+    if (same){
+      await deleteDoc(doc(NEWS_FEEDBACK, s.id));
+    } else {
+      await setDoc(doc(NEWS_FEEDBACK, s.id), {
+        vote: kind, ms: Date.now(), headline: s.headline, source: s.source || '', product: s.product || '',
+        category: s.category || '', direction: s.direction || '', impact: s.impact || 0, url: s.url || ''
+      });
+    }
+  }catch(e){
+    console.error('vote failed', e);
+    alert('Could not save your vote — check the Firestore rules for news_feedback.');
+  }
 }
 
 function applyNewsFilter(){
-  const list = document.getElementById('newsList');
-  if (!list) return;
   const q = newsUI.search.trim().toLowerCase();
-  let shown = 0, total = 0;
-  list.querySelectorAll('.news-row').forEach(row => {
-    total++;
-    const hit = !q || row.dataset.text.includes(q);
-    row.style.display = hit ? '' : 'none';
-    if (hit) shown++;
+  document.querySelectorAll('.news-lane-list').forEach(list => {
+    let shown = 0;
+    list.querySelectorAll('.news-row').forEach(row => {
+      const hit = !q || row.dataset.text.includes(q);
+      row.style.display = hit ? '' : 'none';
+      if (hit) shown++;
+    });
+    const c = document.querySelector(`[data-lane-count="${list.dataset.lane}"]`);
+    if (c) c.textContent = shown;
   });
-  const c = document.getElementById('newsCount');
-  if (c) c.textContent = `${shown} of ${total} headlines · last ${NEWS_HISTORY_DAYS} days · times in your local zone`;
+}
+
+// ── Push alerts (Firebase Cloud Messaging) ──────────────────────────────────
+// Registers this browser/phone in news_devices/{token}. The collector pushes to every
+// registered device when an event is BREAKING or impact ≥ 75. Uses its own service
+// worker at scope /fcm/ so the app's existing sw.js is untouched.
+function updateAlertsButton(){
+  const b = document.getElementById('newsAlertsBtn');
+  if (!b) return;
+  if (!('Notification' in window)){ b.textContent = '🔔 n/a'; b.disabled = true; b.title = 'This browser cannot show notifications'; return; }
+  if (!NEWS_VAPID_KEY){ b.textContent = '🔔 Alerts (setup)'; b.title = 'Paste the Web Push key into NEWS_VAPID_KEY first'; return; }
+  let on = false;
+  try{ on = localStorage.getItem('cte_news_alerts') === '1' && Notification.permission === 'granted'; }catch(e){}
+  b.textContent = on ? '🔔 Alerts on' : '🔔 Alerts';
+  b.classList.toggle('flash', on);
+}
+async function enableNewsAlerts(){
+  const b = document.getElementById('newsAlertsBtn');
+  if (!('Notification' in window) || !('serviceWorker' in navigator)){ alert('This browser cannot receive push notifications.'); return; }
+  if (!NEWS_VAPID_KEY){ alert('Web Push key not configured yet (NEWS_VAPID_KEY).'); return; }
+  try{
+    b.textContent = '🔔 …';
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted'){ b.textContent = '🔔 Alerts'; alert('Notifications were not allowed.'); return; }
+    const { getMessaging, getToken, onMessage } = await import('https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging.js');
+    const reg = await navigator.serviceWorker.register('firebase-messaging-sw.js', { scope: '/fcm/' });
+    await navigator.serviceWorker.ready;
+    const messaging = getMessaging(fbApp);
+    const token = await getToken(messaging, { vapidKey: NEWS_VAPID_KEY, serviceWorkerRegistration: reg });
+    if (!token) throw new Error('no token');
+    await setDoc(doc(NEWS_DEVICES, token), { ms: Date.now(), ua: navigator.userAgent.slice(0, 120) });
+    try{ localStorage.setItem('cte_news_alerts', '1'); }catch(e){}
+    onMessage(messaging, (payload) => {
+      const n = payload.notification || {};
+      const pill = document.getElementById('savePill');
+      if (pill){ pill.textContent = `${n.title || 'Alert'} — ${(n.body || '').slice(0, 80)}`; pill.classList.add('show'); setTimeout(() => { pill.classList.remove('show'); pill.textContent = 'Saved'; }, 6000); }
+    });
+    updateAlertsButton();
+  }catch(e){
+    console.error('alerts setup failed', e);
+    b.textContent = '🔔 Alerts';
+    alert('Could not enable alerts: ' + (e && e.message ? e.message : e));
+  }
+}
+
+// ── History integration ─────────────────────────────────────────────────────
+function renderArchiveNews(container, news){
+  if (!news || !news.products) return;
+  container.appendChild(sectionTitle('Market news that day'));
+  const wrap = document.createElement('div');
+  wrap.className = 'news-tiles';
+  for (const [p, v] of Object.entries(news.products)){
+    const tone = !v.n ? 'flat' : v.net > 0 ? 'pos' : v.net < 0 ? 'neg' : 'flat';
+    const tile = document.createElement('div');
+    tile.className = 'news-tile ' + tone;
+    tile.style.cursor = 'default';
+    tile.innerHTML = `<div class="news-tile-name">${p}</div><div class="news-tile-val">${v.n ? newsFmtSigned(v.net) : '—'}</div>` +
+      `<div class="news-tile-sub">${v.n ? `${v.bull}▲ ${v.bear}▼ · ${v.n} in 24h · bal ${v.balance > 0 ? '+' : ''}${v.balance}%` : 'no qualifying event'}</div>`;
+    wrap.appendChild(tile);
+  }
+  container.appendChild(wrap);
+  if (Array.isArray(news.top) && news.top.length){
+    const list = document.createElement('div');
+    list.className = 'news-archive-top';
+    for (const t of news.top){
+      const row = document.createElement('div');
+      row.className = 'news-archive-row';
+      const dir = t.direction === 'BULLISH' ? 'bull' : t.direction === 'BEARISH' ? 'bear' : 'neu';
+      row.innerHTML = `<span class="news-imp ${dir}">${t.impact}</span><span class="news-archive-head">${escapeHtml(t.headline)}</span>` +
+        `<span class="news-tag prod">${t.product}</span>${t.breaking ? '<span class="news-tag breaking">BREAKING</span>' : ''}${t.trend > 1 ? `<span class="news-tag dim">×${t.trend}</span>` : ''}`;
+      list.appendChild(row);
+    }
+    container.appendChild(list);
+  }
+  const note = document.createElement('div');
+  note.className = 'news-count';
+  note.textContent = `reading taken ${newsFmtTime(news.asOf)} Vietnam time · trailing 24h at that moment`;
+  container.appendChild(note);
 }
 
 loadState();

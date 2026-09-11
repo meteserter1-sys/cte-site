@@ -22,6 +22,9 @@ Environment variables
   ANTHROPIC_API_KEY         Claude API key                                  (required unless --mock)
   CLAUDE_MODEL              default "claude-sonnet-5"
   NEWS_MAX_NEW              cap on new stories classified per run (default 80)
+  NEWS_MIN_STORE            drop stories scored below this impact (default 30, "tight wire")
+  NEWS_RETENTION_DAYS       delete events older than this (default 10)
+  NEWS_ALERT_IMPACT         push alert threshold (default 75; BREAKING always alerts)
 
 Usage
   python collector.py                # normal run (needs both env vars)
@@ -51,39 +54,64 @@ import requests
 # 1. Sources
 # ---------------------------------------------------------------------------
 
-# Google News RSS search queries. Each entry: (query, hl, gl, ceid).
-# Six languages, agreed with the desk: English, Russian, Ukrainian, Portuguese (Brazil),
-# Spanish (Argentina), Chinese. The classifier reads any language and answers in English.
+# ── Sources (31, agreed with the desk on 2026-09-11) ────────────────────────
+# Google News RSS searches: (query, hl, gl, ceid). Five languages: EN, RU, UK, PT-BR, ES-AR.
+# The classifier reads any language and answers in English. Publisher-locked queries use
+# Google's site: operator so we never have to guess a publisher's RSS address.
 GOOGLE_NEWS_QUERIES = [
-    # ── English ──
-    ('"soybean meal" OR soymeal OR "soybean crush" OR "soybean crop"',            'en-US', 'US', 'US:en'),
-    ('"corn futures" OR "corn crop" OR "corn exports" OR "corn harvest"',          'en-US', 'US', 'US:en'),
-    ('"wheat futures" OR "wheat crop" OR "wheat exports" OR "wheat harvest"',      'en-US', 'US', 'US:en'),
-    ('USDA WASDE OR "crop progress" OR "export sales" OR "ending stocks" grains',  'en-US', 'US', 'US:en'),
-    ('"dry bulk" OR panamax OR supramax OR "Baltic Dry Index" OR "freight rates"', 'en-US', 'US', 'US:en'),
-    ('"Black Sea" grain OR "grain corridor" OR "grain exports" Ukraine Russia',    'en-US', 'US', 'US:en'),
-    ('Brent crude OR "Fed rate" OR "dollar index" OR VIX commodities',             'en-US', 'US', 'US:en'),
-    # ── Russian ──
-    ('пшеница экспорт OR урожай зерна OR "зерновой коридор" OR ИКАР',              'ru', 'RU', 'RU:ru'),
-    ('соя OR "соевый шрот" OR кукуруза экспорт OR порт Новороссийск зерно',        'ru', 'RU', 'RU:ru'),
-    # ── Ukrainian ──
-    ('експорт зерна OR пшениця OR кукурудза OR "зерновий коридор" OR порт Одеса', 'uk', 'UA', 'UA:uk'),
-    # ── Portuguese (Brazil) ──
-    ('"farelo de soja" OR "safra de soja" OR "exportação de soja" OR Conab',       'pt-BR', 'BR', 'BR:pt-419'),
-    ('"safra de milho" OR "exportação de milho" OR "milho safrinha"',               'pt-BR', 'BR', 'BR:pt-419'),
-    # ── Spanish (Argentina) ──
-    ('"harina de soja" OR "cosecha de soja" OR "Bolsa de Cereales" OR Rosario soja', 'es-419', 'AR', 'AR:es-419'),
-    ('"cosecha de maíz" OR "exportaciones de maíz" OR "trigo argentino"',          'es-419', 'AR', 'AR:es-419'),
-    # ── Chinese (demand side) ──
-    ('豆粕 OR 大豆进口 OR 大豆压榨',                                                  'zh-CN', 'CN', 'CN:zh-Hans'),
-    ('玉米进口 OR 小麦进口 OR 粮食进口',                                              'zh-CN', 'CN', 'CN:zh-Hans'),
+    # ── CROP: product, crop, weather, reports, demand ──
+    ('"soybean meal" OR soymeal OR "soybean crush" OR "soybean crop"',                 'en-US', 'US', 'US:en'),
+    ('"corn futures" OR "corn crop" OR "corn exports" OR "corn harvest"',               'en-US', 'US', 'US:en'),
+    ('"wheat futures" OR "wheat crop" OR "wheat exports" OR "wheat harvest"',           'en-US', 'US', 'US:en'),
+    ('USDA WASDE OR "crop progress" OR "export sales" OR "ending stocks" grains',       'en-US', 'US', 'US:en'),
+    ('(wheat OR corn OR soybean) "crop weather" OR "weather forecast" crop',            'en-US', 'US', 'US:en'),
+    ('"African swine fever" OR "hog herd" OR "pig herd" OR "feed demand" soybean meal', 'en-US', 'US', 'US:en'),
+    ('"Karen Braun" OR "Andrey Sizov" OR SovEcon grain',                                'en-US', 'US', 'US:en'),
+    ('"farelo de soja" OR "safra de soja" OR "exportação de soja" OR Conab',            'pt-BR', 'BR', 'BR:pt-419'),
+    ('"safra de milho" OR "exportação de milho" OR "milho safrinha"',                    'pt-BR', 'BR', 'BR:pt-419'),
+    ('"harina de soja" OR "cosecha de soja" OR "Bolsa de Cereales" OR Rosario soja',    'es-419', 'AR', 'AR:es-419'),
+    ('"cosecha de maíz" OR "exportaciones de maíz" OR "trigo argentino"',               'es-419', 'AR', 'AR:es-419'),
+    # publisher-locked (TradersEQ pool)
+    ('site:barchart.com wheat OR corn OR soybean',                                      'en-US', 'US', 'US:en'),
+    ('site:agweb.com grain OR corn OR soybean OR wheat',                                'en-US', 'US', 'US:en'),
+    ('site:agriculture.com grain OR corn OR soybean OR wheat',                          'en-US', 'US', 'US:en'),
+    ('site:agrolatam.com',                                                              'es-419', 'AR', 'AR:es-419'),
+    ('site:safras.com.br',                                                              'pt-BR', 'BR', 'BR:pt-419'),
+    ('site:noticiasagricolas.com.br soja OR milho OR trigo',                            'pt-BR', 'BR', 'BR:pt-419'),
+    # ── WORLD: war, politics, trade policy ──
+    ('"Black Sea" grain OR "grain corridor" OR "grain exports" Ukraine Russia',         'en-US', 'US', 'US:en'),
+    ('пшеница экспорт OR урожай зерна OR "зерновой коридор" OR ИКАР',                   'ru', 'RU', 'RU:ru'),
+    ('соя OR "соевый шрот" OR кукуруза экспорт OR порт Новороссийск зерно',             'ru', 'RU', 'RU:ru'),
+    ('експорт зерна OR пшениця OR кукурудза OR "зерновий коридор" OR порт Одеса',      'uk', 'UA', 'UA:uk'),
+    ('site:interfax.com OR site:interfax.com.ua grain OR wheat OR corn',                'en-US', 'US', 'US:en'),
+    ('site:agroportal.ua',                                                              'uk', 'UA', 'UA:uk'),
+    ('site:bfm.ru зерно OR пшеница OR экспорт',                                         'ru', 'RU', 'RU:ru'),
+    # ── MACRO: only what reaches the grain complex ──
+    ('"dry bulk" OR panamax OR supramax OR "Baltic Dry Index" OR "freight rates"',      'en-US', 'US', 'US:en'),
+    ('"bunker fuel" price shipping freight',                                            'en-US', 'US', 'US:en'),
+    ('Brent crude OR "Fed rate" OR "dollar index" OR VIX commodities',                  'en-US', 'US', 'US:en'),
 ]
 
-# Hand-picked publishers (the "sites" feed). Deliberately EMPTY for now — the desk will supply
-# its own list later. Add ('Publisher name', 'https://…/rss') tuples; a dead feed is skipped.
-SITE_FEEDS: list[tuple[str, str]] = []
+# Direct publisher RSS (addresses taken from the desk's Inoreader) and X bridges. A dead feed is
+# logged and skipped; the run never stops for one source.
+SITE_FEEDS: list[tuple[str, str]] = [
+    # WORLD
+    ('War on the Rocks',              'https://warontherocks.com/feed/'),
+    ('ISW (X)',                       'https://rss.xcancel.com/TheStudyofWar/rss'),
+    # CROP / REPORTS
+    ('USDA News',                     'https://www.usda.gov/rss/latest-releases.xml'),
+    ('USDA NASS',                     'https://www.nass.usda.gov/rss/reports.xml'),
+    ('World Grain',                   'https://www.world-grain.com/rss/articles'),
+    ('IGC via World Grain',           'https://www.world-grain.com/rss/topic/1069-igc-international-grains-council'),
+    ('Karen Braun (X)',               'https://rss.xcancel.com/kannbwx/rss'),
+    ('Andrey Sizov (X)',              'https://rss.xcancel.com/sizov_andre/rss'),
+]
 
 PRODUCTS = ('SBM', 'CORN', 'WHEAT', 'FREIGHT', 'MACRO')
+# "Tight wire": stories the classifier scores below this impact are relevant but routine (daily
+# wraps, local anecdotes). They are NOT stored — the desk chose a short list over a full one.
+# Classification cost is unchanged; only Firestore and the page get quieter.
+NEWS_MIN_STORE = int(os.environ.get('NEWS_MIN_STORE', '30'))
 CATEGORIES = ('POLITICS', 'AGRI', 'REPORTS', 'MACRO')
 EVENT_TYPES = ('WEATHER', 'SUPPLY DEMAND', 'TRADE FLOW', 'POLICY', 'GEOPOLITICS',
                'LOGISTICS', 'PRICE', 'DISEASE', 'ENERGY', 'FX', 'OTHER')
@@ -209,33 +237,46 @@ def collect() -> dict[str, dict]:
 # ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = """You are the news enricher for a commodity trading desk that IMPORTS soybean meal (SBM),
-corn and wheat by sea into Vietnam, Malaysia and Indonesia, and charters dry-bulk vessels
-(Panamax / Supramax, combination cargoes) from South America and the US Gulf.
+corn and wheat by sea into South-East Asia and charters dry-bulk vessels (Panamax / Supramax,
+combination cargoes) from South America and the US Gulf. The desk wants ONLY news that can move
+the WORLD grain complex. Small, local, anecdotal or irrelevant items must be skipped.
 
 For every headline you receive, answer with ONE JSON object per headline inside a JSON array,
 same order as the input, nothing else. Fields:
 
   "i"          : the input index (integer)
   "product"    : one of "SBM","CORN","WHEAT","FREIGHT","MACRO","SKIP"
-                 SBM = soybeans / soybean meal / crush / soy oil complex
+                 SBM = soybeans / soybean meal / crush / soy oil complex / feed demand (hog, poultry herds)
                  FREIGHT = dry bulk rates, FFA, bunker fuel, canals, port congestion, vessel supply
-                 MACRO = FX (USD/VND/MYR/IDR/BRL/ARS), interest rates, tariffs affecting the complex broadly
-                 SKIP = not relevant to these markets (local retail prices, unrelated crops, sport, etc.)
+                 MACRO = only macro that reaches the grain complex: Brent and natural gas (fertiliser,
+                         biofuel), Fed rate / dollar index (export competitiveness), BRL and ARS
+                         (farmer selling), VIX only when it is a broad commodity risk-off
+                 SKIP = everything else. SKIP ALSO when the story is:
+                   - about a country that does not shape world grain supply or demand (Vietnam,
+                     Indonesia, Malaysia, Philippines, Guatemala, Nigeria, Bangladesh, Sudan, Iran,
+                     Sri Lanka ... and similar). Countries that DO count: USA, Brazil, Argentina,
+                     Russia, Ukraine, Kazakhstan, EU (France, Germany, Romania, Poland), Australia,
+                     Canada, India, China, Egypt, Turkey, Pakistan and the Black Sea region.
+                   - a single farm, single county/state anecdote, a local cash-bid list, a retail
+                     food-price story, a company earnings or stock story
+                   - gold, silver, crypto, bank/equity earnings, general stock-market moves
+                   - opinion or technical-chart commentary with no new fact
   "direction"  : "BULLISH" | "BEARISH" | "NEUTRAL"
                  THIS IS A PRICE ARGUMENT, NOT SENTIMENT. BULLISH means the story argues the
                  CFR cost of that product UP (tighter supply, stronger demand, higher freight).
                  A record Brazilian crop is good news and BEARISH. An export ban is bad news and BULLISH.
-  "impact"     : 0-100 integer, how much this could move the product's price. Routine daily
-                 price wraps and local anecdotes are 15-35. Weather/crop shocks, policy changes,
+                 Feed demand: herd expansion / recovery = BULLISH for SBM, disease losses / herd cuts = BEARISH.
+  "impact"     : 0-100 integer, how much this could move the product's WORLD price. Routine daily
+                 price wraps and progress updates are 15-35. Weather/crop shocks, policy changes,
                  big tenders, port disruptions are 55-90. Reserve 90+ for genuinely market-defining events.
   "confidence" : 0-100 integer, how sure you are of direction AND impact given only the headline.
   "country"    : ISO-3166 alpha-2 of the country the story is ABOUT ("" if global).
   "category"   : the desk's reading lane, one of
                  "POLITICS" = government policy, tariffs, export bans/duties, war, conflict, attacks, explosions, sanctions
-                 "AGRI"     = crop, harvest, weather, yield, production, planting, good/excellent ratings, ending stocks, export numbers
+                 "AGRI"     = crop, harvest, weather, yield, production, planting, good/excellent ratings, ending stocks, export numbers, feed demand
                  "REPORTS"  = a scheduled/official release or data from USDA, NOAA, CONAB, Bolsa de Cereales de Buenos Aires,
                               IKAR, SovEcon, IGC, FAO, ministry statistics — the source itself is an agency or its report
-                 "MACRO"    = freight, Brent/energy, Fed rate, dollar index, VIX, FX, general markets
+                 "MACRO"    = freight, Brent/energy, Fed rate, dollar index, VIX, FX
   "breaking"   : true ONLY for a fresh, market-defining development on these markets (port attack, sudden export ban,
                  major crop-estimate shock, big surprise tender). Routine updates are false. Expect fewer than 1 in 10.
   "eventType"  : one of "WEATHER","SUPPLY DEMAND","TRADE FLOW","POLICY","GEOPOLITICS","LOGISTICS","PRICE","DISEASE","ENERGY","FX","OTHER"
@@ -244,6 +285,10 @@ same order as the input, nothing else. Fields:
 
 Use round numbers (multiples of 5) for impact and confidence. Be consistent: the same kind of
 story must get the same kind of score every time."""
+
+# The desk's own votes, fed back into every batch: a few disliked headlines say "not this kind",
+# a few liked ones say "more of this". Loaded from Firestore once per run (see load_feedback).
+FEEDBACK_HINT = ''
 
 
 def classify_with_claude(batch: list[dict], model: str) -> list[dict]:
@@ -260,7 +305,7 @@ def classify_with_claude(batch: list[dict], model: str) -> list[dict]:
         model=model,
         max_tokens=4000,
         temperature=0,
-        system=SYSTEM_PROMPT,
+        system=SYSTEM_PROMPT + FEEDBACK_HINT,
         messages=[{'role': 'user', 'content': user}],
     )
     text = ''.join(b.text for b in resp.content if getattr(b, 'type', '') == 'text')
@@ -330,6 +375,7 @@ def sanitise(ans: dict, story: dict) -> dict | None:
 
 def classify_all(stories: list[dict], mock: bool, model: str, batch_size: int = 12) -> list[dict]:
     results: list[dict] = []
+    dropped_low = 0
     for start in range(0, len(stories), batch_size):
         batch = stories[start:start + batch_size]
         try:
@@ -343,9 +389,15 @@ def classify_all(stories: list[dict], mock: bool, model: str, batch_size: int = 
             if not a:
                 continue
             doc = sanitise(a, s)
-            if doc:
-                results.append(doc)
+            if doc is None:
+                continue
+            if doc['impact'] < NEWS_MIN_STORE:
+                dropped_low += 1
+                continue
+            results.append(doc)
         print(f'  classified {min(start + batch_size, len(stories))}/{len(stories)}')
+    if dropped_low:
+        print(f'  {dropped_low} routine stories dropped (impact < {NEWS_MIN_STORE})')
     return results
 
 
@@ -516,6 +568,141 @@ def write_docs(db, docs: list[dict], updates: dict[str, dict]):
 
 # ---------------------------------------------------------------------------
 
+# ── Desk feedback (👍 / 👎 on the page) ─────────────────────────────────────
+# Documents in `news_feedback/{storyId}`: {vote: 'like'|'dislike', ms, headline, source, product,
+# category, direction, impact}. Two effects:
+#   1. The most recent votes are fed to the classifier as examples (FEEDBACK_HINT).
+#   2. A source that collects MUTE_AFTER dislikes is muted: its stories are dropped before
+#      classification (no cost) and the list is written to news_meta/muted so the page can show it.
+
+FEEDBACK_DAYS = 30
+FEEDBACK_EXAMPLES = 12       # per side, in the prompt
+MUTE_AFTER = 5
+
+
+def load_feedback(db) -> tuple[str, set[str]]:
+    """Returns (prompt hint, muted sources)."""
+    global FEEDBACK_HINT
+    cutoff = int(time.time() * 1000) - FEEDBACK_DAYS * 24 * 3600 * 1000
+    likes, dislikes = [], []
+    per_source: dict[str, int] = {}
+    try:
+        for snap in db.collection('news_feedback').where('ms', '>=', cutoff).stream():
+            d = snap.to_dict() or {}
+            vote = d.get('vote')
+            head = str(d.get('headline', ''))[:110]
+            if not head:
+                continue
+            if vote == 'like':
+                likes.append((d.get('ms', 0), head))
+            elif vote == 'dislike':
+                dislikes.append((d.get('ms', 0), head))
+                src = str(d.get('source', '')).strip().lower()
+                if src:
+                    per_source[src] = per_source.get(src, 0) + 1
+    except Exception as e:  # noqa: BLE001
+        print(f'  ! feedback unreadable ({e}); continuing without it', file=sys.stderr)
+        return '', set()
+    likes.sort(reverse=True)
+    dislikes.sort(reverse=True)
+    parts = []
+    if dislikes:
+        parts.append('The desk marked these headlines as NOT WANTED — score similar stories as SKIP or below 30:\n' +
+                     '\n'.join('  - ' + h for _, h in dislikes[:FEEDBACK_EXAMPLES]))
+    if likes:
+        parts.append('The desk marked these headlines as EXACTLY what it wants — treat similar stories as relevant:\n' +
+                     '\n'.join('  - ' + h for _, h in likes[:FEEDBACK_EXAMPLES]))
+    FEEDBACK_HINT = ('\n\n' + '\n\n'.join(parts)) if parts else ''
+    muted = {src for src, n in per_source.items() if n >= MUTE_AFTER}
+    print(f'  feedback: {len(likes)} likes, {len(dislikes)} dislikes, {len(muted)} muted sources')
+    return FEEDBACK_HINT, muted
+
+
+def write_muted(db, muted: set[str]):
+    try:
+        db.collection('news_meta').document('muted').set({'sources': sorted(muted), 'ms': int(time.time() * 1000)})
+    except Exception as e:  # noqa: BLE001
+        print(f'  ! could not write muted list ({e})', file=sys.stderr)
+
+
+# ── Retention: 10 days, per the desk. The History snapshot keeps each day's reading. ─────
+RETENTION_DAYS = int(os.environ.get('NEWS_RETENTION_DAYS', '10'))
+
+
+def prune_old(db) -> int:
+    cutoff = int(time.time() * 1000) - RETENTION_DAYS * 24 * 3600 * 1000
+    deleted = 0
+    try:
+        col = db.collection('news')
+        while True:
+            snaps = list(col.where('ms', '<', cutoff).limit(300).stream())
+            if not snaps:
+                break
+            batch = db.batch()
+            for sn in snaps:
+                batch.delete(sn.reference)
+            batch.commit()
+            deleted += len(snaps)
+            if len(snaps) < 300:
+                break
+    except Exception as e:  # noqa: BLE001
+        print(f'  ! prune failed ({e})', file=sys.stderr)
+    return deleted
+
+
+# ── Push alerts (Firebase Cloud Messaging) ──────────────────────────────────
+# The page registers each phone/browser in `news_devices/{token}`. Every new event that is
+# BREAKING or scores >= ALERT_IMPACT is pushed to all of them. Dead tokens are removed.
+ALERT_IMPACT = int(os.environ.get('NEWS_ALERT_IMPACT', '75'))
+
+
+def push_alerts(db, heads: list[dict]) -> int:
+    alerts = [h for h in heads if h.get('breaking') or h.get('impact', 0) >= ALERT_IMPACT]
+    if not alerts:
+        return 0
+    try:
+        from firebase_admin import messaging
+        tokens = [sn.id for sn in db.collection('news_devices').stream()]
+    except Exception as e:  # noqa: BLE001
+        print(f'  ! devices unreadable ({e})', file=sys.stderr)
+        return 0
+    if not tokens:
+        print('  alerts: no registered devices')
+        return 0
+    sent = 0
+    dead: set[str] = set()
+    for h in sorted(alerts, key=lambda d: -d['impact'])[:5]:          # never spam more than 5 per run
+        arrow = '▲' if h['direction'] == 'BULLISH' else '▼' if h['direction'] == 'BEARISH' else '•'
+        title = f"{'BREAKING · ' if h.get('breaking') else ''}{h['product']} {arrow} {h['impact']}"
+        body = (h.get('summary') or h['headline'])[:180]
+        msg = messaging.MulticastMessage(
+            tokens=tokens,
+            notification=messaging.Notification(title=title, body=body),
+            webpush=messaging.WebpushConfig(
+                notification=messaging.WebpushNotification(title=title, body=body, icon='/icon-192.png', tag=h['id']),
+                fcm_options=messaging.WebpushFCMOptions(link='https://commodity-trading-engine.web.app/#news'),
+            ),
+            data={'id': h['id'], 'url': h.get('url', ''), 'category': h.get('category', '')},
+        )
+        try:
+            resp = messaging.send_each_for_multicast(msg)
+            sent += resp.success_count
+            for tok, r in zip(tokens, resp.responses):
+                if not r.success and r.exception is not None:
+                    code = getattr(getattr(r.exception, 'code', None), 'name', '') or str(r.exception)
+                    if 'UNREGISTERED' in code.upper() or 'NOT_FOUND' in code.upper() or 'INVALID' in code.upper():
+                        dead.add(tok)
+        except Exception as e:  # noqa: BLE001
+            print(f'  ! push failed ({e})', file=sys.stderr)
+    for tok in dead:
+        try:
+            db.collection('news_devices').document(tok).delete()
+        except Exception:  # noqa: BLE001
+            pass
+    print(f'  alerts: {len(alerts)} qualifying, {sent} deliveries, {len(dead)} dead tokens removed')
+    return sent
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--dry-run', action='store_true', help='do not write to Firestore')
@@ -535,8 +722,15 @@ def main():
     seen_cache, events = cache['seen'], cache['events']
     db = None
     ids = list(stories)
+    muted: set[str] = set()
     if not args.dry_run:
         db = firestore_client()
+        _, muted = load_feedback(db)
+        if muted:
+            write_muted(db, muted)
+            before = len(ids)
+            ids = [i for i in ids if stories[i]['source'].strip().lower() not in muted]
+            print(f'  {before - len(ids)} stories dropped from muted sources')
         cached = [i for i in ids if i in seen_cache]
         unknown = [i for i in ids if i not in seen_cache]
         seen = existing_ids(db, unknown) if unknown else set()   # only ask Firestore about ids the cache has never met
@@ -548,7 +742,9 @@ def main():
     new_stories = sorted((stories[i] for i in ids), key=lambda s: -s['ms'])[:max_new]
     if not new_stories:
         if not args.dry_run:
+            pruned = prune_old(db)
             save_cache(cache)
+            print(f'  pruned {pruned} events older than {RETENTION_DAYS} days')
         print('nothing new. done.')
         return
 
@@ -574,11 +770,13 @@ def main():
         return
 
     write_docs(db, heads, updates)
+    push_alerts(db, heads)
+    pruned = prune_old(db)
     # Everything classified this run — kept, folded or skipped — is "seen": never pay for it twice.
     for s in new_stories:
         seen_cache[s['id']] = now_ms
     save_cache(cache)
-    print(f'wrote {len(heads)} events (+{len(updates)} trend updates) to Firestore. done.')
+    print(f'wrote {len(heads)} events (+{len(updates)} trend updates), pruned {pruned} old. done.')
 
 
 if __name__ == '__main__':
