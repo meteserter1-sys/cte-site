@@ -2,7 +2,7 @@ name: CTE newsfeed
 
 on:
   schedule:
-    - cron: '*/10 * * * *'      # every 10 minutes (UTC) — public repo, unlimited minutes. GitHub may delay a few minutes.
+    - cron: '*/30 * * * *'      # every 30 minutes (UTC) — private repo, stays inside the free 2,000 min/month. GitHub may delay a few minutes.
   workflow_dispatch:            # "Run workflow" button for manual runs
 
 concurrency:
