@@ -213,6 +213,11 @@
   .news-chart-latest{ font-family:var(--mono); font-size:17px; font-weight:700; color:var(--text-dim); }
   .news-chart-latest.pos{ color:var(--good); } .news-chart-latest.neg{ color:var(--bad); }
   .news-chart-sub{ font-size:11px; color:var(--text-dim); font-family:var(--mono); }
+  .news-price-widget .news-chart-sub{ margin-left:auto; }
+  .news-price-embed{ display:flex; gap:8px; flex-wrap:wrap; }
+  .news-price-embed > div{ min-width:220px; }
+  .news-price-extra-link{ display:block; font-size:11px; color:var(--accent); text-decoration:none; padding:0 4px 6px; margin-top:-4px; }
+  .news-price-extra-link:hover{ text-decoration:underline; }
   .news-svg{ display:block; }
   .news-axis{ fill:var(--text-dim); font-family:var(--mono); font-size:9.5px; }
   .news-grid{ stroke:var(--border); stroke-width:1; }
@@ -2114,12 +2119,6 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 
-// News is the default landing tab — render it once on load without waiting for a click.
-{
-  const startTab = document.querySelector('.tab.active');
-  if (startTab && startTab.dataset.tab === 'newstab') renderNewsTab();
-}
-
 document.querySelectorAll('.subtab').forEach(tab => {
   tab.addEventListener('click', () => {
     const scope = tab.closest('section');
@@ -2660,6 +2659,8 @@ function renderNewsBody(){
   body.innerHTML = '';
   body.appendChild(renderNewsSummary());
   body.appendChild(renderNewsChart());
+  const priceWidget = renderNewsPriceWidget();
+  if (priceWidget) body.appendChild(priceWidget);
   const ticker = renderNewsTicker();
   if (ticker) body.appendChild(ticker);
   body.appendChild(renderNewsEvents());
@@ -2710,6 +2711,95 @@ function renderNewsChart(){
   const width = Math.max(320, Math.min(900, (document.getElementById('newstab')?.clientWidth || 360) - 24));
   svgWrap.innerHTML = newsChartSvg(pts, width, 150);
   box.appendChild(svgWrap);
+  return box;
+}
+
+// Live market reference under the impact chart: TradingView's free public embed widgets (no
+// scraping, no API key). Front-month/continuous only, not the individual forward contracts
+// (WZ26, WH27, …) — those need a licensed data vendor, a separate decision (agreed 2026-09-11).
+//
+// IMPORTANT (found 2026-09-11, after WHEAT/CORN/SBM/DXY/VIX all showed "This symbol is only
+// available on TradingView" in production): TradingView's free embed widgets do NOT carry
+// official-exchange data (CBOT futures like CBOT:ZW1!/ZC1!/ZM1!, or TVC:DXY/TVC:VIX index data)
+// for anonymous embedding on someone else's site — confirmed by testing the same symbols on
+// TradingView's own "Advanced Real-Time Chart" widget, not just the small ones, so it's a data
+// licensing restriction, not a bot-block and not something we can work around technically.
+// Broker CFD symbols (FOREXCOM:*, CAPITALCOM:*, same family as TVC:UKOIL/Brent which already
+// worked) ARE free to embed and track the underlying market closely, so we use those instead.
+// The one gap: no broker offers a Soybean **Meal** CFD (only raw Soybean, CBOT ZS) — so SBM
+// shows the Soybean proxy with an honest label plus a click-through to the real CBOT:ZM1! chart
+// on tradingview.com itself (full site ≠ free embed — it does carry the real meal data there).
+const NEWS_PRICE_SYMBOLS = {
+  WHEAT:   [{ symbol: 'FOREXCOM:WHEAT', label: 'Wheat CFD — FOREX.com (tracks CBOT wheat)' }],
+  CORN:    [{ symbol: 'FOREXCOM:CORN', label: 'Corn CFD — FOREX.com (tracks CBOT corn)' }],
+  SBM:     [{ symbol: 'FOREXCOM:SOYBEAN', label: 'Soybean CFD — proxy, no free live meal feed exists' }],
+  FREIGHT: [{ symbol: 'TVC:UKOIL', label: 'Brent Crude' }],
+  MACRO:   [{ symbol: 'CAPITALCOM:DXY', label: 'US Dollar Index (DXY)' }, { symbol: 'CAPITALCOM:VIX', label: 'VIX' }],
+};
+
+// SBM only: real Soybean Meal (CBOT ZM1!) data does exist on tradingview.com itself, just not in
+// the free embed — link out to it instead of pretending the Soybean proxy above is the same thing.
+const NEWS_PRICE_EXTRA_LINK = {
+  SBM: { href: 'https://www.tradingview.com/symbols/CBOT-ZM1!/', label: 'Open live Soybean Meal (ZM1!) on TradingView ↗' },
+};
+
+// Cache built widget DOM nodes per product so switching back to an already-seen product (or a
+// Firestore-triggered re-render while staying on the same product) reuses the live iframe instead
+// of tearing it down and reloading it — TradingView widgets are heavier than our own inline SVG.
+const newsPriceWidgetCache = {};
+
+function tvWidget(scriptFile, symbol, height){
+  const container = document.createElement('div');
+  container.className = 'tradingview-widget-container';
+  container.appendChild(document.createElement('div'));
+  const script = document.createElement('script');
+  script.src = `https://s3.tradingview.com/external-embedding/embed-widget-${scriptFile}.js`;
+  script.async = true;
+  script.text = JSON.stringify({
+    symbol, width: '100%', height, locale: 'en', dateRange: '1D',
+    colorTheme: 'dark', isTransparent: true, autosize: false, chartOnly: false,
+  });
+  container.appendChild(script);
+  return container;
+}
+
+function renderNewsPriceWidget(){
+  const product = newsUI.chartProduct;
+  const specs = NEWS_PRICE_SYMBOLS[product];
+  if (!specs) return null;
+  const box = document.createElement('div');
+  box.className = 'news-chart news-price-widget';
+  const head = document.createElement('div');
+  head.className = 'news-chart-head';
+  head.innerHTML = `<span class="news-chart-title">${specs.map(s => s.label).join(' · ')}</span>` +
+    `<span class="news-chart-sub">live · TradingView</span>`;
+  box.appendChild(head);
+  const extra = NEWS_PRICE_EXTRA_LINK[product];
+  if (extra){
+    const a = document.createElement('a');
+    a.href = extra.href; a.target = '_blank'; a.rel = 'noopener';
+    a.className = 'news-price-extra-link';
+    a.textContent = extra.label;
+    box.appendChild(a);
+  }
+  if (newsPriceWidgetCache[product]){
+    box.appendChild(newsPriceWidgetCache[product]);
+    return box;
+  }
+  const wrap = document.createElement('div');
+  wrap.className = 'news-price-embed';
+  for (const { symbol } of specs){
+    const col = document.createElement('div');
+    col.style.flex = specs.length > 1 ? '1 1 260px' : '1 1 100%';
+    // Only the "mini-symbol-overview" widget: it already shows name/price/%chg plus the chart in
+    // one piece. The "symbol-info" strip widget we used before is equity-only (EPS/market cap/P-E
+    // fields) — it silently falls back to a demo AAPL quote for any non-stock symbol, which is
+    // exactly the bug that made WHEAT/CORN/SBM look broken even for symbols that do carry data.
+    col.appendChild(tvWidget('mini-symbol-overview', symbol, 160));
+    wrap.appendChild(col);
+  }
+  newsPriceWidgetCache[product] = wrap;
+  box.appendChild(wrap);
   return box;
 }
 
@@ -2956,6 +3046,14 @@ function renderArchiveNews(container, news){
   note.className = 'news-count';
   note.textContent = `reading taken ${newsFmtTime(news.asOf)} Vietnam time · trailing 24h at that moment`;
   container.appendChild(note);
+}
+
+// News is the default landing tab — render it once on load without waiting for a click.
+// (Placed here, after every `let`/`const` in this module has been declared, so it doesn't
+// touch news state during the temporal dead zone the way an early call would.)
+{
+  const startTab = document.querySelector('.tab.active');
+  if (startTab && startTab.dataset.tab === 'newstab') renderNewsTab();
 }
 
 loadState();
