@@ -301,10 +301,11 @@ def classify_with_claude(batch: list[dict], model: str) -> list[dict]:
         lines.append(f'{i}. [{s["source"]}] {s["headline"]}{snippet}')
     user = 'Headlines:\n' + '\n'.join(lines) + '\n\nReturn the JSON array now.'
 
+    # No `temperature`: the 1.x SDK dropped it. Determinism comes from the prompt's
+    # "same kind of story → same kind of score" rule and the round-number instruction.
     resp = client.messages.create(
         model=model,
         max_tokens=4000,
-        temperature=0,
         system=SYSTEM_PROMPT + FEEDBACK_HINT,
         messages=[{'role': 'user', 'content': user}],
     )
@@ -373,8 +374,12 @@ def sanitise(ans: dict, story: dict) -> dict | None:
     }
 
 
-def classify_all(stories: list[dict], mock: bool, model: str, batch_size: int = 12) -> list[dict]:
+def classify_all(stories: list[dict], mock: bool, model: str, batch_size: int = 12) -> tuple[list[dict], set[str]]:
+    """Returns (kept docs, ids of every story the model actually answered for).
+    A batch that fails (API error, bad JSON) is NOT counted as processed, so those stories are
+    retried next run instead of being silently marked as seen."""
     results: list[dict] = []
+    processed: set[str] = set()
     dropped_low = 0
     for start in range(0, len(stories), batch_size):
         batch = stories[start:start + batch_size]
@@ -383,6 +388,7 @@ def classify_all(stories: list[dict], mock: bool, model: str, batch_size: int = 
         except Exception as e:  # noqa: BLE001
             print(f'  ! classify batch failed: {e}', file=sys.stderr)
             continue
+        processed.update(s['id'] for s in batch)
         by_i = {int(a.get('i', -1)): a for a in answers if isinstance(a, dict)}
         for i, s in enumerate(batch):
             a = by_i.get(i)
@@ -398,7 +404,7 @@ def classify_all(stories: list[dict], mock: bool, model: str, batch_size: int = 
         print(f'  classified {min(start + batch_size, len(stories))}/{len(stories)}')
     if dropped_low:
         print(f'  {dropped_low} routine stories dropped (impact < {NEWS_MIN_STORE})')
-    return results
+    return results, processed
 
 
 # ---------------------------------------------------------------------------
@@ -749,8 +755,10 @@ def main():
         return
 
     print(f'classifying {len(new_stories)} stories with {"MOCK" if args.mock else model}…')
-    docs = classify_all(new_stories, args.mock, model)
-    print(f'  {len(docs)} kept ({len(new_stories) - len(docs)} skipped as irrelevant/failed)')
+    docs, processed = classify_all(new_stories, args.mock, model)
+    failed = len(new_stories) - len(processed)
+    print(f'  {len(docs)} kept, {len(processed) - len(docs)} skipped as irrelevant/routine'
+          + (f', {failed} NOT processed (will retry next run)' if failed else ''))
 
     heads, updates = cluster(docs, events)
     print(f'  {len(heads)} events after clustering ({len(docs) - len(heads)} reports folded in, '
@@ -772,9 +780,11 @@ def main():
     write_docs(db, heads, updates)
     push_alerts(db, heads)
     pruned = prune_old(db)
-    # Everything classified this run — kept, folded or skipped — is "seen": never pay for it twice.
+    # Everything the model actually answered for — kept, folded or skipped — is "seen": never pay
+    # for it twice. Stories from a failed batch are left out so they come back next run.
     for s in new_stories:
-        seen_cache[s['id']] = now_ms
+        if s['id'] in processed:
+            seen_cache[s['id']] = now_ms
     save_cache(cache)
     print(f'wrote {len(heads)} events (+{len(updates)} trend updates), pruned {pruned} old. done.')
 
