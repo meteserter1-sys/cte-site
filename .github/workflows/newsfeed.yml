@@ -2,8 +2,13 @@ name: CTE newsfeed
 
 on:
   schedule:
-    - cron: '*/30 * * * *'      # every 30 minutes (UTC) — private repo, stays inside the free 2,000 min/month. GitHub may delay a few minutes.
-  workflow_dispatch:            # "Run workflow" button for manual runs
+    # Safety-net only, not the primary clock. GitHub's own `schedule:` trigger is empirically
+    # unreliable at high frequency on this repo — real gaps of 2-5h were observed against a
+    # */30 setting (2026-09-11 investigation) — so the actual 15-20 min cadence is driven by an
+    # external service calling the workflow_dispatch API below (see newsfeed/README.md for setup).
+    # This schedule just fires occasionally in case that external trigger is ever down.
+    - cron: '*/45 * * * *'
+  workflow_dispatch:            # "Run workflow" button for manual runs, and the external trigger's target
 
 concurrency:
   group: newsfeed
