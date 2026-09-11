@@ -2656,6 +2656,10 @@ function renderNewsBody(){
   // keep each lane box's own scroll position across live re-renders
   const scrolls = {};
   body.querySelectorAll('.news-lane-list').forEach(l => { scrolls[l.dataset.lane] = l.scrollTop; });
+  // keep the page's own scroll position too — tearing down and rebuilding #newsBody (a vote, a
+  // product-tile click, a live Firestore update) used to snap the whole page back to the top,
+  // because the browser can't scroll-anchor across an innerHTML='' wipe of the scrolled content.
+  const pageScrollY = window.scrollY;
   body.innerHTML = '';
   body.appendChild(renderNewsSummary());
   body.appendChild(renderNewsChart());
@@ -2676,6 +2680,7 @@ function renderNewsBody(){
   body.appendChild(muted);
   body.querySelectorAll('.news-lane-list').forEach(l => { if (scrolls[l.dataset.lane]) l.scrollTop = scrolls[l.dataset.lane]; });
   applyNewsFilter();
+  if (pageScrollY) window.scrollTo(0, pageScrollY);
 }
 
 // Summary tiles: trailing-24h reading "now" for every product.
