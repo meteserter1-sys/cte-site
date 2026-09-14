@@ -202,7 +202,11 @@
   .news-tile{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 10px 7px; cursor:pointer; }
   .news-tile:hover{ border-color:var(--accent); }
   .news-tile.sel{ border-color:var(--accent); background:var(--accent-soft); }
+  .news-tile-head{ display:flex; align-items:baseline; justify-content:space-between; gap:6px; }
   .news-tile-name{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); font-weight:700; }
+  .news-tile-price{ font-family:var(--mono); font-size:10px; color:var(--text-dim); white-space:nowrap; }
+  .news-tile-price .chg.pos{ color:var(--good); } .news-tile-price .chg.neg{ color:var(--bad); }
+  .news-tile-proxy{ font-size:8.5px; color:var(--text-dim); opacity:.75; text-transform:uppercase; letter-spacing:.04em; }
   .news-tile-val{ font-family:var(--mono); font-size:19px; font-weight:700; margin:1px 0; color:var(--text-dim); }
   .news-tile.pos .news-tile-val{ color:var(--good); }
   .news-tile.neg .news-tile-val{ color:var(--bad); }
@@ -214,6 +218,9 @@
   .news-chart-latest.pos{ color:var(--good); } .news-chart-latest.neg{ color:var(--bad); }
   .news-chart-sub{ font-size:11px; color:var(--text-dim); font-family:var(--mono); }
   .news-price-widget .news-chart-sub{ margin-left:auto; }
+  .news-legend{ display:flex; gap:12px; margin-left:auto; }
+  .news-legend-item{ display:flex; align-items:center; gap:5px; font-size:10.5px; color:var(--text-dim); font-family:var(--mono); white-space:nowrap; }
+  .news-legend-dot{ width:8px; height:8px; border-radius:50%; display:inline-block; flex-shrink:0; }
   .news-price-embed{ display:flex; gap:8px; flex-wrap:wrap; }
   .news-price-embed > div{ min-width:220px; }
   .news-price-extra-link{ display:block; font-size:11px; color:var(--accent); text-decoration:none; padding:0 4px 6px; margin-top:-4px; }
@@ -2374,7 +2381,23 @@ let newsUI = { product: 'ALL', search: '', chartProduct: 'WHEAT', minImpactOn: f
 // SAME chart at render time (see renderNewsChart) rather than being its own data model. MACRO has
 // no entry here on purpose: it keeps its existing separate TradingView DXY/VIX widgets.
 const PRICE_PRODUCTS = ['WHEAT', 'CORN', 'SBM', 'FREIGHT'];
-let newsPrices = {};               // product -> { symbol, updatedMs, bars: [{t, c}, …] } | undefined
+// Labels for the chart legend and tile — WHEAT/CORN/SBM show their own futures, but FREIGHT's price
+// line is Brent crude (BZ=F, see collector.py PRICE_SYMBOLS), used as a bunker-fuel/freight-cost
+// proxy exactly like the old TradingView widget did (it was explicitly labeled "Brent Crude" there —
+// Mete: "freight icinde yine brent fiyati eskisinde oldugu gibi" — keep that labeling, not a bare
+// unlabeled number that could be mistaken for an actual freight-rate index).
+const PRICE_LABELS = {
+  WHEAT: 'Wheat futures',
+  CORN: 'Corn futures',
+  SBM: 'Soybean meal futures',
+  FREIGHT: 'Brent crude (freight proxy)',
+};
+// `bars` = 5y daily closes (for Weekly/Monthly/1Y/5Y). `intraday` = ~2 days of 5-minute bars,
+// refreshed every collector run (2026-09-14 addition) — used only for the "Daily" range so it shows
+// real live-session movement instead of a single flat daily-close point (Mete: "daily'de canlı anlık
+// grafik olması lazım, bir önceki öyle değil miydi" — the old TradingView widget's Daily view was
+// live intraday, the merged chart needs its own equivalent rather than reusing the daily series).
+let newsPrices = {};               // product -> { symbol, updatedMs, bars, intradayUpdatedMs, intraday } | undefined
 
 // Shared time-range control for the net-impact chart AND the TradingView price widget beneath it
 // (2026-09-14, Mete's request): before this, the price widget was hard-locked to `dateRange:'1D'`
@@ -2803,6 +2826,29 @@ function renderNewsBody(){
   if (pageScrollY) window.scrollTo(0, pageScrollY);
 }
 
+// Latest price + day-change% for a product's tile header (2026-09-14, Mete's request — "TradingView
+// widget'taki gibi" a live price right in the small box). Computed entirely from the same
+// Firestore prices/{product} data the merged chart already holds in `newsPrices` — no extra network
+// call. Prefers the intraday series (freshest, refreshed every collector run) and falls back to the
+// daily series if intraday hasn't synced yet; returns null (tile just omits the price) if neither has.
+function newsLatestPrice(product){
+  const rec = newsPrices[product];
+  if (!rec) return null;
+  const intraday = Array.isArray(rec.intraday) ? rec.intraday : [];
+  const daily = Array.isArray(rec.bars) ? rec.bars : [];
+  const live = intraday.length ? intraday[intraday.length - 1] : (daily.length ? daily[daily.length - 1] : null);
+  if (!live) return null;
+  // Day-over-day % vs the most recent daily close from BEFORE the live bar's own calendar day
+  // (UTC date compare — precise enough for a ticker-style % figure, no exchange-session math needed).
+  const liveDay = new Date(live.t).toISOString().slice(0, 10);
+  let prevClose = null;
+  for (let i = daily.length - 1; i >= 0; i--){
+    if (new Date(daily[i].t).toISOString().slice(0, 10) < liveDay){ prevClose = daily[i].c; break; }
+  }
+  const pct = prevClose ? (live.c - prevClose) / prevClose * 100 : null;
+  return { price: live.c, pct };
+}
+
 // Summary tiles: trailing-24h reading "now" for every product.
 function renderNewsSummary(){
   const wrap = document.createElement('div');
@@ -2812,7 +2858,11 @@ function renderNewsSummary(){
     const tone = now.n === 0 ? 'flat' : now.net > 0 ? 'pos' : now.net < 0 ? 'neg' : 'flat';
     const tile = document.createElement('div');
     tile.className = 'news-tile ' + tone + (newsUI.chartProduct === p ? ' sel' : '');
-    tile.innerHTML = `<div class="news-tile-name">${p}</div>` +
+    const q = PRICE_PRODUCTS.includes(p) ? newsLatestPrice(p) : null;
+    const priceHtml = q
+      ? `<span class="news-tile-price" title="${PRICE_LABELS[p] || ''}">${newsFmtPrice(q.price)}${p === 'FREIGHT' ? ' <span class="news-tile-proxy">Brent</span>' : ''}${q.pct != null ? ` <span class="chg ${q.pct > 0 ? 'pos' : q.pct < 0 ? 'neg' : ''}">${q.pct > 0 ? '▲' : q.pct < 0 ? '▼' : '·'}${Math.abs(q.pct).toFixed(1)}%</span>` : ''}</span>`
+      : '';
+    tile.innerHTML = `<div class="news-tile-head"><span class="news-tile-name">${p}</span>${priceHtml}</div>` +
       `<div class="news-tile-val">${now.n ? newsFmtSigned(now.net) : '—'}</div>` +
       `<div class="news-tile-sub">${now.n ? `${now.bull}▲ ${now.bear}▼ · ${now.n} in 24h · bal ${now.balance > 0 ? '+' : ''}${now.balance}%` : 'no qualifying event in 24h'}</div>`;
     tile.title = `${count} qualifying ${p} events in the last ${NEWS_HISTORY_DAYS} days — click to chart`;
@@ -2853,17 +2903,29 @@ function renderNewsChart(){
     shownPts = pts;
     rangeNote = ` · not enough events for ${rangeDef.label.toLowerCase()}, showing full history`;
   }
-  // Real daily-close price history from Firestore prices/{product} (collector.py's sync_prices()).
-  // MACRO never has one — it keeps its separate TradingView DXY/VIX widgets below, untouched.
+  // Real price history from Firestore prices/{product} (collector.py's sync_prices()). MACRO never
+  // has one — it keeps its separate TradingView DXY/VIX widgets below, untouched. "Daily" uses the
+  // live-ish intraday series (5-minute bars, refreshed every collector run) instead of the 5y daily
+  // series — a single daily close can't show same-day movement, which is what Daily is for.
   const priceRec = newsPrices[newsUI.chartProduct];
-  const allBars = (priceRec && Array.isArray(priceRec.bars)) ? priceRec.bars : [];
-  const priceBars = allBars.filter(b => b.t >= xMin && b.t <= xMax).sort((a, b) => a.t - b.t);
+  const useIntraday = rangeDef.key === '1D';
+  const rawBars = priceRec && Array.isArray(useIntraday ? priceRec.intraday : priceRec.bars)
+    ? (useIntraday ? priceRec.intraday : priceRec.bars) : [];
+  const priceBars = rawBars.filter(b => b.t >= xMin && b.t <= xMax).sort((a, b) => a.t - b.t);
 
+  const hasPriceLine = priceBars.length >= 2;
   const head = document.createElement('div');
   head.className = 'news-chart-head';
-  head.innerHTML = `<span class="news-chart-title">${newsUI.chartProduct} · net impact${priceBars.length >= 2 ? ' + price' : ''}</span>` +
+  head.innerHTML = `<span class="news-chart-title">${newsUI.chartProduct} · net impact${hasPriceLine ? ' + price' : ''}</span>` +
     `<span class="news-chart-latest ${now.net > 0 ? 'pos' : now.net < 0 ? 'neg' : ''}">${now.n ? newsFmtSigned(now.net) : '—'}</span>` +
-    `<span class="news-chart-sub">${now.bull} bullish / ${now.bear} bearish · ${now.n} events · ${count} in ${NEWS_HISTORY_DAYS}d${rangeNote}</span>`;
+    `<span class="news-chart-sub">${now.bull} bullish / ${now.bear} bearish · ${now.n} events · ${count} in ${NEWS_HISTORY_DAYS}d${rangeNote}</span>` +
+    // Color-coded legend (2026-09-14, Mete's request — the two lines weren't labeled anywhere) so
+    // it's obvious which line is which without guessing from color alone: blue = net impact (same
+    // stroke as .news-line), gold = futures price (same stroke as .news-price-line / var(--accent)).
+    (hasPriceLine ? `<span class="news-legend">
+        <span class="news-legend-item"><span class="news-legend-dot" style="background:#5eb3f6"></span>Net impact (24h)</span>
+        <span class="news-legend-item"><span class="news-legend-dot" style="background:var(--accent)"></span>${PRICE_LABELS[newsUI.chartProduct] || 'Futures price'}</span>
+      </span>` : '');
   box.appendChild(head);
 
   const svgWrap = document.createElement('div');
