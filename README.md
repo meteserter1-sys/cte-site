@@ -45,6 +45,104 @@ durmaz; ilk log'da hangi kaynağın boş döndüğüne bak.
   prompt'a örnek olarak eklenir; bir kaynağa 5+ 👎 → kaynak susturulur (`news_meta/muted`).
 * **Saklama:** 10 gün; eskisi her çalıştırmada silinir. Günün okuması History snapshot'ında kalır.
 
+## Yapılacaklar (2026-09-11'de not edildi)
+
+1. **AÇIK, DOĞRULANDI (14 Eylül) — `firebase.json` — `index.html` cache düzeltmesi.** Canlı sitede
+   `fetch('/index.html')` ile bizzat kontrol edildi: `Cache-Control: max-age=3600` hâlâ aktif.
+   GitHub repo kök dizini de kontrol edildi (`meteserter1-sys/cte-site`) — `firebase.json` gerçekten
+   yok, sadece Mete'nin yerel deploy klasöründe olmalı, o yüzden ben bu dosyayı düzenleyemiyorum.
+   Her deploy sonrası daha önce ziyaret etmiş tarayıcılar (kendi tarayıcın dahil) sert yenileme
+   (Ctrl+Shift+R) yapılmadıkça yeni sürümü göremeden 1 saate kadar eski sürümü göstermeye devam
+   ediyor. **Aksiyon (Mete'nin yerel `firebase.json`'una eklemesi gerek):**
+   ```json
+   { "hosting": { "headers": [{
+       "source": "/index.html",
+       "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" }]
+   }] } }
+   ```
+   Zaten bir `hosting.headers` dizisi varsa bu obje o diziye eklenmeli, üzerine yazılmamalı.
+
+2. **Sınıflandırıcı yön (direction) tutarsızlığı — rekolte/hasat haberlerinde.** 11 Eylül akışında
+   iki örnek görüldü:
+   - "Fransa'da mısır rekoltesi yeni dibe indi" → **BEARISH** etiketlenmiş, ama kural gereği ters
+     olmalıydı: rekolte/verim düşüşü = daha az arz = **BULLISH** (tıpkı "rekor hasat = BEARISH"
+     kuralının simetriği gibi). Muhtemel gerçek sınıflandırma hatası.
+   - Aynı "Hindistan yağlı tohum ihracatı %12,5 düştü" haberi iki farklı kaynaktan geldiğinde biri
+     BEARISH biri BULLISH etiketlenmiş — aynı olay için tutarsız yön ataması.
+   - Not: Arjantin "El Niño sayesinde rekor 70,5 M ton mısır hasadı" haberi BEARISH doğru
+     etiketlenmiş (El Niño → Arjantin'de bol yağış → iyi verim → fazla arz) — bu örnek sorun değil,
+     sadece karşılaştırma için.
+   - **✅ UYGULANDI (14 Eylül) — `collector.py`'de `SYSTEM_PROMPT`'a açık bir "SYMMETRY RULE" eklendi**:
+     düşen rekolte/verim/hasat tahmini = BULLISH, artan/rekor = BEARISH, ikisi karıştırılmasın diye
+     modele doğrudan yazıldı ("iyi/kötü haber" hissiyle değil arz daralması/genişlemesiyle karar
+     ver). **Önemli:** bu değişiklik henüz yalnızca bu oturumda düzenlenmiş `collector.py` dosyasında
+     — GitHub'a yüklenip Actions bir sonraki `workflow_dispatch`'te çalışana kadar etkisiz, ve zaten
+     yalnızca BUNDAN SONRA sınıflandırılacak yeni başlıkları etkiler; Fransa örneği gibi geçmişte
+     yanlış etiketlenmiş kayıtlar Firestore'da öyle kalır (geriye dönük düzeltme yapılmadı).
+
+3. **Aynı olay, zıt yön — WASDE günü (12 Eylül) örneği.** Aynı kaynaktan (agriculture.com), ~70
+   dakika arayla, aynı WASDE verisini (mısır verimi + bitiş stokları kesildi) yorumlayan iki başlık
+   birbirine tamamen zıt etiketlenmiş:
+   - "USDA Cuts Corn Yield to 178.5 Bu... Nudges Soybeans Slightly Higher" → **BULLISH 75**
+   - "USDA Drops 2026/2027 U.S. Corn Yield and Ending Stocks in September WASDE" → **BEARISH 70**
+
+   2. maddedeki (Fransa/SBM) tutarsızlıkla aynı aile — büyük/karmaşık raporları (WASDE gibi çok
+   sayılı, çok yönlü tablo içeren) tek başlıktan yorumlarken model bazen zıt sonuca varabiliyor.
+   **Dikkat:** Bunu düzeltirken, aynı akışta gördüğümüz meşru ve KORUNMASI gereken bir ayrı boyutu
+   karıştırmamak lazım — "sell the fact" başlıkları ("Corn Fades Lower Despite USDA Yield Cut",
+   "Corn Slipping Back in Sell the Fact Reaction to USDA Yield Cut") bilerek BEARISH etiketlenmiş,
+   çünkü onlar temel veriyi değil GERÇEKLEŞEN FİYAT TEPKİSİNİ anlatıyor (temel bullish olsa da fiyat
+   satılabilir) — bu geçerli bir ayrı sinyal, hata değil. Yani düzeltme hedefi: "aynı temel olguyu
+   anlatan başlıklar arasında tutarlılık", "temel veri yönü" ile "gerçekleşen fiyat tepkisi yönü"
+   arasındaki meşru farkı silmeden.
+   - **✅ UYGULANDI (14 Eylül) — aynı `SYSTEM_PROMPT` düzenlemesiyle** bir "MULTI-COMPONENT REPORTS"
+     kuralı eklendi: WASDE gibi çok tablolu raporlarda en önemli bileşenler (üretim/verim, bitiş
+     stokları) net edilip TEK yön kararına varılacak; aynı olayı anlatan başlıklar normalde aynı
+     yönde olmalı; "sell the fact" tarzı gerçek fiyat-tepkisi başlıkları (başlık açıkça fiyat
+     tepkisinden bahsediyorsa) istisna olarak zıt kalabilir ama bu varsayılan değil. Şema
+     değişmedi (`direction` hâlâ tek alan) — ayrı bir "fiyat tepkisi" alanı eklemek daha büyük bir
+     UI değişikliği gerektirir, şimdilik ertelendi. Aynı yayılma notu geçerli: GitHub'a yüklenip
+     yeniden deploy edilene kadar etkisiz, yalnızca ileriye dönük.
+
+4. **✅ ÇÖZÜLDÜ / TEK SEFERLİKMİŞ (14 Eylül doğrulandı) — cron-job.org tetikleyicisi 13 Eylül'de
+   başarısız olmuştu.** GitHub → Actions sekmesi kontrol edildi: `is:failure` filtresiyle **0 sonuç**
+   — son 290 workflow run'ın tamamı ✅ başarılı, ~15 dakikada bir düzenli çalışıyor, en son çalışma
+   14 Eylül'de 12 dakika önceydi. 13 Eylül'deki 500 hatası GitHub'ın anlık/tek seferlik bir
+   aksaklığıymış, tekrarlamamış. Ekstra aksiyon gerekmiyor.
+
+5. **🔴 AÇIK, KRİTİK — Claude API kredisi (14 Eylül'de tekrar kontrol edildi: $2,15 kaldı, e-postadaki
+   $2,43'ten de düşmüş).** Claude Console → Billing'de doğrudan görüldü: **"Auto reload is off. Turn
+   it on to keep your API running when your balance reaches zero."** Yani kredi biterse
+   `collector.py`'nin Claude sınıflandırma adımı (GitHub Actions'taki `ANTHROPIC_API_KEY`) sessizce
+   durur, haber toplama kesilir. Ben kendi başıma kredi satın alamam/auto-reload açamam (ödeme/hesap
+   ayarı — Mete'nin onayı ve kendi işlemi gerekiyor). **Aksiyon (Mete): Claude Console → Settings →
+   Billing → ya "Buy credits" ile manuel yükle, ya da "Auto reload"u aç.** Bu iş kalan tek gerçekten
+   acil madde.
+
+6. **✅ ÇÖZÜLDÜ (14 Eylül) — Brezilya mısır ihracatı düştü haberi, yön doğrulandı: ETİKET DOĞRU.**
+   "Exportação de milho recua 8% em 2026" (Investing.com Brasil, BEARISH 45 conf 65) için asıl
+   Investing.com makalesi hâlâ doğrudan çekilemedi, ama Google AI Overview + noticiasagricolas.com.br
+   üzerinden aynı olayı anlatan başka kaynaklar bulundu ve sebep netleşti: **rekabet kaynaklı**, Brezilya'nın
+   kendi arzı daralmıyor. "Mais competitiva, Argentina acelera exportações de milho enquanto Brasil
+   projeta setembro abaixo de 2025" ve "Exportações de milho fecham agosto 32% abaixo de 2025"
+   başlıkları, Arjantin'in daha rekabetçi fiyatlarla alıcıları kaptığını gösteriyor — 2. maddedeki
+   "kendi arzı daralması = BULLISH olmalıydı" senaryosu değil, Arjantin örneğiyle aynı "dünyada mısır
+   bol, Brezilya'nın pazarlık gücü zayıf" mantığı geçerli. Sonuç: **BEARISH 45 doğru etiketlenmiş**,
+   düzeltme gerekmiyor.
+
+7. **✅ ÇÖZÜLDÜ (14 Eylül) — Trailing 24h net impact grafiğinde çizgi ikiye bölünüyordu (FREIGHT'te görülmüştü).**
+   Mete'nin kararı nettti: "tek parça çizilecek, doğru, ikiye bölünmesin." Buna göre `newsSeries()`
+   ve `newsChartSvg()` (index.html) düzeltildi:
+   - `newsSeries()`: art arda iki qualifying olay arası 24 saati (`NEWS_WINDOW_MS`) aşınca artık
+     anlamsız bir `{gap:true}` işareti koymak yerine, önceki olayın 24 saatlik penceresinin tam
+     boşaldığı ana (`prev + NEWS_WINDOW_MS`) `newsWindowStats()` ile **gerçekten hesaplanmış** bir
+     nokta ekliyor (aynı mantık son olaydan "şimdi"ye kadar olan boşluk için de uygulandı).
+   - `newsChartSvg()`: `.gap` filtreleme/kalem-kaldırma mantığı tamamen kaldırıldı, path artık
+     koşulsuz tek parça `M ... L ... L ...` olarak çiziliyor.
+   Sonuç: çizgi her zaman tek parça, ve boşluk anındaki değer uydurma/düz-çizgi değil, gerçekten
+   o anda pencerenin ne gösterdiğinin doğru hesaplanmış hali. `node --check` ile syntax doğrulandı.
+   Canlı sitede (deploy sonrası) görsel doğrulama yapılacak.
+
 ## Kurulum — sırayla
 
 ### 1. Firestore kuralları

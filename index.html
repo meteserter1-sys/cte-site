@@ -226,9 +226,9 @@
   /* breaking ticker */
   .news-ticker{ display:flex; align-items:stretch; background:#2a1512; border:1px solid var(--bad); border-radius:7px; overflow:hidden; margin-bottom:10px; height:30px; }
   .news-ticker-label{ background:var(--bad); color:#fff; font-size:10.5px; font-weight:800; letter-spacing:.12em; padding:0 10px; display:flex; align-items:center; flex-shrink:0; }
-  .news-ticker-track{ flex:1; overflow:hidden; position:relative; }
+  .news-ticker-track{ flex:1; overflow:hidden; position:relative; touch-action:pan-y; cursor:grab; }
+  .news-ticker-track.dragging{ cursor:grabbing; }
   .news-ticker-inner{ display:inline-flex; gap:40px; white-space:nowrap; padding-left:100%; animation:news-scroll linear infinite; align-items:center; height:100%; }
-  .news-ticker-track:hover .news-ticker-inner{ animation-play-state:paused; }
   .news-ticker-item{ color:#ffd9d3; font-size:12px; font-weight:600; text-decoration:none; }
   .news-ticker-item.bull{ color:#9be3bf; } .news-ticker-item.bear{ color:#ffb0a6; }
   .news-ticker-item:hover{ text-decoration:underline; }
@@ -2410,19 +2410,24 @@ function newsWindowStats(asc, endMs){
   return { ms: endMs, net, n, bull, bear, neu, balance: abs ? Math.round(1000 * net / abs) / 10 : 0 };
 }
 
-// One point per qualifying story (evaluated at its own timestamp), plus a "now" point.
-// Consecutive points further apart than the window get a null gap between them, never a zero.
+// One point per qualifying story (evaluated at its own timestamp), plus a "now" point. When two
+// consecutive stories are further apart than the window, the trailing sum genuinely empties out in
+// between (the earlier story ages out of the 24h window before the next one arrives) — so we add
+// one extra, honestly-computed point at exactly that moment (previous story's ms + 24h) instead of
+// either leaving a break in the line or drawing a straight segment across the gap that would hide
+// the real dip. The line is always a single continuous path; it just visits the true value at the
+// point the window empties, rather than only at story timestamps.
 function newsSeries(product){
   const asc = newsForProduct(product).filter(newsQualifies).slice().sort((a, b) => a.ms - b.ms);
   const pts = [];
   let prev = null;
   for (const s of asc){
-    if (prev !== null && s.ms - prev > NEWS_WINDOW_MS) pts.push({ ms: prev + Math.floor((s.ms - prev) / 2), gap: true });
+    if (prev !== null && s.ms - prev > NEWS_WINDOW_MS) pts.push(newsWindowStats(asc, prev + NEWS_WINDOW_MS));
     pts.push(newsWindowStats(asc, s.ms));
     prev = s.ms;
   }
   const now = newsWindowStats(asc, Date.now());
-  if (prev !== null && Date.now() - prev > NEWS_WINDOW_MS) pts.push({ ms: prev + Math.floor((Date.now() - prev) / 2), gap: true });
+  if (prev !== null && Date.now() - prev > NEWS_WINDOW_MS) pts.push(newsWindowStats(asc, prev + NEWS_WINDOW_MS));
   pts.push({ ...now, isNow: true });
   return { pts, now, count: asc.length };
 }
@@ -2573,20 +2578,16 @@ function renderNewsEvents(){
 function newsChartSvg(pts, width, height){
   const padL = 44, padR = 12, padT = 10, padB = 24;
   const w = width - padL - padR, h = height - padT - padB;
-  const real = pts.filter(p => !p.gap);
-  if (real.length < 2) return `<div class="note">Not enough qualifying events yet to draw the trailing 24h line (needs impact ≥ ${NEWS_MIN_IMPACT} and confidence ≥ ${NEWS_MIN_CONF}).</div>`;
-  const xMin = real[0].ms, xMax = real[real.length - 1].ms;
-  let yMin = Math.min(0, ...real.map(p => p.net)), yMax = Math.max(0, ...real.map(p => p.net));
+  if (pts.length < 2) return `<div class="note">Not enough qualifying events yet to draw the trailing 24h line (needs impact ≥ ${NEWS_MIN_IMPACT} and confidence ≥ ${NEWS_MIN_CONF}).</div>`;
+  const xMin = pts[0].ms, xMax = pts[pts.length - 1].ms;
+  let yMin = Math.min(0, ...pts.map(p => p.net)), yMax = Math.max(0, ...pts.map(p => p.net));
   if (yMax === yMin){ yMax += 50; yMin -= 50; }
   const span = yMax - yMin; yMax += span * 0.1; yMin -= span * 0.1;
   const X = ms => padL + (xMax === xMin ? w / 2 : (ms - xMin) / (xMax - xMin) * w);
   const Y = v => padT + (yMax - v) / (yMax - yMin) * h;
-  let d = '', pen = false;
-  for (const p of pts){
-    if (p.gap){ pen = false; continue; }
-    d += (pen ? ' L' : ' M') + X(p.ms).toFixed(1) + ' ' + Y(p.net).toFixed(1);
-    pen = true;
-  }
+  // Always one continuous path — newsSeries() now supplies a real (not interpolated-away) point
+  // at every moment the trailing window's value actually changes, so there is never a gap to skip.
+  const d = pts.map((p, i) => (i ? ' L' : 'M') + X(p.ms).toFixed(1) + ' ' + Y(p.net).toFixed(1)).join('');
   const y0 = Y(0);
   const ticks = [];
   const step = niceStep((yMax - yMin) / 4);
@@ -2601,7 +2602,7 @@ function newsChartSvg(pts, width, height){
     const anchor = i === 0 ? 'start' : i === nX - 1 ? 'end' : 'middle';
     xt.push(`<text x="${X(ms).toFixed(1)}" y="${height - 6}" text-anchor="${anchor}" class="news-axis">${newsFmtTime(ms)}</text>`);
   }
-  const last = real[real.length - 1];
+  const last = pts[pts.length - 1];
   const lastColor = last.net > 0 ? 'var(--good)' : last.net < 0 ? 'var(--bad)' : 'var(--text-dim)';
   return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="none" class="news-svg" role="img" aria-label="Trailing 24h net impact">
     ${ticks.join('')}
@@ -2834,6 +2835,71 @@ function renderNewsTicker(){
   inner.style.animationDuration = Math.max(20, items.length * 9) + 's';
   track.appendChild(inner);
   bar.appendChild(label); bar.appendChild(track);
+
+  // Hovering (desktop) or pressing-and-holding (touch) pauses the strip; press-and-drag lets you
+  // scrub it left/right by hand instead of waiting for the loop to come back around. Releasing
+  // always resumes the auto-scroll from wherever you left it, never snapping back to the start.
+  // Handled entirely here in JS so hover, touch-hold and drag-release all share one mechanism —
+  // a CSS-only `:hover{ animation-play-state:paused }` can't also support manual scrubbing,
+  // because a still-running (even paused) CSS animation keeps owning `transform` and ignores
+  // any inline transform we'd try to drive by hand.
+  let dragging = false, dragMoved = false, dragStartX = 0, dragBaseTx = 0, singleWidth = 0;
+  const txNow = () => {
+    const m = getComputedStyle(inner).transform;
+    const mm = m && m.match(/matrix\(([^)]+)\)/);
+    return mm ? (parseFloat(mm[1].split(',')[4]) || 0) : 0;
+  };
+  const detach = () => {                        // freeze the animation, hand transform control to us
+    const tx = txNow();
+    inner.style.animation = 'none';
+    inner.style.transform = `translateX(${tx}px)`;
+    return tx;
+  };
+  const resume = () => {                         // restart the auto-scroll from the current spot
+    const tx = txNow();
+    singleWidth = singleWidth || inner.scrollWidth / 2;   // content is duplicated once, for the loop
+    const durationSec = parseFloat(inner.style.animationDuration) || 20;
+    const fraction = singleWidth > 0 ? Math.min(1, Math.max(0, -tx / singleWidth)) : 0;
+    inner.style.transform = '';
+    inner.style.animation = 'none';
+    void inner.offsetWidth;                      // force reflow so the delay below actually takes
+    inner.style.animation = `news-scroll ${durationSec}s linear infinite`;
+    inner.style.animationDelay = `-${fraction * durationSec}s`;
+  };
+  track.addEventListener('mouseenter', () => { if (!dragging) detach(); });
+  track.addEventListener('mouseleave', () => { if (!dragging) resume(); });
+  track.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    dragging = true; dragMoved = false;
+    dragStartX = e.clientX;
+    singleWidth = inner.scrollWidth / 2;
+    dragBaseTx = detach();
+    track.classList.add('dragging');
+    try{ track.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  track.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const delta = e.clientX - dragStartX;
+    if (Math.abs(delta) > 4) dragMoved = true;
+    let tx = dragBaseTx + delta;
+    if (singleWidth > 0){
+      tx = tx % singleWidth;
+      if (tx > 0) tx -= singleWidth;              // wrap so scrubbing feels endless both directions
+    }
+    inner.style.transform = `translateX(${tx}px)`;
+  });
+  const endDrag = () => {
+    if (!dragging) return;
+    dragging = false;
+    track.classList.remove('dragging');
+    resume();
+    if (dragMoved){                                // a drag shouldn't also open the link you let go on
+      track.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); }, { capture: true, once: true });
+    }
+  };
+  track.addEventListener('pointerup', endDrag);
+  track.addEventListener('pointercancel', endDrag);
+
   return bar;
 }
 
