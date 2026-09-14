@@ -788,6 +788,75 @@ def push_alerts(db, heads: list[dict]) -> int:
     return sent
 
 
+# ── Price history (for the site's merged net-impact + futures price chart) ────────────────
+# 2026-09-14, Mete's request: the trailing net-impact line and the CBOT futures price should be
+# drawn on the SAME chart, with a real price axis and a hover tooltip. That's only possible if WE
+# hold the actual price numbers — a TradingView iframe embed can't be read from outside itself, and
+# there's no way to draw our own line into it. Yahoo Finance's public chart endpoint (the same one
+# the popular `yfinance` Python package wraps) gives free, keyless daily OHLC for CBOT/ICE futures
+# continuous front-month contracts — fine for a daily-bar line chart, not meant for tick trading.
+# MACRO is deliberately left out of this (stays on its existing separate DXY/VIX TradingView
+# widgets, per Mete — no price history needed for those here).
+#
+# NOT independently verified reachable from GitHub Actions as of this writing — this sandbox's own
+# network policy blocks both this endpoint and its usual fallback (stooq.com) for unrelated reasons
+# (an egress allowlist, and a tool that honors robots.txt), so this was written against Yahoo's
+# well-documented, widely-used (via `yfinance`) response shape rather than a live test from here.
+# First real run should be checked (see `sync_prices` logging below, and Firestore `prices/*`).
+PRICE_SYMBOLS = {
+    'WHEAT':   'ZW=F',   # CBOT Wheat, continuous front-month
+    'CORN':    'ZC=F',   # CBOT Corn
+    'SBM':     'ZM=F',   # CBOT Soybean Meal
+    'FREIGHT': 'BZ=F',   # ICE Brent Crude — same proxy the page already used for FREIGHT via TradingView
+}
+PRICE_REFRESH_HOURS = 4    # don't re-fetch a symbol more often than this — daily bars barely move
+                           # intraday anyway, and it keeps us a polite, low-volume caller
+PRICE_YEARS = 5
+
+
+def fetch_price_series(symbol: str) -> list[dict] | None:
+    """Daily closes for `symbol` over the last PRICE_YEARS, oldest first: [{'t': ms, 'c': close}, …].
+    Returns None on any failure — the caller must treat that as "try again next run", not fatal."""
+    url = f'https://query2.finance.yahoo.com/v8/finance/chart/{symbol}'
+    headers = {'User-Agent': 'Mozilla/5.0 (compatible; CTE-newsfeed/1.0; +https://commodity-trading-engine.web.app/)'}
+    try:
+        r = requests.get(url, params={'range': f'{PRICE_YEARS}y', 'interval': '1d'}, headers=headers, timeout=20)
+        r.raise_for_status()
+        result = r.json()['chart']['result'][0]
+        timestamps = result['timestamp']
+        closes = result['indicators']['quote'][0]['close']
+        bars = [{'t': int(ts) * 1000, 'c': round(c, 4)} for ts, c in zip(timestamps, closes) if c is not None]
+        return bars or None
+    except Exception as e:  # noqa: BLE001
+        print(f'  ! price fetch failed for {symbol} ({e})', file=sys.stderr)
+        return None
+
+
+def sync_prices(db):
+    """Refreshes Firestore `prices/{product}` for every symbol whose stored copy is missing or
+    older than PRICE_REFRESH_HOURS. Never raises — a price-data outage must not break the news run
+    (the page falls back gracefully to no-price-line if a doc is missing or stale, see index.html)."""
+    now_ms = int(time.time() * 1000)
+    stale_before = now_ms - PRICE_REFRESH_HOURS * 3600 * 1000
+    updated = 0
+    for product, symbol in PRICE_SYMBOLS.items():
+        try:
+            ref = db.collection('prices').document(product)
+            snap = ref.get()
+            if snap.exists and (snap.to_dict() or {}).get('updatedMs', 0) > stale_before:
+                continue    # fresh enough, skip — keeps us to a handful of requests per day
+            bars = fetch_price_series(symbol)
+            if not bars:
+                continue    # fetch_price_series already logged why
+            ref.set({'symbol': symbol, 'updatedMs': now_ms, 'bars': bars})
+            updated += 1
+        except Exception as e:  # noqa: BLE001
+            print(f'  ! price sync failed for {product} ({e})', file=sys.stderr)
+    if updated:
+        print(f'  prices: refreshed {updated}/{len(PRICE_SYMBOLS)} symbols')
+    return updated
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--dry-run', action='store_true', help='do not write to Firestore')
@@ -829,6 +898,7 @@ def main():
         if not args.dry_run:
             pruned = prune_old(db)
             save_cache(cache)
+            sync_prices(db)
             print(f'  pruned {pruned} events older than {RETENTION_DAYS} days')
         print('nothing new. done.')
         return
@@ -859,6 +929,7 @@ def main():
     write_docs(db, heads, updates)
     push_alerts(db, heads)
     pruned = prune_old(db)
+    sync_prices(db)
     # Everything the model actually answered for — kept, folded or skipped — is "seen": never pay
     # for it twice. Stories from a failed batch are left out so they come back next run.
     for s in new_stories:
