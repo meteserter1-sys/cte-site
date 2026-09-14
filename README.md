@@ -144,11 +144,52 @@ durmaz; ilk log'da hangi kaynağın boş döndüğüne bak.
    o anda pencerenin ne gösterdiğinin doğru hesaplanmış hali. `node --check` ile syntax doğrulandı.
    Canlı sitede (deploy sonrası) görsel doğrulama yapılacak.
 
+8. **✅ UYGULANDI (14 Eylül) — News sekmesindeki grafik işi: varsayılan ürün, birleşik grafik, İngilizce
+   etiketler, fiyat ekseni + hover.** Mete'nin bu turdaki isteği tek tek:
+   - Açılış grafiği artık **WHEAT** seçili geliyor (SBM değil) — `newsUI.chartProduct` varsayılanı
+     değişti.
+   - Net-impact grafiği ile CBOT futures fiyat grafiği **tek grafikte birleşti** (WHEAT/CORN/SBM/
+     FREIGHT için) — ayrı TradingView kutusu kaldırıldı, sağda kendi ekseni olan gerçek bir fiyat
+     çizgisi eklendi. **MACRO dokunulmadı**, DXY/VIX hâlâ ayrı TradingView widget'larında.
+     Sebep: TradingView'in embed widget'ı cross-origin iframe olduğu için içine kendi verimizi
+     çizemiyorduk — bu yüzden fiyatı kendi tarafımızda (collector.py → Firestore → grafik) çekmeye
+     geçildi (aşağıda).
+   - Daily/Weekly/Monthly/1Y/5Y aralık etiketleri İngilizce (zaten önceki turda yapılmıştı, bu turda
+     tekrar doğrulandı).
+   - Fiyat ekseni: seçili aralık penceresindeki **gerçek en düşük/en yüksek kapanış** sağ eksende
+     yazılı duruyor (adım aralıklı tik değil, gerçek min/maks). Mouse bir tarihin üzerine gelince
+     dikey kılavuz çizgi + o tarihin net-impact ve fiyat değerini gösteren bir tooltip çıkıyor.
+   - **Yeni fiyat verisi altyapısı:** `collector.py`'ye `sync_prices()` eklendi — Yahoo Finance'in
+     genel chart endpoint'inden (`yfinance` paketinin kullandığı aynı endpoint) WHEAT/CORN/SBM/
+     FREIGHT için (`ZW=F`/`ZC=F`/`ZM=F`/`BZ=F`) günlük kapanışları 5 yıllık çekip
+     Firestore `prices/{product}` altına yazıyor, en fazla 4 saatte bir sembol başına yeniliyor.
+     `firestore.rules`'a yeni `match /prices/{product}` bloğu eklendi (sadece okuma, yazma servis
+     hesabından). **Bu kural GitHub Console'dan AYRICA Publish edilmeli** — `firebase deploy --only
+     hosting` bunu kapsamıyor (bkz. Kurulum §1).
+   - **Doğrulanamayan tek nokta:** Yahoo Finance'in bu endpoint'ine bu oturumun kendi sanal ortamından
+     (GitHub Actions değil) erişim engelliydi (proxy + robots.txt kısıtlamaları) — bu GitHub Actions'ın
+     kendi ağ erişimini yansıtmıyor, `yfinance` paketinin de aynı endpoint'i kullandığı biliniyor, ama
+     ilk gerçek toplayıcı çalışmasından sonra Firestore'da `prices/*` dolduğunu ben ayrıca doğrulayacağım.
+
+9. **✅ UYGULANDI (14 Eylül) — Masaüstü ding + bildirim.** Sekme açıkken BREAKING ya da etki ≥ 75
+   olay geldiğinde iki tonlu bir "ding" (Web Audio API, harici ses dosyası yok) + tarayıcı
+   `Notification`'ı çıkıyor. Var olan 🔔 Alerts butonunun aynı izin/localStorage durumunu kullanıyor —
+   ayrı bir açma/kapama eklenmedi. Mobil push (FCM) bu değişiklikten etkilenmedi, aynı şekilde çalışıyor.
+
+10. **Not (14 Eylül) — Ukrayna demiryolu tahıl ihracatı haberi.** 7. maddedeki ürün değerlendirmesinde
+    bu haberi (58% düşüş + fazla malın elde kalması, BEARISH) yanlışlıkla Fransa rekolte örneğiyle
+    "aynı aile hata" diye nitelemiştim. Mete haklı olarak düzeltti: Fransa örneği gerçek bir hataydı
+    (rekolte düşüşü = az arz = BULLISH olmalıydı, ama BEARISH etiketlenmişti). Ukrayna haberi ise
+    farklı bir mantık — ihracat düşüp mal elde kalması bir arz fazlası/zayıf talep göstergesi, bu da
+    zaten BEARISH'i destekliyor. İkisi ilgisiz, karıştırılmamalı — ✅ düzeltildi, ayrı bir aksiyon
+    gerekmiyor.
+
 ## Kurulum — sırayla
 
 ### 1. Firestore kuralları
 Firebase Console → Firestore → Rules → `newsfeed/firestore.rules` içeriğini yapıştır → Publish.
-(`news_feedback` ve `news_devices` yazma izni bu sürümde eklendi.)
+(`news_feedback` ve `news_devices` yazma izni bu sürümde eklendi; 14 Eylül'de yeni `prices/{product}`
+bloğu eklendi — birleşik fiyat grafiği için, ayrıca Publish edilmesi gerekiyor.)
 
 ### 2. Secret'lar (yapıldı)
 GitHub → Settings → Secrets → `FIREBASE_SERVICE_ACCOUNT`, `ANTHROPIC_API_KEY`.

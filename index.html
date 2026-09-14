@@ -220,9 +220,18 @@
   .news-price-extra-link:hover{ text-decoration:underline; }
   .news-svg{ display:block; }
   .news-axis{ fill:var(--text-dim); font-family:var(--mono); font-size:9.5px; }
+  .news-price-axis{ fill:var(--accent); }
   .news-grid{ stroke:var(--border); stroke-width:1; }
   .news-zero{ stroke:var(--text-dim); stroke-width:1; stroke-dasharray:4 4; }
   .news-line{ fill:none; stroke:#5eb3f6; stroke-width:1.8; stroke-linejoin:round; stroke-linecap:round; }
+  .news-price-line{ fill:none; stroke:var(--accent); stroke-width:1.6; stroke-linejoin:round; stroke-linecap:round; }
+  /* merged net-impact + price chart: hover guide line + tooltip (2026-09-14) */
+  .news-svg-wrap{ position:relative; cursor:crosshair; }
+  .news-hover-line{ position:absolute; top:10px; bottom:24px; width:1px; background:var(--text-dim); opacity:.6; pointer-events:none; }
+  .news-hover-tip{ position:absolute; top:2px; transform:translateX(-50%); background:var(--panel-2); border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-size:10.5px; font-family:var(--mono); line-height:1.5; white-space:nowrap; pointer-events:none; z-index:5; }
+  .news-hover-tip .news-hover-date{ color:var(--text-dim); margin-bottom:1px; }
+  .news-hover-tip b.pos{ color:var(--good); } .news-hover-tip b.neg{ color:var(--bad); }
+  .news-hover-tip b{ color:var(--text); }
   /* breaking ticker */
   .news-ticker{ display:flex; align-items:stretch; background:#2a1512; border:1px solid var(--bad); border-radius:7px; overflow:hidden; margin-bottom:10px; height:30px; }
   .news-ticker-label{ background:var(--bad); color:#fff; font-size:10.5px; font-weight:800; letter-spacing:.12em; padding:0 10px; display:flex; align-items:center; flex-shrink:0; }
@@ -2334,6 +2343,10 @@ const NEWS_HISTORY_DAYS = 30;
 // (2026-09-14) was ~54 stored docs/day, so 30 days ≈ 1,620 docs; ×120/day gives comfortable
 // headroom for busier weeks (WASDE, harvest season) without the query ever silently truncating.
 const NEWS_QUERY_LIMIT = NEWS_HISTORY_DAYS * 120;
+// Must track collector.py's NEWS_ALERT_IMPACT default (see that file's header) — used here only to
+// decide when to ding/desktop-notify for a live tab, a client-side mirror of the server's own
+// push-alert threshold, not a second source of truth for it.
+const NEWS_ALERT_IMPACT_JS = 75;
 const NEWS_PRODUCTS = ['ALL', 'WHEAT', 'CORN', 'SBM', 'FREIGHT', 'MACRO'];
 const NEWS_TZ = 'Asia/Ho_Chi_Minh';
 // Web-push public key from Firebase Console → Cloud Messaging → Web Push certificates.
@@ -2354,7 +2367,14 @@ let newsVotes = {};                // id -> 'like' | 'dislike'
 let newsUnsub = null;
 let newsLoaded = null;             // promise resolved after the first snapshot
 let newsClockTimer = null;
-let newsUI = { product: 'ALL', search: '', chartProduct: 'SBM', minImpactOn: false, chartRange: '1M' };
+let newsUI = { product: 'ALL', search: '', chartProduct: 'WHEAT', minImpactOn: false, chartRange: '1M' };
+
+// Daily futures price history (2026-09-14), written by collector.py's sync_prices() into
+// Firestore `prices/{product}`. Kept separate from newsDocs/newsSeries — this merges into the
+// SAME chart at render time (see renderNewsChart) rather than being its own data model. MACRO has
+// no entry here on purpose: it keeps its existing separate TradingView DXY/VIX widgets.
+const PRICE_PRODUCTS = ['WHEAT', 'CORN', 'SBM', 'FREIGHT'];
+let newsPrices = {};               // product -> { symbol, updatedMs, bars: [{t, c}, …] } | undefined
 
 // Shared time-range control for the net-impact chart AND the TradingView price widget beneath it
 // (2026-09-14, Mete's request): before this, the price widget was hard-locked to `dateRange:'1D'`
@@ -2364,11 +2384,11 @@ let newsUI = { product: 'ALL', search: '', chartProduct: 'SBM', minImpactOn: fal
 // widget. TradingView's mini-symbol-overview widget has no exact "1 week" preset, so Haftalık and
 // Aylık both use TradingView's `1M` (closest available) — only the SVG side actually narrows to 7d.
 const NEWS_CHART_RANGES = [
-  { key: '1D', label: 'Günlük',   days: 1,    tv: '1D'  },
-  { key: '1W', label: 'Haftalık', days: 7,    tv: '1M'  },
-  { key: '1M', label: 'Aylık',    days: 30,   tv: '1M'  },
-  { key: '1Y', label: '1 Yıllık', days: 365,  tv: '12M' },
-  { key: '5Y', label: '5 Yıllık', days: 1825, tv: '60M' },
+  { key: '1D', label: 'Daily',   days: 1,    tv: '1D'  },
+  { key: '1W', label: 'Weekly',  days: 7,    tv: '1M'  },
+  { key: '1M', label: 'Monthly', days: 30,   tv: '1M'  },
+  { key: '1Y', label: '1Y',      days: 365,  tv: '12M' },
+  { key: '5Y', label: '5Y',      days: 1825, tv: '60M' },
 ];
 
 function subscribeNews(){
@@ -2377,12 +2397,21 @@ function subscribeNews(){
   newsLoaded = new Promise(r => { resolveLoaded = r; });
   const since = Date.now() - NEWS_HISTORY_DAYS * 24 * 3600 * 1000;
   const q = query(NEWS_COLLECTION, orderBy('ms', 'desc'), limit(NEWS_QUERY_LIMIT));
+  let newsFirstSnapshot = true;     // don't ding/notify for the entire history on first load
   newsUnsub = onSnapshot(q, (snap) => {
     newsDocs = [];
     snap.forEach(d => {
       const x = d.data();
       if (x && typeof x.ms === 'number' && x.ms >= since) newsDocs.push(x);
     });
+    if (!newsFirstSnapshot){
+      for (const change of snap.docChanges()){
+        if (change.type !== 'added') continue;
+        const x = change.doc.data();
+        if (x && typeof x.ms === 'number' && x.ms >= since) newsMaybeAlert(x);
+      }
+    }
+    newsFirstSnapshot = false;
     resolveLoaded();
     renderNewsBody();
   }, (err) => {
@@ -2391,6 +2420,12 @@ function subscribeNews(){
     const body = document.getElementById('newsBody');
     if (body) body.innerHTML = '<div class="note">Could not load the news feed. If this is the first deployment, make sure the Firestore rules allow reading the <b>news</b> collection (see newsfeed/firestore.rules).</div>';
   });
+  for (const product of PRICE_PRODUCTS){
+    onSnapshot(doc(db, 'prices', product), (snap) => {
+      newsPrices[product] = snap.exists() ? snap.data() : undefined;
+      if (newsUI.chartProduct === product) renderNewsBody();
+    }, () => { /* missing prices/{product} doc or unreadable rules — chart just falls back to no price line */ });
+  }
   onSnapshot(NEWS_META_REF, (snap) => {
     newsMeta = snap.exists() ? snap.data() : null;
     const el = document.getElementById('newsLastRun');
@@ -2477,6 +2512,13 @@ function newsFmtTime(ms){
   return newsFmt(ms, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '');
 }
 function newsFmtSigned(v){ const r = Math.round(v); return (r > 0 ? '+' : '') + r.toLocaleString('en-US'); }
+// Futures/CFD-style price formatting for the merged chart's right-hand axis and hover tooltip
+// (2026-09-14) — 2 decimals regardless of magnitude keeps WHEAT (~600) and SBM (~350) readable
+// without a per-product format table.
+function newsFmtPrice(v){
+  if (v == null || !isFinite(v)) return '—';
+  return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 // ── Clocks + CBOT session state ──────────────────────────────────────────────
 const NEWS_CLOCKS = [
@@ -2599,25 +2641,48 @@ function renderNewsEvents(){
 }
 
 // ── SVG line chart (no library: keeps the app a single file) ────────────────
-function newsChartSvg(pts, width, height){
-  const padL = 44, padR = 12, padT = 10, padB = 24;
+// Merged net-impact + price chart (2026-09-14, Mete's request): draws the trailing-24h net-impact
+// line (left axis) and the real daily-close price line (right axis, when price data exists for
+// this product) on ONE chart instead of two separate boxes. `xMin`/`xMax` are the selected range
+// window's boundaries in ms — driven by the range chip, not by however much data happens to exist —
+// so "5Y" always spans 5 real years on screen even if net-impact events are sparse in it. Returns
+// `{ html, meta }`: meta carries just enough of the pixel<->time mapping for the caller to build a
+// mouse-hover tooltip without re-deriving it (see renderNewsChart) — no closures survive an
+// innerHTML string, so the scale has to be handed back explicitly instead.
+function newsChartSvg(pts, priceBars, xMin, xMax, width, height){
+  const hasPrice = Array.isArray(priceBars) && priceBars.length >= 2;
+  const padL = 44, padR = hasPrice ? 50 : 12, padT = 10, padB = 24;
   const w = width - padL - padR, h = height - padT - padB;
-  if (pts.length < 2) return `<div class="note">Not enough qualifying events yet to draw the trailing 24h line (needs impact ≥ ${NEWS_MIN_IMPACT} and confidence ≥ ${NEWS_MIN_CONF}).</div>`;
-  const xMin = pts[0].ms, xMax = pts[pts.length - 1].ms;
+  if (pts.length < 2 && !hasPrice){
+    return { html: `<div class="note">Not enough qualifying events yet to draw the trailing 24h line (needs impact ≥ ${NEWS_MIN_IMPACT} and confidence ≥ ${NEWS_MIN_CONF}).</div>`, meta: null };
+  }
   let yMin = Math.min(0, ...pts.map(p => p.net)), yMax = Math.max(0, ...pts.map(p => p.net));
+  if (!pts.length){ yMin = -50; yMax = 50; }
   if (yMax === yMin){ yMax += 50; yMin -= 50; }
   const span = yMax - yMin; yMax += span * 0.1; yMin -= span * 0.1;
   const X = ms => padL + (xMax === xMin ? w / 2 : (ms - xMin) / (xMax - xMin) * w);
   const Y = v => padT + (yMax - v) / (yMax - yMin) * h;
-  // Always one continuous path — newsSeries() now supplies a real (not interpolated-away) point
-  // at every moment the trailing window's value actually changes, so there is never a gap to skip.
-  const d = pts.map((p, i) => (i ? ' L' : 'M') + X(p.ms).toFixed(1) + ' ' + Y(p.net).toFixed(1)).join('');
-  const y0 = Y(0);
+
+  // Right-hand price axis: the actual min/max close in the shown window, explicitly labeled (not
+  // evenly-spaced step ticks like the left axis) — e.g. picking WHEAT + 5Y should show the true
+  // lowest and highest prices over that window, per Mete's ask.
+  let priceMin = null, priceMax = null, pPadTop = null, pPadBot = null, Yp = null;
+  if (hasPrice){
+    const closes = priceBars.map(b => b.c);
+    priceMin = Math.min(...closes); priceMax = Math.max(...closes);
+    if (priceMax === priceMin){ priceMax += 1; priceMin -= 1; }
+    const pspan = priceMax - priceMin;
+    pPadTop = priceMax + pspan * 0.08; pPadBot = priceMin - pspan * 0.08;
+    Yp = v => padT + (pPadTop - v) / (pPadTop - pPadBot) * h;
+  }
+
   const ticks = [];
-  const step = niceStep((yMax - yMin) / 4);
-  for (let v = Math.ceil(yMin / step) * step; v <= yMax; v += step){
-    ticks.push(`<text x="${padL - 6}" y="${(Y(v) + 3.5).toFixed(1)}" text-anchor="end" class="news-axis">${newsFmtSigned(v)}</text>` +
-               `<line x1="${padL}" x2="${padL + w}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" class="news-grid"/>`);
+  if (pts.length){
+    const step = niceStep((yMax - yMin) / 4);
+    for (let v = Math.ceil(yMin / step) * step; v <= yMax; v += step){
+      ticks.push(`<text x="${padL - 6}" y="${(Y(v) + 3.5).toFixed(1)}" text-anchor="end" class="news-axis">${newsFmtSigned(v)}</text>` +
+                 `<line x1="${padL}" x2="${padL + w}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" class="news-grid"/>`);
+    }
   }
   const xt = [];
   const nX = Math.max(2, Math.min(5, Math.floor(w / 110)));
@@ -2626,15 +2691,39 @@ function newsChartSvg(pts, width, height){
     const anchor = i === 0 ? 'start' : i === nX - 1 ? 'end' : 'middle';
     xt.push(`<text x="${X(ms).toFixed(1)}" y="${height - 6}" text-anchor="${anchor}" class="news-axis">${newsFmtTime(ms)}</text>`);
   }
-  const last = pts[pts.length - 1];
-  const lastColor = last.net > 0 ? 'var(--good)' : last.net < 0 ? 'var(--bad)' : 'var(--text-dim)';
-  return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="none" class="news-svg" role="img" aria-label="Trailing 24h net impact">
+
+  let netLine = '', netDot = '';
+  if (pts.length >= 2){
+    // Always one continuous path — newsSeries() supplies a real point at every moment the trailing
+    // window's value actually changes, so there is never a gap to skip.
+    const d = pts.map((p, i) => (i ? ' L' : 'M') + X(p.ms).toFixed(1) + ' ' + Y(p.net).toFixed(1)).join('');
+    const last = pts[pts.length - 1];
+    const lastColor = last.net > 0 ? 'var(--good)' : last.net < 0 ? 'var(--bad)' : 'var(--text-dim)';
+    netLine = `<line x1="${padL}" x2="${padL + w}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" class="news-zero"/>` +
+              `<path d="${d.trim()}" class="news-line"/>`;
+    netDot = `<circle cx="${X(last.ms).toFixed(1)}" cy="${Y(last.net).toFixed(1)}" r="3.5" fill="${lastColor}"/>`;
+  }
+
+  let priceLine = '', priceDot = '', priceAxis = '';
+  if (hasPrice){
+    const dp = priceBars.map((b, i) => (i ? ' L' : 'M') + X(b.t).toFixed(1) + ' ' + Yp(b.c).toFixed(1)).join('');
+    const lastP = priceBars[priceBars.length - 1];
+    priceLine = `<path d="${dp.trim()}" class="news-price-line"/>`;
+    priceDot = `<circle cx="${X(lastP.t).toFixed(1)}" cy="${Yp(lastP.c).toFixed(1)}" r="3.5" fill="var(--accent)"/>`;
+    priceAxis = `<text x="${padL + w + 6}" y="${(Yp(priceMax) + 3.5).toFixed(1)}" class="news-axis news-price-axis">${newsFmtPrice(priceMax)}</text>` +
+                `<text x="${padL + w + 6}" y="${(Yp(priceMin) + 3.5).toFixed(1)}" class="news-axis news-price-axis">${newsFmtPrice(priceMin)}</text>`;
+  }
+
+  const html = `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="none" class="news-svg" role="img" aria-label="Trailing 24h net impact${hasPrice ? ' and price' : ''}">
     ${ticks.join('')}
-    <line x1="${padL}" x2="${padL + w}" y1="${y0.toFixed(1)}" y2="${y0.toFixed(1)}" class="news-zero"/>
-    <path d="${d.trim()}" class="news-line"/>
-    <circle cx="${X(last.ms).toFixed(1)}" cy="${Y(last.net).toFixed(1)}" r="3.5" fill="${lastColor}"/>
+    ${netLine}
+    ${priceLine}
+    ${netDot}
+    ${priceDot}
+    ${priceAxis}
     ${xt.join('')}
   </svg>`;
+  return { html, meta: { padL, w, padT, h, xMin, xMax, width, height, hasPrice } };
 }
 function niceStep(raw){
   if (raw <= 0) return 50;
@@ -2689,8 +2778,13 @@ function renderNewsBody(){
   body.appendChild(renderNewsSummary());
   body.appendChild(renderNewsRangeBar());
   body.appendChild(renderNewsChart());
-  const priceWidget = renderNewsPriceWidget();
-  if (priceWidget) body.appendChild(priceWidget);
+  // WHEAT/CORN/SBM/FREIGHT now get their price line merged straight into the chart above (see
+  // newsChartSvg/renderNewsChart) — the separate TradingView embed only remains for MACRO
+  // (DXY/VIX), which has no futures price series of its own to merge in. Kept exactly as before.
+  if (newsUI.chartProduct === 'MACRO'){
+    const priceWidget = renderNewsPriceWidget();
+    if (priceWidget) body.appendChild(priceWidget);
+  }
   const ticker = renderNewsTicker();
   if (ticker) body.appendChild(ticker);
   body.appendChild(renderNewsEvents());
@@ -2748,26 +2842,79 @@ function renderNewsChart(){
   box.className = 'news-chart';
   const { pts, now, count } = newsSeries(newsUI.chartProduct);
   const rangeDef = NEWS_CHART_RANGES.find(r => r.key === newsUI.chartRange) || NEWS_CHART_RANGES[2];
-  // Clip to the selected window; if that leaves fewer than 2 points (e.g. "Günlük" chosen but the
-  // last qualifying event is older than a day), fall back to the full series rather than showing
-  // an empty/broken chart, and say so in the subtitle.
-  const cutoffMs = Date.now() - rangeDef.days * 24 * 3600 * 1000;
-  let shownPts = pts.filter(p => p.ms >= cutoffMs);
+  // The X-axis window is the range chip itself (now − N days → now), not derived from whatever
+  // data happens to exist — so "5Y" always spans a real 5 years, even if net-impact events are
+  // sparse in it, and always lines up with however much price history is available.
+  const xMax = Date.now();
+  const xMin = xMax - rangeDef.days * 24 * 3600 * 1000;
+  let shownPts = pts.filter(p => p.ms >= xMin && p.ms <= xMax);
   let rangeNote = '';
-  if (shownPts.length < 2){
+  if (shownPts.length < 2 && pts.length >= 2){
     shownPts = pts;
-    rangeNote = ` · ${rangeDef.label.toLowerCase()} için yeterli veri yok, tüm geçmiş gösteriliyor`;
+    rangeNote = ` · not enough events for ${rangeDef.label.toLowerCase()}, showing full history`;
   }
+  // Real daily-close price history from Firestore prices/{product} (collector.py's sync_prices()).
+  // MACRO never has one — it keeps its separate TradingView DXY/VIX widgets below, untouched.
+  const priceRec = newsPrices[newsUI.chartProduct];
+  const allBars = (priceRec && Array.isArray(priceRec.bars)) ? priceRec.bars : [];
+  const priceBars = allBars.filter(b => b.t >= xMin && b.t <= xMax).sort((a, b) => a.t - b.t);
+
   const head = document.createElement('div');
   head.className = 'news-chart-head';
-  head.innerHTML = `<span class="news-chart-title">${newsUI.chartProduct} · trailing 24h net impact</span>` +
+  head.innerHTML = `<span class="news-chart-title">${newsUI.chartProduct} · net impact${priceBars.length >= 2 ? ' + price' : ''}</span>` +
     `<span class="news-chart-latest ${now.net > 0 ? 'pos' : now.net < 0 ? 'neg' : ''}">${now.n ? newsFmtSigned(now.net) : '—'}</span>` +
     `<span class="news-chart-sub">${now.bull} bullish / ${now.bear} bearish · ${now.n} events · ${count} in ${NEWS_HISTORY_DAYS}d${rangeNote}</span>`;
   box.appendChild(head);
+
   const svgWrap = document.createElement('div');
+  svgWrap.className = 'news-svg-wrap';
   const width = Math.max(320, Math.min(900, (document.getElementById('newstab')?.clientWidth || 360) - 24));
-  svgWrap.innerHTML = newsChartSvg(shownPts, width, 150);
+  const height = 150;
+  const { html, meta } = newsChartSvg(shownPts, priceBars, xMin, xMax, width, height);
+  svgWrap.innerHTML = html;
   box.appendChild(svgWrap);
+
+  // Mouse-hover tooltip (2026-09-14, Mete's request): a vertical guide line + a small tooltip
+  // showing that date's net impact and price, built as plain absolutely-positioned HTML overlay
+  // elements rather than SVG nodes — simpler to position and doesn't need re-parsing the SVG.
+  if (meta){
+    const guide = document.createElement('div');
+    guide.className = 'news-hover-line';
+    guide.hidden = true;
+    const tip = document.createElement('div');
+    tip.className = 'news-hover-tip';
+    tip.hidden = true;
+    svgWrap.appendChild(guide);
+    svgWrap.appendChild(tip);
+    const onMove = (clientX) => {
+      const rect = svgWrap.getBoundingClientRect();
+      if (!rect.width) return;
+      const xPx = clientX - rect.left;
+      const leftPct = (xPx / rect.width) * 100;
+      // Convert the mouse position (rendered CSS px, scaled by the responsive SVG) back into
+      // viewBox units, then into a timestamp, using the exact same padding the chart was drawn with.
+      const xInner = (xPx / rect.width) * meta.width;
+      if (xInner < meta.padL - 4 || xInner > meta.padL + meta.w + 4 || leftPct < 0 || leftPct > 100){
+        guide.hidden = true; tip.hidden = true; return;
+      }
+      const clampedInner = Math.min(Math.max(xInner, meta.padL), meta.padL + meta.w);
+      const ms = meta.xMin + (clampedInner - meta.padL) / meta.w * (meta.xMax - meta.xMin);
+      let nearestNet = null, bestNetD = Infinity;
+      for (const p of shownPts){ const d = Math.abs(p.ms - ms); if (d < bestNetD){ bestNetD = d; nearestNet = p; } }
+      let nearestPrice = null, bestPriceD = Infinity;
+      for (const b of priceBars){ const d = Math.abs(b.t - ms); if (d < bestPriceD){ bestPriceD = d; nearestPrice = b; } }
+      guide.style.left = leftPct + '%';
+      guide.hidden = false;
+      const lines = [`<div class="news-hover-date">${newsFmtTime(ms)}</div>`];
+      if (nearestNet) lines.push(`<div>net impact: <b class="${nearestNet.net > 0 ? 'pos' : nearestNet.net < 0 ? 'neg' : ''}">${newsFmtSigned(nearestNet.net)}</b></div>`);
+      if (nearestPrice) lines.push(`<div>price: <b>${newsFmtPrice(nearestPrice.c)}</b></div>`);
+      tip.innerHTML = lines.join('');
+      tip.style.left = Math.min(Math.max(leftPct, 10), 90) + '%';
+      tip.hidden = false;
+    };
+    svgWrap.addEventListener('pointermove', (e) => onMove(e.clientX));
+    svgWrap.addEventListener('pointerleave', () => { guide.hidden = true; tip.hidden = true; });
+  }
   return box;
 }
 
@@ -2783,22 +2930,19 @@ function renderNewsChart(){
 // licensing restriction, not a bot-block and not something we can work around technically.
 // Broker CFD symbols (FOREXCOM:*, CAPITALCOM:*, same family as TVC:UKOIL/Brent which already
 // worked) ARE free to embed and track the underlying market closely, so we use those instead.
-// The one gap: no broker offers a Soybean **Meal** CFD (only raw Soybean, CBOT ZS) — so SBM
-// shows the Soybean proxy with an honest label plus a click-through to the real CBOT:ZM1! chart
-// on tradingview.com itself (full site ≠ free embed — it does carry the real meal data there).
+// 2026-09-14 update: WHEAT/CORN/SBM/FREIGHT no longer use these CFD-proxy TradingView embeds — a
+// cross-origin iframe can't be read from or merged with our own SVG, so those four now get a real
+// price line (Yahoo Finance ZW=F/ZC=F/ZM=F/BZ=F via collector.py) drawn straight into the net-impact
+// chart itself (see newsChartSvg/renderNewsChart). MACRO is kept exactly as before — DXY/VIX have no
+// futures price series of their own to merge in, so they stay as separate TradingView widgets.
 const NEWS_PRICE_SYMBOLS = {
-  WHEAT:   [{ symbol: 'FOREXCOM:WHEAT', label: 'Wheat CFD — FOREX.com (tracks CBOT wheat)' }],
-  CORN:    [{ symbol: 'FOREXCOM:CORN', label: 'Corn CFD — FOREX.com (tracks CBOT corn)' }],
-  SBM:     [{ symbol: 'FOREXCOM:SOYBEAN', label: 'Soybean CFD — proxy, no free live meal feed exists' }],
-  FREIGHT: [{ symbol: 'TVC:UKOIL', label: 'Brent Crude' }],
-  MACRO:   [{ symbol: 'CAPITALCOM:DXY', label: 'US Dollar Index (DXY)' }, { symbol: 'CAPITALCOM:VIX', label: 'VIX' }],
+  MACRO: [{ symbol: 'CAPITALCOM:DXY', label: 'US Dollar Index (DXY)' }, { symbol: 'CAPITALCOM:VIX', label: 'VIX' }],
 };
 
-// SBM only: real Soybean Meal (CBOT ZM1!) data does exist on tradingview.com itself, just not in
-// the free embed — link out to it instead of pretending the Soybean proxy above is the same thing.
-const NEWS_PRICE_EXTRA_LINK = {
-  SBM: { href: 'https://www.tradingview.com/symbols/CBOT-ZM1!/', label: 'Open live Soybean Meal (ZM1!) on TradingView ↗' },
-};
+// No longer needed now that WHEAT/CORN/SBM/FREIGHT get real price data merged into their own
+// chart directly (see NEWS_PRICE_SYMBOLS comment above) — SBM's chart now shows real ZM=F closes,
+// not the old Soybean CFD proxy, so the "real data is elsewhere" click-through no longer applies.
+const NEWS_PRICE_EXTRA_LINK = {};
 
 // Cache built widget DOM nodes per product+range so switching back to an already-seen combination
 // (or a Firestore-triggered re-render while staying on the same product/range) reuses the live
@@ -3104,6 +3248,58 @@ function applyNewsFilter(){
   });
 }
 
+// ── Desktop ding (2026-09-14, Mete's request) ───────────────────────────────
+// FCM push (below) already reaches phones reliably. On a desktop tab that's just sitting open on
+// a second monitor, waiting on a round trip through Firebase Cloud Messaging is slower and less
+// reliable than just reacting the instant the SAME live Firestore listener the page already has
+// open (subscribeNews's onSnapshot) sees a new qualifying doc — so we do both: FCM for
+// closed-tab/phone delivery, this for "I'm already looking at the screen" immediacy. Reuses the
+// same 🔔 Alerts on/off state as the push flow (Notification.permission + the same localStorage
+// flag) rather than adding a second toggle — one button, two delivery paths.
+let newsAudioCtx = null;
+function newsUnlockAudio(){
+  // Browsers block audio from starting without a user gesture; call this from inside the actual
+  // click handler that enables alerts so the context is "unlocked" and ready for later automated
+  // dings (the click itself doesn't need to make a sound, it just needs to exist).
+  try{
+    newsAudioCtx = newsAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (newsAudioCtx.state === 'suspended') newsAudioCtx.resume();
+  }catch(e){ /* Web Audio unavailable — dings will just silently no-op */ }
+}
+function newsPlayDing(){
+  try{
+    if (!newsAudioCtx) return;
+    const ctx = newsAudioCtx;
+    if (ctx.state === 'suspended') ctx.resume();
+    const now = ctx.currentTime;
+    const tone = (freq, start, dur) => {
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, now + start);
+      gain.gain.linearRampToValueAtTime(0.18, now + start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + start + dur);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(now + start); osc.stop(now + start + dur + 0.03);
+    };
+    tone(880, 0, 0.16);       // two-tone "ding" — no external audio file needed
+    tone(1320, 0.12, 0.22);
+  }catch(e){ /* ignore — a missed ding should never break the page */ }
+}
+function newsMaybeAlert(s){
+  let on = false;
+  try{ on = localStorage.getItem('cte_news_alerts') === '1' && Notification.permission === 'granted'; }catch(e){}
+  if (!on) return;
+  if (!(s.breaking === true || (typeof s.impact === 'number' && s.impact >= NEWS_ALERT_IMPACT_JS))) return;
+  newsPlayDing();
+  try{
+    const arrow = s.direction === 'BULLISH' ? '▲' : s.direction === 'BEARISH' ? '▼' : '•';
+    const n = new Notification(`${s.breaking ? '🔴 BREAKING · ' : ''}${s.product} ${arrow} ${s.impact}`, {
+      body: s.headline, tag: s.id || (s.product + '_' + s.ms),
+    });
+    n.onclick = () => { window.focus(); if (s.url) window.open(s.url, '_blank'); };
+  }catch(e){ /* new Notification() can throw in some contexts; the ding above already played */ }
+}
+
 // ── Push alerts (Firebase Cloud Messaging) ──────────────────────────────────
 // Registers this browser/phone in news_devices/{token}. The collector pushes to every
 // registered device when an event is BREAKING or impact ≥ 75. Uses its own service
@@ -3124,6 +3320,7 @@ async function enableNewsAlerts(){
   if (!NEWS_VAPID_KEY){ alert('Web Push key not configured yet (NEWS_VAPID_KEY).'); return; }
   try{
     b.textContent = '🔔 …';
+    newsUnlockAudio();     // must happen inside this click handler, or the browser blocks audio later
     const perm = await Notification.requestPermission();
     if (perm !== 'granted'){ b.textContent = '🔔 Alerts'; alert('Notifications were not allowed.'); return; }
     const { getMessaging, getToken, onMessage } = await import('https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging.js');
