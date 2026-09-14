@@ -2324,7 +2324,16 @@ const NEWS_DEVICES = collection(db, 'news_devices');
 const NEWS_MIN_IMPACT = 50;
 const NEWS_MIN_CONF = 50;
 const NEWS_WINDOW_MS = 24 * 3600 * 1000;
-const NEWS_HISTORY_DAYS = 10;
+// 2026-09-14: raised 10 → 30 (Mete's request, to see the 1-month price/news correlation) — must
+// stay in lockstep with the `NEWS_RETENTION_DAYS` GitHub Actions variable collector.py prunes to
+// (default also bumped to 30 there); showing more history here than Firestore actually retains
+// would just mean the extra days silently return nothing.
+const NEWS_HISTORY_DAYS = 30;
+// The live query below has to actually return enough documents to cover NEWS_HISTORY_DAYS, or the
+// client-side `x.ms >= since` filter further down has nothing to filter — measured real volume
+// (2026-09-14) was ~54 stored docs/day, so 30 days ≈ 1,620 docs; ×120/day gives comfortable
+// headroom for busier weeks (WASDE, harvest season) without the query ever silently truncating.
+const NEWS_QUERY_LIMIT = NEWS_HISTORY_DAYS * 120;
 const NEWS_PRODUCTS = ['ALL', 'WHEAT', 'CORN', 'SBM', 'FREIGHT', 'MACRO'];
 const NEWS_TZ = 'Asia/Ho_Chi_Minh';
 // Web-push public key from Firebase Console → Cloud Messaging → Web Push certificates.
@@ -2345,14 +2354,29 @@ let newsVotes = {};                // id -> 'like' | 'dislike'
 let newsUnsub = null;
 let newsLoaded = null;             // promise resolved after the first snapshot
 let newsClockTimer = null;
-let newsUI = { product: 'ALL', search: '', chartProduct: 'SBM', minImpactOn: false };
+let newsUI = { product: 'ALL', search: '', chartProduct: 'SBM', minImpactOn: false, chartRange: '1M' };
+
+// Shared time-range control for the net-impact chart AND the TradingView price widget beneath it
+// (2026-09-14, Mete's request): before this, the price widget was hard-locked to `dateRange:'1D'`
+// (today only, hourly candles) while the net-impact chart showed several days — so a spike on the
+// left had nothing lined up to compare against on the right. `days` clips OUR OWN chart's points to
+// that trailing window; `tv` is the matching TradingView Mini Chart `dateRange` preset for the price
+// widget. TradingView's mini-symbol-overview widget has no exact "1 week" preset, so Haftalık and
+// Aylık both use TradingView's `1M` (closest available) — only the SVG side actually narrows to 7d.
+const NEWS_CHART_RANGES = [
+  { key: '1D', label: 'Günlük',   days: 1,    tv: '1D'  },
+  { key: '1W', label: 'Haftalık', days: 7,    tv: '1M'  },
+  { key: '1M', label: 'Aylık',    days: 30,   tv: '1M'  },
+  { key: '1Y', label: '1 Yıllık', days: 365,  tv: '12M' },
+  { key: '5Y', label: '5 Yıllık', days: 1825, tv: '60M' },
+];
 
 function subscribeNews(){
   if (newsUnsub) return newsLoaded;
   let resolveLoaded;
   newsLoaded = new Promise(r => { resolveLoaded = r; });
   const since = Date.now() - NEWS_HISTORY_DAYS * 24 * 3600 * 1000;
-  const q = query(NEWS_COLLECTION, orderBy('ms', 'desc'), limit(400));
+  const q = query(NEWS_COLLECTION, orderBy('ms', 'desc'), limit(NEWS_QUERY_LIMIT));
   newsUnsub = onSnapshot(q, (snap) => {
     newsDocs = [];
     snap.forEach(d => {
@@ -2663,6 +2687,7 @@ function renderNewsBody(){
   const pageScrollY = window.scrollY;
   body.innerHTML = '';
   body.appendChild(renderNewsSummary());
+  body.appendChild(renderNewsRangeBar());
   body.appendChild(renderNewsChart());
   const priceWidget = renderNewsPriceWidget();
   if (priceWidget) body.appendChild(priceWidget);
@@ -2703,19 +2728,45 @@ function renderNewsSummary(){
   return wrap;
 }
 
+// Range chips shared by the net-impact chart and the TradingView price widget below it, so both
+// can be visually correlated over the same window instead of the price widget being stuck on "today".
+function renderNewsRangeBar(){
+  const bar = document.createElement('div');
+  bar.className = 'news-bar news-range-bar';
+  for (const r of NEWS_CHART_RANGES){
+    const chip = document.createElement('span');
+    chip.className = 'month-chip' + (newsUI.chartRange === r.key ? ' on' : '');
+    chip.textContent = r.label;
+    chip.addEventListener('click', () => { newsUI.chartRange = r.key; renderNewsBody(); });
+    bar.appendChild(chip);
+  }
+  return bar;
+}
+
 function renderNewsChart(){
   const box = document.createElement('div');
   box.className = 'news-chart';
   const { pts, now, count } = newsSeries(newsUI.chartProduct);
+  const rangeDef = NEWS_CHART_RANGES.find(r => r.key === newsUI.chartRange) || NEWS_CHART_RANGES[2];
+  // Clip to the selected window; if that leaves fewer than 2 points (e.g. "Günlük" chosen but the
+  // last qualifying event is older than a day), fall back to the full series rather than showing
+  // an empty/broken chart, and say so in the subtitle.
+  const cutoffMs = Date.now() - rangeDef.days * 24 * 3600 * 1000;
+  let shownPts = pts.filter(p => p.ms >= cutoffMs);
+  let rangeNote = '';
+  if (shownPts.length < 2){
+    shownPts = pts;
+    rangeNote = ` · ${rangeDef.label.toLowerCase()} için yeterli veri yok, tüm geçmiş gösteriliyor`;
+  }
   const head = document.createElement('div');
   head.className = 'news-chart-head';
   head.innerHTML = `<span class="news-chart-title">${newsUI.chartProduct} · trailing 24h net impact</span>` +
     `<span class="news-chart-latest ${now.net > 0 ? 'pos' : now.net < 0 ? 'neg' : ''}">${now.n ? newsFmtSigned(now.net) : '—'}</span>` +
-    `<span class="news-chart-sub">${now.bull} bullish / ${now.bear} bearish · ${now.n} events · ${count} in ${NEWS_HISTORY_DAYS}d</span>`;
+    `<span class="news-chart-sub">${now.bull} bullish / ${now.bear} bearish · ${now.n} events · ${count} in ${NEWS_HISTORY_DAYS}d${rangeNote}</span>`;
   box.appendChild(head);
   const svgWrap = document.createElement('div');
   const width = Math.max(320, Math.min(900, (document.getElementById('newstab')?.clientWidth || 360) - 24));
-  svgWrap.innerHTML = newsChartSvg(pts, width, 150);
+  svgWrap.innerHTML = newsChartSvg(shownPts, width, 150);
   box.appendChild(svgWrap);
   return box;
 }
@@ -2749,12 +2800,14 @@ const NEWS_PRICE_EXTRA_LINK = {
   SBM: { href: 'https://www.tradingview.com/symbols/CBOT-ZM1!/', label: 'Open live Soybean Meal (ZM1!) on TradingView ↗' },
 };
 
-// Cache built widget DOM nodes per product so switching back to an already-seen product (or a
-// Firestore-triggered re-render while staying on the same product) reuses the live iframe instead
-// of tearing it down and reloading it — TradingView widgets are heavier than our own inline SVG.
+// Cache built widget DOM nodes per product+range so switching back to an already-seen combination
+// (or a Firestore-triggered re-render while staying on the same product/range) reuses the live
+// iframe instead of tearing it down and reloading it — TradingView widgets are heavier than our own
+// inline SVG. Keyed by range too (not just product) because the TradingView dateRange is baked into
+// the widget's script config at creation time and can't be changed on an already-built widget.
 const newsPriceWidgetCache = {};
 
-function tvWidget(scriptFile, symbol, height){
+function tvWidget(scriptFile, symbol, height, dateRange){
   const container = document.createElement('div');
   container.className = 'tradingview-widget-container';
   container.appendChild(document.createElement('div'));
@@ -2762,7 +2815,7 @@ function tvWidget(scriptFile, symbol, height){
   script.src = `https://s3.tradingview.com/external-embedding/embed-widget-${scriptFile}.js`;
   script.async = true;
   script.text = JSON.stringify({
-    symbol, width: '100%', height, locale: 'en', dateRange: '1D',
+    symbol, width: '100%', height, locale: 'en', dateRange: dateRange || '1D',
     colorTheme: 'dark', isTransparent: true, autosize: false, chartOnly: false,
   });
   container.appendChild(script);
@@ -2773,12 +2826,14 @@ function renderNewsPriceWidget(){
   const product = newsUI.chartProduct;
   const specs = NEWS_PRICE_SYMBOLS[product];
   if (!specs) return null;
+  const rangeDef = NEWS_CHART_RANGES.find(r => r.key === newsUI.chartRange) || NEWS_CHART_RANGES[2];
+  const cacheKey = product + '_' + rangeDef.key;
   const box = document.createElement('div');
   box.className = 'news-chart news-price-widget';
   const head = document.createElement('div');
   head.className = 'news-chart-head';
   head.innerHTML = `<span class="news-chart-title">${specs.map(s => s.label).join(' · ')}</span>` +
-    `<span class="news-chart-sub">live · TradingView</span>`;
+    `<span class="news-chart-sub">${rangeDef.label} · live · TradingView</span>`;
   box.appendChild(head);
   const extra = NEWS_PRICE_EXTRA_LINK[product];
   if (extra){
@@ -2788,8 +2843,8 @@ function renderNewsPriceWidget(){
     a.textContent = extra.label;
     box.appendChild(a);
   }
-  if (newsPriceWidgetCache[product]){
-    box.appendChild(newsPriceWidgetCache[product]);
+  if (newsPriceWidgetCache[cacheKey]){
+    box.appendChild(newsPriceWidgetCache[cacheKey]);
     return box;
   }
   const wrap = document.createElement('div');
@@ -2801,10 +2856,10 @@ function renderNewsPriceWidget(){
     // one piece. The "symbol-info" strip widget we used before is equity-only (EPS/market cap/P-E
     // fields) — it silently falls back to a demo AAPL quote for any non-stock symbol, which is
     // exactly the bug that made WHEAT/CORN/SBM look broken even for symbols that do carry data.
-    col.appendChild(tvWidget('mini-symbol-overview', symbol, 160));
+    col.appendChild(tvWidget('mini-symbol-overview', symbol, 160, rangeDef.tv));
     wrap.appendChild(col);
   }
-  newsPriceWidgetCache[product] = wrap;
+  newsPriceWidgetCache[cacheKey] = wrap;
   box.appendChild(wrap);
   return box;
 }
@@ -2832,7 +2887,9 @@ function renderNewsTicker(){
   });
   mk().forEach(a => inner.appendChild(a));
   mk().forEach(a => inner.appendChild(a));      // duplicated so the loop is seamless
-  inner.style.animationDuration = Math.max(20, items.length * 9) + 's';
+  const tickerDurationSec = Math.max(20, items.length * 9);   // kept in JS, not re-read from
+                                                                // inline style — see resume() below
+  inner.style.animationDuration = tickerDurationSec + 's';
   track.appendChild(inner);
   bar.appendChild(label); bar.appendChild(track);
 
@@ -2858,7 +2915,13 @@ function renderNewsTicker(){
   const resume = () => {                         // restart the auto-scroll from the current spot
     const tx = txNow();
     singleWidth = singleWidth || inner.scrollWidth / 2;   // content is duplicated once, for the loop
-    const durationSec = parseFloat(inner.style.animationDuration) || 20;
+    // NOTE: always use the captured tickerDurationSec, never re-read inner.style.animationDuration
+    // here — detach() sets inner.style.animation = 'none', and assigning the `animation` SHORTHAND
+    // resets all of its longhand sub-properties (including animation-duration) back to 0s. Reading
+    // animationDuration after that always returned "0s", so `parseFloat(...) || 20` silently fell
+    // back to a fixed 20s on every single resume — far faster than the intended (up to 108s)
+    // content-scaled speed. That was the "ticker suddenly flies by" bug.
+    const durationSec = tickerDurationSec;
     const fraction = singleWidth > 0 ? Math.min(1, Math.max(0, -tx / singleWidth)) : 0;
     inner.style.transform = '';
     inner.style.animation = 'none';
