@@ -282,6 +282,23 @@ same order as the input, nothing else. Fields:
                  CFR cost of that product UP (tighter supply, stronger demand, higher freight).
                  A record Brazilian crop is good news and BEARISH. An export ban is bad news and BULLISH.
                  Feed demand: herd expansion / recovery = BULLISH for SBM, disease losses / herd cuts = BEARISH.
+                 SYMMETRY RULE: crop/yield/rating headlines are two-sided. A record or rising crop/yield/
+                 rating is BEARISH (more supply) — and its mirror image, a FALLING crop rating, a yield cut,
+                 a downgraded harvest estimate, or a lower-than-expected production number, is BULLISH (less
+                 supply). Apply this consistently in both directions: do not let "bad news for farmers"
+                 framing pull a shrinking crop toward BEARISH, and do not let "good news for farmers"
+                 framing pull a growing crop toward BULLISH. The price argument runs on supply tightness,
+                 not on whether the news sounds good or bad for the growing country or its farmers.
+                 MULTI-COMPONENT REPORTS (WASDE, CONAB, USDA supply/demand tables and similar): when one
+                 report moves several numbers at once, net the components that matter most for world price
+                 (production/yield and ending stocks outweigh minor demand-line tweaks) into ONE direction
+                 for that headline, rather than picking whichever number the headline happens to lead with.
+                 If two or more headlines describe the SAME underlying report or event within a short
+                 window, they should normally agree on direction. Only diverge when a headline is explicitly
+                 about a distinct PRICE REACTION ("markets sell off despite...", "futures slip on profit-
+                 taking after...", "sell the fact") rather than the report's fundamentals — that reaction
+                 headline may legitimately carry the opposite tag, but treat it as the exception, not the
+                 default, and only when the headline itself frames it as a market/price reaction.
   "impact"     : 0-100 integer, how much this could move the product's WORLD price. Routine daily
                  price wraps and progress updates are 15-35. Weather/crop shocks, policy changes,
                  big tenders, port disruptions are 55-90. Reserve 90+ for genuinely market-defining events.
