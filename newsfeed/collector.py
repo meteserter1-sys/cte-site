@@ -23,7 +23,10 @@ Environment variables
   CLAUDE_MODEL              default "claude-sonnet-5"
   NEWS_MAX_NEW              cap on new stories classified per run (default 80)
   NEWS_MIN_STORE            drop stories scored below this impact (default 30, "tight wire")
-  NEWS_RETENTION_DAYS       delete events older than this (default 10)
+  NEWS_RETENTION_DAYS       delete events older than this (default 30; 2026-09-14, was 10 — bumped
+                            so the site's 1-month chart range has real data to show. Override by
+                            setting this as a GitHub → Settings → Variables entry, no code change
+                            needed)
   NEWS_ALERT_IMPACT         push alert threshold (default 75; BREAKING always alerts)
 
 Usage
@@ -706,8 +709,9 @@ def write_muted(db, muted: set[str]):
         print(f'  ! could not write muted list ({e})', file=sys.stderr)
 
 
-# ── Retention: 10 days, per the desk. The History snapshot keeps each day's reading. ─────
-RETENTION_DAYS = int(os.environ.get('NEWS_RETENTION_DAYS', '10'))
+# ── Retention: 30 days (2026-09-14, was 10 — Mete wanted a full month of history to line up
+# against the CBOT price charts). The History snapshot keeps each day's reading regardless. ─────
+RETENTION_DAYS = int(os.environ.get('NEWS_RETENTION_DAYS', '30'))
 
 
 def prune_old(db) -> int:

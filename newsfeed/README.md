@@ -3,7 +3,7 @@
 ```
 Google News (5 dil) + yayıncı RSS + X köprüleri ──► collector.py (GitHub Actions, 10 dk'da bir)
                                                        │  tekilleştir → Claude ile sınıflandır
-                                                       │  → kümele (trend) → 10 gün sakla → push
+                                                       │  → kümele (trend) → 30 gün sakla → push
                                                        ▼
                                                Firestore `news`
                                                        │  onSnapshot
@@ -43,7 +43,8 @@ durmaz; ilk log'da hangi kaynağın boş döndüğüne bak.
   etki katar, `trend` = yayıncı sayısı.
 * **Geri bildirim:** sayfadaki 👍/👎 `news_feedback`'e yazılır. Son 30 günün oyları her çalıştırmada
   prompt'a örnek olarak eklenir; bir kaynağa 5+ 👎 → kaynak susturulur (`news_meta/muted`).
-* **Saklama:** 10 gün; eskisi her çalıştırmada silinir. Günün okuması History snapshot'ında kalır.
+* **Saklama:** 30 gün (2026-09-14'te 10'dan yükseltildi — 1 aylık fiyat/haber korelasyonunu
+  görebilmek için); eskisi her çalıştırmada silinir. Günün okuması History snapshot'ında kalır.
 
 ## Yapılacaklar (2026-09-11'de not edildi)
 
@@ -239,7 +240,7 @@ onayın gerekiyor.
 | `CLAUDE_MODEL` | `claude-sonnet-5` | sınıflandırıcı model |
 | `NEWS_MAX_NEW` | 80 | çalıştırma başına en fazla sınıflandırılan haber (maliyet tavanı) |
 | `NEWS_MIN_STORE` | 30 | bu etkinin altı kaydedilmez |
-| `NEWS_RETENTION_DAYS` | 10 | saklama süresi |
+| `NEWS_RETENTION_DAYS` | 30 (14 Eylül'de 10'dan yükseltildi) | saklama süresi |
 | `NEWS_ALERT_IMPACT` | 75 | push eşiği (BREAKING her zaman) |
 
 Sayfa tarafı: `NEWS_MIN_IMPACT = 50`, `NEWS_MIN_CONF = 50`, `NEWS_HISTORY_DAYS = 10` (`index.html`).
@@ -250,6 +251,15 @@ CBOT tatil listesi (`CBOT_HOLIDAYS`) ve WASDE/FOMC tarihleri (`NEWS_FIXED_EVENTS
 Firebase Spark (0 $): günde ~150-300 yazma, 1-3 bin okuma, yılda ~80 MB. GitHub Actions (public, 0 $).
 Claude: yalnızca yeni ve tekil başlıklar için, ~0,14 sent/başlık (Sonnet 5). Beklenen 15-25 $/ay;
 sert tavan `NEWS_MAX_NEW` ve console'daki 30 $ limit.
+
+**Saklamayı 10 → 30 güne çıkarmanın maliyeti (14 Eylül'de ölçüldü, karar verilirken):** Firestore'da
+canlı sayım yapıldı — şu an 303 doküman, ~5,6 günlük veri, yani gerçek yazma hızı günde **~54**
+(README'deki "150-300" ilk günkü kaba tahminmiş, gerçek daha düşük çıktı). 30 günde ~1.620 doküman
+bekleniyor: depolama ~birkaç MB (Spark'ın 1 GiB ücretsiz sınırının çok altında), okuma sayfa
+açılışı başına ~1.600'e çıkar ama bu da günlük 50.000 okuma ücretsiz sınırının çok altında (günde
+~30'dan az sayfa açılışı olduğu sürece). **Asıl maliyet kalemi olan Claude sınıflandırma ücreti
+saklama süresinden tamamen bağımsız** — sadece yeni gelen başlık sayısına bağlı, o değişmedi.
+Sonuç: **ek maliyet pratikte sıfır**, hâlâ Firebase Spark (ücretsiz) sınırları içinde kalıyoruz.
 
 ## Yerelde deneme
 
