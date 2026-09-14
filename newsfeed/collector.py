@@ -809,18 +809,39 @@ PRICE_SYMBOLS = {
     'SBM':     'ZM=F',   # CBOT Soybean Meal
     'FREIGHT': 'BZ=F',   # ICE Brent Crude — same proxy the page already used for FREIGHT via TradingView
 }
-PRICE_REFRESH_HOURS = 4    # don't re-fetch a symbol more often than this — daily bars barely move
-                           # intraday anyway, and it keeps us a polite, low-volume caller
+PRICE_REFRESH_HOURS = 4    # don't re-fetch the 5y DAILY series more often than this — daily bars
+                           # barely move intraday anyway, keeps us a polite, low-volume caller for that
+                           # part. Does NOT gate the intraday series below — that one is meant to look
+                           # live, so it refreshes on every run (still cheap: ~2 days of 5m bars).
 PRICE_YEARS = 5
+
+# 2026-09-14 addition: the "Daily" chart range used to be the TradingView widget's own live intraday
+# view before the chart merge — Mete noticed the merged chart lost that ("daily'de canli anlik grafik
+# olmasi lazim"). A single point per day (the DAILY series above) can't show that, so Daily gets its
+# own short intraday series instead: 5-minute bars, refreshed every collector run (~15 min), so the
+# page's "Daily" selection actually tracks the live session instead of one flat point.
+INTRADAY_RANGE = '2d'      # 2 days of buffer so "today" still has bars right after a weekend/holiday
+INTRADAY_INTERVAL = '5m'
 
 
 def fetch_price_series(symbol: str) -> list[dict] | None:
     """Daily closes for `symbol` over the last PRICE_YEARS, oldest first: [{'t': ms, 'c': close}, …].
     Returns None on any failure — the caller must treat that as "try again next run", not fatal."""
+    return _fetch_yahoo_chart(symbol, range_=f'{PRICE_YEARS}y', interval='1d')
+
+
+def fetch_intraday_series(symbol: str) -> list[dict] | None:
+    """5-minute bars for `symbol` over the last ~2 days, oldest first: [{'t': ms, 'c': close}, …].
+    Used only for the chart's "Daily" range so it shows real live-session movement instead of a
+    single flat daily-close point. Returns None on any failure — never fatal to the run."""
+    return _fetch_yahoo_chart(symbol, range_=INTRADAY_RANGE, interval=INTRADAY_INTERVAL)
+
+
+def _fetch_yahoo_chart(symbol: str, range_: str, interval: str) -> list[dict] | None:
     url = f'https://query2.finance.yahoo.com/v8/finance/chart/{symbol}'
     headers = {'User-Agent': 'Mozilla/5.0 (compatible; CTE-newsfeed/1.0; +https://commodity-trading-engine.web.app/)'}
     try:
-        r = requests.get(url, params={'range': f'{PRICE_YEARS}y', 'interval': '1d'}, headers=headers, timeout=20)
+        r = requests.get(url, params={'range': range_, 'interval': interval}, headers=headers, timeout=20)
         r.raise_for_status()
         result = r.json()['chart']['result'][0]
         timestamps = result['timestamp']
@@ -828,33 +849,49 @@ def fetch_price_series(symbol: str) -> list[dict] | None:
         bars = [{'t': int(ts) * 1000, 'c': round(c, 4)} for ts, c in zip(timestamps, closes) if c is not None]
         return bars or None
     except Exception as e:  # noqa: BLE001
-        print(f'  ! price fetch failed for {symbol} ({e})', file=sys.stderr)
+        print(f'  ! price fetch failed for {symbol} ({range_}/{interval}) ({e})', file=sys.stderr)
         return None
 
 
 def sync_prices(db):
-    """Refreshes Firestore `prices/{product}` for every symbol whose stored copy is missing or
-    older than PRICE_REFRESH_HOURS. Never raises — a price-data outage must not break the news run
-    (the page falls back gracefully to no-price-line if a doc is missing or stale, see index.html)."""
+    """Refreshes Firestore `prices/{product}`: the 5y DAILY series when missing/older than
+    PRICE_REFRESH_HOURS, and the short INTRADAY series on every run (see INTRADAY_RANGE comment
+    above). Writes with merge=True so an intraday-only update doesn't clobber the daily series (and
+    vice versa). Never raises — a price-data outage must not break the news run (the page falls back
+    gracefully to no-price-line if a field is missing or stale, see index.html)."""
     now_ms = int(time.time() * 1000)
     stale_before = now_ms - PRICE_REFRESH_HOURS * 3600 * 1000
-    updated = 0
+    daily_updated = 0
+    intraday_updated = 0
     for product, symbol in PRICE_SYMBOLS.items():
         try:
             ref = db.collection('prices').document(product)
             snap = ref.get()
-            if snap.exists and (snap.to_dict() or {}).get('updatedMs', 0) > stale_before:
-                continue    # fresh enough, skip — keeps us to a handful of requests per day
-            bars = fetch_price_series(symbol)
-            if not bars:
-                continue    # fetch_price_series already logged why
-            ref.set({'symbol': symbol, 'updatedMs': now_ms, 'bars': bars})
-            updated += 1
+            existing = snap.to_dict() if snap.exists else {}
+            payload = {}
+
+            if existing.get('updatedMs', 0) <= stale_before:
+                bars = fetch_price_series(symbol)
+                if bars:
+                    payload['bars'] = bars
+                    payload['updatedMs'] = now_ms
+                    daily_updated += 1
+
+            intraday = fetch_intraday_series(symbol)
+            if intraday:
+                payload['intraday'] = intraday
+                payload['intradayUpdatedMs'] = now_ms
+                intraday_updated += 1
+
+            if payload:
+                payload['symbol'] = symbol
+                ref.set(payload, merge=True)
         except Exception as e:  # noqa: BLE001
             print(f'  ! price sync failed for {product} ({e})', file=sys.stderr)
-    if updated:
-        print(f'  prices: refreshed {updated}/{len(PRICE_SYMBOLS)} symbols')
-    return updated
+    if daily_updated or intraday_updated:
+        print(f'  prices: refreshed {daily_updated}/{len(PRICE_SYMBOLS)} daily, '
+              f'{intraday_updated}/{len(PRICE_SYMBOLS)} intraday')
+    return daily_updated
 
 
 def main():
