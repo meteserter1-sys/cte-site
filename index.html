@@ -249,6 +249,23 @@
   .news-ticker-item.bull{ color:#9be3bf; } .news-ticker-item.bear{ color:#ffb0a6; }
   .news-ticker-item:hover{ text-decoration:underline; }
   @keyframes news-scroll{ from{ transform:translateX(0); } to{ transform:translateX(-50%); } }
+  /* price-anomaly alert (README item 14B) */
+  .news-anomaly-bar{ background:#2a1512; border:1px solid var(--bad); border-radius:7px; padding:7px 10px; margin-bottom:10px; display:flex; flex-direction:column; gap:4px; }
+  .news-anomaly-row{ color:#ffd9d3; font-size:12px; font-weight:600; line-height:1.4; }
+  .news-anomaly-row b{ color:#fff; }
+  /* morning report card (README item 15) */
+  .news-morning-card{ background:var(--panel); border:1px solid var(--accent); border-radius:8px; padding:8px 10px; margin-bottom:10px; }
+  .news-morning-head{ display:flex; align-items:center; justify-content:space-between; font-size:12px; font-weight:700; color:var(--accent); letter-spacing:.03em; margin-bottom:6px; }
+  .news-morning-close{ padding:2px 7px; font-size:11px; line-height:1; }
+  .news-morning-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:4px 14px; }
+  .news-morning-row{ display:flex; align-items:baseline; gap:7px; font-size:11.5px; }
+  .news-morning-prod{ font-weight:700; color:var(--text-dim); min-width:52px; }
+  .news-morning-net{ font-family:var(--mono); font-weight:700; color:var(--text-dim); min-width:34px; }
+  .news-morning-net.pos{ color:var(--good); } .news-morning-net.neg{ color:var(--bad); }
+  .news-morning-sub{ color:var(--text-dim); font-size:10.5px; font-family:var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .news-morning-top{ margin-top:7px; padding-top:7px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:3px; }
+  .news-morning-top-item{ color:var(--text-dim); font-size:11px; text-decoration:none; line-height:1.35; }
+  .news-morning-top-item:hover{ color:var(--accent); text-decoration:underline; }
   /* upcoming releases */
   .news-events{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 10px; margin-bottom:10px; }
   .news-box-head{ display:flex; align-items:baseline; gap:8px; padding-bottom:6px; border-bottom:1px solid var(--border); margin-bottom:6px; }
@@ -2464,6 +2481,7 @@ function subscribeNews(){
     snap.forEach(d => { const v = d.data(); if (v && v.vote) newsVotes[d.id] = v.vote; });
     renderNewsBody();
   }, () => {});
+  subscribeMorningReport();
   return newsLoaded;
 }
 
@@ -2513,6 +2531,183 @@ function newsSeries(product){
   pts.push({ ...now, isNow: true });
   return { pts, now, count: asc.length };
 }
+
+// ── Smoothed net-impact series, for the CHART LINE only ──────────────────────
+// newsSeries() above is the exact trailing-24h sum, sampled only at the moments it truly changes
+// (a headline arrives, or one ages out of the window 24h later) — correct and fully traceable, so
+// it stays exactly as-is for the tile numbers and the chart's own header figure. But on a quiet
+// news day it sits dead flat for hours then jumps, which looks disconnected from a continuously
+// moving futures price line (raised 2026-09-14 — compared against a competitor's equivalent chart:
+// same trailing-24h-ish idea, but a much smoother line because they simply see far more qualifying
+// headlines per day for the same product). Rather than chase headline volume, give the LINE a
+// proper time-decay instead of a hard window: each qualifying story's signed impact decays
+// exponentially with a 12h half-life (≈50% weight at 12h, ≈25% at 24h, ≈6% at 48h — "roughly a day
+// matters most", like the hard window, but tapering smoothly instead of snapping to zero at an
+// exact cutoff), resampled on a regular time grid across the whole visible range so the line keeps
+// moving between headlines instead of sitting flat. This intentionally will NOT match the exact
+// hard-window number shown in the tile/header — that number stays the traceable one; this is purely
+// a smoother, continuously-comparable view for eyeballing against the price line.
+const NEWS_DECAY_HALFLIFE_MS = 12 * 3600 * 1000;
+const NEWS_DECAY_TAU = NEWS_DECAY_HALFLIFE_MS / Math.LN2;
+const NEWS_DECAY_LOOKBACK_MS = 4 * NEWS_DECAY_HALFLIFE_MS; // ~48h; a story's weight is ~6% by then
+
+function newsSmoothStep(spanMs){
+  // Grid resolution scales with the visible span: fine enough to look continuous on a Daily chart,
+  // coarse enough that a 5Y chart isn't computing millions of points.
+  if (spanMs <= 2 * 24 * 3600 * 1000) return 15 * 60 * 1000;      // ≤2d   → 15 min
+  if (spanMs <= 10 * 24 * 3600 * 1000) return 60 * 60 * 1000;     // ≤10d  → 1 hour
+  if (spanMs <= 60 * 24 * 3600 * 1000) return 4 * 3600 * 1000;    // ≤60d  → 4 hours
+  if (spanMs <= 400 * 24 * 3600 * 1000) return 24 * 3600 * 1000;  // ≤400d → 1 day
+  return 3 * 24 * 3600 * 1000;                                    // longer → 3 days
+}
+
+function newsSmoothSeries(product, xMin, xMax){
+  const asc = newsForProduct(product).filter(newsQualifies).slice().sort((a, b) => a.ms - b.ms);
+  if (!asc.length) return [];
+  const step = newsSmoothStep(xMax - xMin);
+  const pts = [];
+  let lo = 0; // stories before `lo` are more than the lookback behind every future grid point too
+  let t = xMin;
+  for (; t <= xMax; t += step){
+    while (lo < asc.length && t - asc[lo].ms > NEWS_DECAY_LOOKBACK_MS) lo++;
+    let net = 0;
+    for (let i = lo; i < asc.length && asc[i].ms <= t; i++) net += newsSigned(asc[i]) * Math.exp(-(t - asc[i].ms) / NEWS_DECAY_TAU);
+    pts.push({ ms: t, net });
+  }
+  // Always end exactly at xMax (usually "now") so the line's right edge lines up with the price
+  // line's latest bar instead of stopping mid-step.
+  if (!pts.length || pts[pts.length - 1].ms < xMax){
+    while (lo < asc.length && xMax - asc[lo].ms > NEWS_DECAY_LOOKBACK_MS) lo++;
+    let net = 0;
+    for (let i = lo; i < asc.length && asc[i].ms <= xMax; i++) net += newsSigned(asc[i]) * Math.exp(-(xMax - asc[i].ms) / NEWS_DECAY_TAU);
+    pts.push({ ms: xMax, net });
+  }
+  return pts;
+}
+
+// ── Price-anomaly alert ("flash haber" safety net, README item 14B) ─────────────────────────────
+// 2026-09-15, Mete: "%1 artar veya azalırsa sistem alarm versin." No matter how far the collector's
+// source list grows (items 12/13/14A), some flash headline will always slip through uncollected —
+// this is the reactive half: the PAGE itself notices "price moved but no qualifying news explains
+// it" and says so, instead of Mete having to spot the chart wiggle and go hunting on his phone (what
+// actually happened on 14 Eylül). Computed entirely from data already in memory (intraday price bars
+// + newsDocs) — no backend change, no extra network call.
+const NEWS_ANOMALY_PCT = 1.0;                        // ± percent move that counts as "notable"
+const NEWS_ANOMALY_WINDOW_MS = 15 * 60 * 1000;       // look back this far for the price move itself
+const NEWS_ANOMALY_NEWS_WINDOW_MS = 60 * 60 * 1000;  // wider window checked for a qualifying explanation
+const NEWS_ANOMALY_EXPLAIN_NET = 20;                 // minimum same-direction net impact that "explains" it
+const NEWS_ANOMALY_STALE_MS = 30 * 60 * 1000;        // don't alarm on a price feed that stopped updating
+
+function computePriceAnomalies(){
+  const out = [];
+  const now = Date.now();
+  for (const product of PRICE_PRODUCTS){
+    const rec = newsPrices[product];
+    const intraday = rec && Array.isArray(rec.intraday) ? rec.intraday : [];
+    if (intraday.length < 2) continue;
+    const last = intraday[intraday.length - 1];
+    if (now - last.t > NEWS_ANOMALY_STALE_MS) continue;
+    let base = null;
+    for (let i = intraday.length - 1; i >= 0; i--){
+      if (intraday[i].t <= last.t - NEWS_ANOMALY_WINDOW_MS){ base = intraday[i]; break; }
+    }
+    if (!base || !base.c) continue;
+    const pct = (last.c - base.c) / base.c * 100;
+    if (Math.abs(pct) < NEWS_ANOMALY_PCT) continue;
+    const since = last.t - NEWS_ANOMALY_NEWS_WINDOW_MS;
+    const relevant = newsForProduct(product).filter(s => newsQualifies(s) && s.ms >= since && s.ms <= last.t);
+    const net = relevant.reduce((a, s) => a + newsSigned(s), 0);
+    const explained = pct > 0 ? net >= NEWS_ANOMALY_EXPLAIN_NET : net <= -NEWS_ANOMALY_EXPLAIN_NET;
+    if (explained) continue;
+    out.push({ product, pct, windowMin: Math.round(NEWS_ANOMALY_WINDOW_MS / 60000), net, ms: last.t });
+  }
+  return out;
+}
+
+function renderNewsAnomalyBanner(){
+  const anomalies = computePriceAnomalies();
+  newsMaybeAlertAnomalies(anomalies);
+  if (!anomalies.length) return null;
+  const bar = document.createElement('div');
+  bar.className = 'news-anomaly-bar';
+  bar.innerHTML = anomalies.map(a => {
+    const dirTxt = a.pct > 0 ? `+${a.pct.toFixed(1)}%` : `${a.pct.toFixed(1)}%`;
+    const netTxt = a.net > 0 ? `+${a.net}` : `${a.net}`;
+    return `<div class="news-anomaly-row">⚠️ <b>${a.product}</b> ${a.windowMin} dk'da ${dirTxt} hareket etti, ` +
+           `açıklayan qualifying haber yok (net ${netTxt}) — dış kaynak kontrol et.</div>`;
+  }).join('');
+  return bar;
+}
+
+// Ding/notify once per newly-detected anomaly, reusing the same 🔔 Alerts on/off state as
+// breaking-news alerts (Mete's own design: one delivery path, not a second toggle).
+let newsAnomalyAlerted = new Set();
+function newsMaybeAlertAnomalies(anomalies){
+  let on = false;
+  try{ on = localStorage.getItem('cte_news_alerts') === '1' && Notification.permission === 'granted'; }catch(e){}
+  for (const a of anomalies){
+    const key = `${a.product}_${Math.floor(a.ms / NEWS_ANOMALY_WINDOW_MS)}`;
+    if (newsAnomalyAlerted.has(key)) continue;
+    newsAnomalyAlerted.add(key);
+    if (!on) continue;
+    newsPlayDing();
+    try{
+      const n = new Notification(`⚠️ ${a.product} ${a.pct > 0 ? '▲' : '▼'} ${Math.abs(a.pct).toFixed(1)}% — haber yok`, {
+        body: `${a.windowMin} dk'da fiyat hareket etti ama açıklayan qualifying haber bulunamadı.`,
+        tag: `anomaly_${a.product}`,
+      });
+      n.onclick = () => { window.focus(); };
+    }catch(e){ /* the ding above already played */ }
+  }
+  if (newsAnomalyAlerted.size > 200) newsAnomalyAlerted = new Set(Array.from(newsAnomalyAlerted).slice(-100));
+}
+
+// ── Morning report card (VN 07:00 daily summary, README item 15) ────────────────────────────────
+// collector.py's maybe_send_morning_report() writes news_meta/morning_report once a day around VN
+// 07:00: overnight qualifying-news net impact + futures % change per product, plus the top overnight
+// headlines. Shown as a dismissible card (per-date dismiss, so it comes back tomorrow) at the top of
+// the News tab while it's still today's report.
+let newsMorningReport = null;
+function subscribeMorningReport(){
+  onSnapshot(doc(db, 'news_meta', 'morning_report'), (snap) => {
+    newsMorningReport = snap.exists() ? snap.data() : null;
+    renderNewsBody();
+  }, () => {});
+}
+function morningReportDismissed(dateVN){
+  try{ return localStorage.getItem('cte_morning_dismissed') === dateVN; }catch(e){ return false; }
+}
+function renderMorningReportCard(){
+  const r = newsMorningReport;
+  if (!r || !r.dateVN || morningReportDismissed(r.dateVN)) return null;
+  if (Date.now() - (r.generatedMs || 0) > 20 * 3600 * 1000) return null;   // yesterday's — let it go
+  const card = document.createElement('div');
+  card.className = 'news-morning-card';
+  const rows = PRODUCTS_MORNING.map(p => {
+    const pr = (r.products || {})[p] || {};
+    const net = pr.n ? newsFmtSigned(pr.net) : '—';
+    const netCls = pr.n ? (pr.net > 0 ? 'pos' : pr.net < 0 ? 'neg' : '') : '';
+    const pct = pr.pricePct;
+    const pctTxt = pct == null ? '' : ` · ${pct > 0 ? '+' : ''}${pct.toFixed(1)}% price`;
+    return `<div class="news-morning-row"><span class="news-morning-prod">${p}</span>` +
+           `<span class="news-morning-net ${netCls}">${net}</span>` +
+           `<span class="news-morning-sub">${pr.n ? `${pr.bull}▲ ${pr.bear}▼ · ${pr.n} ev` : 'no qualifying event'}${pctTxt}</span></div>`;
+  }).join('');
+  const top = (r.top || []).slice(0, 4).map(t =>
+    `<a class="news-morning-top-item" href="${t.url || '#'}" target="_blank" rel="noopener">` +
+    `${t.breaking ? '🔴 ' : ''}${t.product} ${t.direction === 'BULLISH' ? '▲' : t.direction === 'BEARISH' ? '▼' : '•'} ${t.impact} · ${t.headline}</a>`
+  ).join('');
+  card.innerHTML = `<div class="news-morning-head"><span>☀️ Morning Report · ${r.dateVN} (VN)</span>` +
+    `<button class="hbtn news-morning-close" title="Dismiss until tomorrow">✕</button></div>` +
+    `<div class="news-morning-grid">${rows}</div>` +
+    (top ? `<div class="news-morning-top">${top}</div>` : '');
+  card.querySelector('.news-morning-close').addEventListener('click', () => {
+    try{ localStorage.setItem('cte_morning_dismissed', r.dateVN); }catch(e){}
+    renderNewsBody();
+  });
+  return card;
+}
+const PRODUCTS_MORNING = ['WHEAT', 'CORN', 'SBM', 'FREIGHT', 'MACRO'];
 
 // Compact reading for the History snapshot: one number per product + the day's top events.
 function buildNewsSnapshot(){
@@ -2677,7 +2872,7 @@ function newsChartSvg(pts, priceBars, xMin, xMax, width, height){
   const padL = 44, padR = hasPrice ? 50 : 12, padT = 10, padB = 24;
   const w = width - padL - padR, h = height - padT - padB;
   if (pts.length < 2 && !hasPrice){
-    return { html: `<div class="note">Not enough qualifying events yet to draw the trailing 24h line (needs impact ≥ ${NEWS_MIN_IMPACT} and confidence ≥ ${NEWS_MIN_CONF}).</div>`, meta: null };
+    return { html: `<div class="note">Not enough qualifying events yet to draw the net-impact line (needs impact ≥ ${NEWS_MIN_IMPACT} and confidence ≥ ${NEWS_MIN_CONF}).</div>`, meta: null };
   }
   let yMin = Math.min(0, ...pts.map(p => p.net)), yMax = Math.max(0, ...pts.map(p => p.net));
   if (!pts.length){ yMin = -50; yMax = 50; }
@@ -2737,7 +2932,7 @@ function newsChartSvg(pts, priceBars, xMin, xMax, width, height){
                 `<text x="${padL + w + 6}" y="${(Yp(priceMin) + 3.5).toFixed(1)}" class="news-axis news-price-axis">${newsFmtPrice(priceMin)}</text>`;
   }
 
-  const html = `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="none" class="news-svg" role="img" aria-label="Trailing 24h net impact${hasPrice ? ' and price' : ''}">
+  const html = `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="none" class="news-svg" role="img" aria-label="Smoothed net impact${hasPrice ? ' and price' : ''}">
     ${ticks.join('')}
     ${netLine}
     ${priceLine}
@@ -2798,6 +2993,10 @@ function renderNewsBody(){
   // because the browser can't scroll-anchor across an innerHTML='' wipe of the scrolled content.
   const pageScrollY = window.scrollY;
   body.innerHTML = '';
+  const morningCard = renderMorningReportCard();
+  if (morningCard) body.appendChild(morningCard);
+  const anomalyBar = renderNewsAnomalyBanner();
+  if (anomalyBar) body.appendChild(anomalyBar);
   body.appendChild(renderNewsSummary());
   body.appendChild(renderNewsRangeBar());
   body.appendChild(renderNewsChart());
@@ -2890,19 +3089,17 @@ function renderNewsRangeBar(){
 function renderNewsChart(){
   const box = document.createElement('div');
   box.className = 'news-chart';
-  const { pts, now, count } = newsSeries(newsUI.chartProduct);
+  // `now`/`count` stay the exact trailing-24h sum (tile/header number, fully traceable back to
+  // specific headlines); the chart LINE itself uses newsSmoothSeries() below — see its comment.
+  const { now, count } = newsSeries(newsUI.chartProduct);
   const rangeDef = NEWS_CHART_RANGES.find(r => r.key === newsUI.chartRange) || NEWS_CHART_RANGES[2];
   // The X-axis window is the range chip itself (now − N days → now), not derived from whatever
   // data happens to exist — so "5Y" always spans a real 5 years, even if net-impact events are
   // sparse in it, and always lines up with however much price history is available.
   const xMax = Date.now();
   const xMin = xMax - rangeDef.days * 24 * 3600 * 1000;
-  let shownPts = pts.filter(p => p.ms >= xMin && p.ms <= xMax);
-  let rangeNote = '';
-  if (shownPts.length < 2 && pts.length >= 2){
-    shownPts = pts;
-    rangeNote = ` · not enough events for ${rangeDef.label.toLowerCase()}, showing full history`;
-  }
+  const shownPts = newsSmoothSeries(newsUI.chartProduct, xMin, xMax);
+  const rangeNote = '';
   // Real price history from Firestore prices/{product} (collector.py's sync_prices()). MACRO never
   // has one — it keeps its separate TradingView DXY/VIX widgets below, untouched. "Daily" uses the
   // live-ish intraday series (5-minute bars, refreshed every collector run) instead of the 5y daily
@@ -2923,7 +3120,7 @@ function renderNewsChart(){
     // it's obvious which line is which without guessing from color alone: blue = net impact (same
     // stroke as .news-line), gold = futures price (same stroke as .news-price-line / var(--accent)).
     (hasPriceLine ? `<span class="news-legend">
-        <span class="news-legend-item"><span class="news-legend-dot" style="background:#5eb3f6"></span>Net impact (24h)</span>
+        <span class="news-legend-item"><span class="news-legend-dot" style="background:#5eb3f6"></span>Net impact (smoothed)</span>
         <span class="news-legend-item"><span class="news-legend-dot" style="background:var(--accent)"></span>${PRICE_LABELS[newsUI.chartProduct] || 'Futures price'}</span>
       </span>` : '');
   box.appendChild(head);
@@ -2968,7 +3165,7 @@ function renderNewsChart(){
       guide.style.left = leftPct + '%';
       guide.hidden = false;
       const lines = [`<div class="news-hover-date">${newsFmtTime(ms)}</div>`];
-      if (nearestNet) lines.push(`<div>net impact: <b class="${nearestNet.net > 0 ? 'pos' : nearestNet.net < 0 ? 'neg' : ''}">${newsFmtSigned(nearestNet.net)}</b></div>`);
+      if (nearestNet) lines.push(`<div>net impact (smoothed): <b class="${nearestNet.net > 0 ? 'pos' : nearestNet.net < 0 ? 'neg' : ''}">${newsFmtSigned(nearestNet.net)}</b></div>`);
       if (nearestPrice) lines.push(`<div>price: <b>${newsFmtPrice(nearestPrice.c)}</b></div>`);
       tip.innerHTML = lines.join('');
       tip.style.left = Math.min(Math.max(leftPct, 10), 90) + '%';

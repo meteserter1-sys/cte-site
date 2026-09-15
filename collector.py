@@ -28,6 +28,9 @@ Environment variables
                             setting this as a GitHub → Settings → Variables entry, no code change
                             needed)
   NEWS_ALERT_IMPACT         push alert threshold (default 75; BREAKING always alerts)
+  NEWS_MORNING_HOUR_VN      hour (0-23, Vietnam time, UTC+7) the daily Morning Report is generated
+                            in (default 7). Any run whose Vietnam-time hour matches this generates
+                            it once per calendar date — see maybe_send_morning_report().
 
 Usage
   python collector.py                # normal run (needs both env vars)
@@ -57,7 +60,8 @@ import requests
 # 1. Sources
 # ---------------------------------------------------------------------------
 
-# ── Sources (31, agreed with the desk on 2026-09-11) ────────────────────────
+# ── Sources (31 agreed with the desk on 2026-09-11; +3 on 2026-09-15, README items 12/13/14A —
+# see the "Yarın yapılacak" entries dated 14 Eylül) ──────────────────────────────────────────────
 # Google News RSS searches: (query, hl, gl, ceid). Five languages: EN, RU, UK, PT-BR, ES-AR.
 # The classifier reads any language and answers in English. Publisher-locked queries use
 # Google's site: operator so we never have to guess a publisher's RSS address.
@@ -88,6 +92,14 @@ GOOGLE_NEWS_QUERIES = [
     # global trade" has neither) — 2026-09-11, after finding Houthi coverage missing entirely.
     ('Houthi OR "Bab-el-Mandeb" OR "Bab al-Mandeb" OR "Mocha port" OR "Red Sea shipping" OR "Red Sea security" OR "Suez Canal"',
                                                                                          'en-US', 'US', 'US:en'),
+    # 2026-09-15, README item 12: the 14 Eylül WHEAT flash-crash (VN 22:00, ZW.Z26 -14c in 5 min)
+    # was very likely Trump's "Ukraine has agreed not to hit Russian Energy targets" statement —
+    # a Russia-Ukraine de-escalation headline with NO grain/export keyword in it at all, so it never
+    # matched anything above. Deliberately grain-free: catches the ceasefire/truce story itself, the
+    # classifier's own SYMMETRY-style reasoning ("war risk premium down -> wheat BEARISH") does the
+    # rest once the headline is actually collected.
+    ('Russia Ukraine ceasefire OR truce OR "peace deal" OR "peace plan" OR "energy targets" OR "agreed not to strike" OR "agreed not to hit" OR de-escalation',
+                                                                                         'en-US', 'US', 'US:en'),
     ('пшеница экспорт OR урожай зерна OR "зерновой коридор" OR ИКАР',                   'ru', 'RU', 'RU:ru'),
     ('соя OR "соевый шрот" OR кукуруза экспорт OR порт Новороссийск зерно',             'ru', 'RU', 'RU:ru'),
     ('експорт зерна OR пшениця OR кукурудза OR "зерновий коридор" OR порт Одеса',      'uk', 'UA', 'UA:uk'),
@@ -98,6 +110,13 @@ GOOGLE_NEWS_QUERIES = [
     ('"dry bulk" OR panamax OR supramax OR "Baltic Dry Index" OR "freight rates"',      'en-US', 'US', 'US:en'),
     ('"bunker fuel" price shipping freight',                                            'en-US', 'US', 'US:en'),
     ('Brent crude OR "Fed rate" OR "dollar index" OR VIX commodities',                  'en-US', 'US', 'US:en'),
+    # 2026-09-15, README item 13: same 14 Eylül session, a textbook MACRO story (US 10-year Treasury
+    # yield above 5% for the first time since 2023, Nasdaq/S&P/Dow down, VIX +11%) never reached
+    # Firestore because nothing above contains "Treasury/yield/bond". Ruled OUT as the WHEAT crash's
+    # cause (SBM/CORN flat in the same window — see item 13), but it's a real, independent MACRO gap
+    # on its own and belongs in the desk's MACRO lane regardless.
+    ('"Treasury yield" OR "10-year yield" OR "10-year Treasury" OR "bond yield" OR "10-year note" OR "Treasury sell-off"',
+                                                                                         'en-US', 'US', 'US:en'),
 ]
 
 # Direct publisher RSS (addresses taken from the desk's Inoreader) and X bridges. A dead feed is
@@ -106,6 +125,13 @@ SITE_FEEDS: list[tuple[str, str]] = [
     # WORLD
     ('War on the Rocks',              'https://warontherocks.com/feed/'),
     ('ISW (X)',                       'https://rss.xcancel.com/TheStudyofWar/rss'),
+    # 2026-09-15, README item 14A: the 14 Eylül Trump/Ukraine-energy headline reached the desk (via
+    # Mete's phone) minutes before it would have shown up as a secondary Google News article — a
+    # primary-source, market-moving statement is exactly what this kind of fast X account carries
+    # first. Same rss.xcancel.com bridge already used for ISW/Karen Braun/Andrey Sizov below, applied
+    # to a widely-watched real-time breaking-news headline account (not grain-specific on purpose —
+    # this is the "flash headline" net, the classifier + item-12/13 queries narrow it back down).
+    ('Breaking Market News (X)',      'https://rss.xcancel.com/DeItaone/rss'),
     # CROP / REPORTS
     ('USDA News',                     'https://www.usda.gov/rss/latest-releases.xml'),
     ('USDA NASS',                     'https://www.nass.usda.gov/rss/reports.xml'),
@@ -894,6 +920,151 @@ def sync_prices(db):
     return daily_updated
 
 
+# ── Morning report (VN 07:00 daily summary) ─────────────────────────────────
+# 2026-09-15, Mete's request (README item 15): every morning around Vietnam 07:00, a summary of the
+# previous 24h — overnight qualifying headlines per product, and how far each CBOT future actually
+# moved. GitHub Actions already runs every ~15 min (cron-job.org), so this needs no schedule of its
+# own: every run just checks "is it currently the target Vietnam hour, and has today's report
+# already been written?" — idempotent against the exact trigger timing, safe to call on every run.
+VN_OFFSET_HOURS = 7                                                    # Vietnam is UTC+7, no DST
+MORNING_REPORT_HOUR = int(os.environ.get('NEWS_MORNING_HOUR_VN', '7')) # generate once per VN date
+MORNING_MIN_IMPACT = 50    # mirrors index.html's NEWS_MIN_IMPACT — "qualifying" must mean the same
+MORNING_MIN_CONF = 50      # thing here as it does on the page, or the two would quietly disagree.
+MORNING_WINDOW_MS = 24 * 3600 * 1000
+
+
+def _vn_now():
+    from datetime import timedelta
+    return datetime.now(timezone.utc) + timedelta(hours=VN_OFFSET_HOURS)
+
+
+def _price_pct_change(rec: dict | None, window_ms: int, now_ms: int) -> float | None:
+    """% change of the freshest close vs. the closest bar at/before (now_ms - window_ms). Prefers the
+    intraday (5-min) series — freshest — and falls back to the daily series. None if neither works."""
+    if not rec:
+        return None
+    for key in ('intraday', 'bars'):
+        series = rec.get(key)
+        if not isinstance(series, list) or len(series) < 2:
+            continue
+        series = sorted(series, key=lambda b: b['t'])
+        last = series[-1]
+        if now_ms - last['t'] > MORNING_WINDOW_MS:       # feed is stale — don't report a fake move
+            continue
+        base = None
+        for b in reversed(series):
+            if b['t'] <= last['t'] - window_ms:
+                base = b
+                break
+        if base is None or not base.get('c'):
+            continue
+        return round((last['c'] - base['c']) / base['c'] * 100, 2)
+    return None
+
+
+def build_morning_report(db) -> dict | None:
+    """Reads the last 24h of Firestore `news` + `prices/*` and returns the report dict, or None on
+    a read failure (the caller treats that as 'try again next run', never fatal)."""
+    now_ms = int(time.time() * 1000)
+    window_start = now_ms - MORNING_WINDOW_MS
+    try:
+        snaps = list(db.collection('news').where('ms', '>=', window_start).stream())
+    except Exception as e:  # noqa: BLE001
+        print(f'  ! morning report: could not read news ({e})', file=sys.stderr)
+        return None
+    docs = [d for d in (sn.to_dict() for sn in snaps) if d]
+    products = {}
+    for p in PRODUCTS:
+        qual = [d for d in docs if d.get('product') == p and d.get('impact', 0) >= MORNING_MIN_IMPACT
+                and d.get('confidence', 0) >= MORNING_MIN_CONF]
+        net = sum((d['impact'] if d.get('direction') == 'BULLISH'
+                    else -d['impact'] if d.get('direction') == 'BEARISH' else 0) for d in qual)
+        price_pct = None
+        if p in PRICE_SYMBOLS:
+            try:
+                snap = db.collection('prices').document(p).get()
+                price_pct = _price_pct_change(snap.to_dict() if snap.exists else None, MORNING_WINDOW_MS, now_ms)
+            except Exception:  # noqa: BLE001
+                price_pct = None
+        products[p] = {
+            'net': int(net),
+            'bull': sum(1 for d in qual if d.get('direction') == 'BULLISH'),
+            'bear': sum(1 for d in qual if d.get('direction') == 'BEARISH'),
+            'n': len(qual),
+            'pricePct': price_pct,
+        }
+    top = sorted(docs, key=lambda d: -d.get('impact', 0))[:6]
+    return {
+        'dateVN': _vn_now().strftime('%Y-%m-%d'),
+        'generatedMs': now_ms,
+        'windowStartMs': window_start,
+        'windowEndMs': now_ms,
+        'products': products,
+        'top': [{'headline': d.get('headline', ''), 'product': d.get('product', ''),
+                 'direction': d.get('direction', ''), 'impact': d.get('impact', 0),
+                 'breaking': bool(d.get('breaking')), 'url': d.get('url', ''),
+                 'source': d.get('source', ''), 'ms': d.get('ms', 0)} for d in top],
+    }
+
+
+def push_morning_report(db, report: dict):
+    """One push notification pointing at the News tab — same registered-device list as push_alerts,
+    never fatal (a delivery failure must not stop the run or lose the report already written)."""
+    try:
+        from firebase_admin import messaging
+        tokens = [sn.id for sn in db.collection('news_devices').stream()]
+    except Exception as e:  # noqa: BLE001
+        print(f'  ! morning report push: devices unreadable ({e})', file=sys.stderr)
+        return
+    if not tokens:
+        return
+    parts = [f"{p} {report['products'][p]['net']:+d}" for p in PRODUCTS
+              if p != 'MACRO' and report['products'].get(p, {}).get('n')]
+    body = ('Overnight: ' + ', '.join(parts)) if parts else 'No qualifying overnight events.'
+    title = '☀️ Morning Report — CTE'
+    msg = messaging.MulticastMessage(
+        tokens=tokens,
+        notification=messaging.Notification(title=title, body=body[:180]),
+        webpush=messaging.WebpushConfig(
+            notification=messaging.WebpushNotification(title=title, body=body[:180], icon='/icon-192.png', tag='morning_report'),
+            fcm_options=messaging.WebpushFCMOptions(link='https://commodity-trading-engine.web.app/#news'),
+        ),
+    )
+    try:
+        messaging.send_each_for_multicast(msg)
+    except Exception as e:  # noqa: BLE001
+        print(f'  ! morning report push failed ({e})', file=sys.stderr)
+
+
+def maybe_send_morning_report(db):
+    """Generates + writes the daily VN-07:00 report at most once per calendar date. Called on EVERY
+    run (both the 'nothing new' early-return path and the normal path in main()) — cheap to check,
+    and it must not depend on there being fresh headlines this particular run."""
+    vn = _vn_now()
+    if vn.hour != MORNING_REPORT_HOUR:
+        return
+    date_str = vn.strftime('%Y-%m-%d')
+    ref = db.collection('news_meta').document('morning_report')
+    try:
+        existing = ref.get()
+        if existing.exists and (existing.to_dict() or {}).get('dateVN') == date_str:
+            return   # already generated today — every other run this hour is a no-op
+    except Exception as e:  # noqa: BLE001
+        print(f'  ! morning report: could not check existing ({e})', file=sys.stderr)
+        return
+    report = build_morning_report(db)
+    if not report:
+        return
+    try:
+        ref.set(report)
+        db.collection('morning_reports').document(date_str).set(report)   # dated history copy
+    except Exception as e:  # noqa: BLE001
+        print(f'  ! morning report: write failed ({e})', file=sys.stderr)
+        return
+    print(f"  morning report generated for {date_str}")
+    push_morning_report(db, report)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--dry-run', action='store_true', help='do not write to Firestore')
@@ -936,6 +1107,7 @@ def main():
             pruned = prune_old(db)
             save_cache(cache)
             sync_prices(db)
+            maybe_send_morning_report(db)
             print(f'  pruned {pruned} events older than {RETENTION_DAYS} days')
         print('nothing new. done.')
         return
@@ -967,6 +1139,7 @@ def main():
     push_alerts(db, heads)
     pruned = prune_old(db)
     sync_prices(db)
+    maybe_send_morning_report(db)
     # Everything the model actually answered for — kept, folded or skipped — is "seen": never pay
     # for it twice. Stories from a failed batch are left out so they come back next run.
     for s in new_stories:
