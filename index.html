@@ -229,6 +229,8 @@
   .news-svg{ display:block; }
   .news-axis{ fill:var(--text-dim); font-family:var(--mono); font-size:9.5px; }
   .news-price-axis{ fill:var(--accent); }
+  .news-price-current{ font-weight:700; }
+  .news-price-current-bg{ fill:var(--accent); opacity:0.16; }
   .news-grid{ stroke:var(--border); stroke-width:1; }
   .news-zero{ stroke:var(--text-dim); stroke-width:1; stroke-dasharray:4 4; }
   .news-line{ fill:none; stroke:#5eb3f6; stroke-width:1.8; stroke-linejoin:round; stroke-linecap:round; }
@@ -2973,14 +2975,25 @@ function newsChartSvg(pts, priceBars, xMin, xMax, width, height){
     netDot = `<circle cx="${X(last.ms).toFixed(1)}" cy="${Y(last.net).toFixed(1)}" r="3.5" fill="${lastColor}"/>`;
   }
 
-  let priceLine = '', priceDot = '', priceAxis = '';
+  let priceLine = '', priceDot = '', priceAxis = '', priceCurrent = '';
   if (hasPrice){
     const dp = priceBars.map((b, i) => (i ? ' L' : 'M') + X(b.t).toFixed(1) + ' ' + Yp(b.c).toFixed(1)).join('');
     const lastP = priceBars[priceBars.length - 1];
     priceLine = `<path d="${dp.trim()}" class="news-price-line"/>`;
     priceDot = `<circle cx="${X(lastP.t).toFixed(1)}" cy="${Yp(lastP.c).toFixed(1)}" r="3.5" fill="var(--accent)"/>`;
-    priceAxis = `<text x="${padL + w + 6}" y="${(Yp(priceMax) + 3.5).toFixed(1)}" class="news-axis news-price-axis">${newsFmtPrice(priceMax)}</text>` +
-                `<text x="${padL + w + 6}" y="${(Yp(priceMin) + 3.5).toFixed(1)}" class="news-axis news-price-axis">${newsFmtPrice(priceMin)}</text>`;
+    const maxY = Yp(priceMax), minY = Yp(priceMin), lastY = Yp(lastP.c);
+    priceAxis = `<text x="${padL + w + 6}" y="${(maxY + 3.5).toFixed(1)}" class="news-axis news-price-axis">${newsFmtPrice(priceMax)}</text>` +
+                `<text x="${padL + w + 6}" y="${(minY + 3.5).toFixed(1)}" class="news-axis news-price-axis">${newsFmtPrice(priceMin)}</text>`;
+    // Live/current price label at the price line's actual last point — the max/min labels above are
+    // fixed to the window's extremes, but Mete wants the line's current (changing) value called out
+    // wherever it actually sits, not just the two endpoints. Skipped when it would sit right on top of
+    // the max or min label (current value IS the extreme, which is common) to avoid double-printing it.
+    if (Math.abs(lastY - maxY) > 9 && Math.abs(lastY - minY) > 9){
+      const label = newsFmtPrice(lastP.c);
+      const bw = 7 + label.length * 5.6;
+      priceCurrent = `<rect x="${(padL + w + 3).toFixed(1)}" y="${(lastY - 6.5).toFixed(1)}" width="${bw.toFixed(1)}" height="12" rx="3" class="news-price-current-bg"/>` +
+                     `<text x="${padL + w + 6}" y="${(lastY + 3.5).toFixed(1)}" class="news-axis news-price-axis news-price-current">${label}</text>`;
+    }
   }
 
   const html = `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="none" class="news-svg" role="img" aria-label="Net impact${hasPrice ? ' and price' : ''}">
@@ -2990,6 +3003,7 @@ function newsChartSvg(pts, priceBars, xMin, xMax, width, height){
     ${netDot}
     ${priceDot}
     ${priceAxis}
+    ${priceCurrent}
     ${xt.join('')}
   </svg>`;
   return { html, meta: { padL, w, padT, h, xMin, xMax, width, height, hasPrice } };
