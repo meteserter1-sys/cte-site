@@ -166,23 +166,149 @@ durmaz; ilk log'da hangi kaynağın boş döndüğüne bak.
      `firestore.rules`'a yeni `match /prices/{product}` bloğu eklendi (sadece okuma, yazma servis
      hesabından). **Bu kural GitHub Console'dan AYRICA Publish edilmeli** — `firebase deploy --only
      hosting` bunu kapsamıyor (bkz. Kurulum §1).
-   - **Doğrulanamayan tek nokta:** Yahoo Finance'in bu endpoint'ine bu oturumun kendi sanal ortamından
-     (GitHub Actions değil) erişim engelliydi (proxy + robots.txt kısıtlamaları) — bu GitHub Actions'ın
-     kendi ağ erişimini yansıtmıyor, `yfinance` paketinin de aynı endpoint'i kullandığı biliniyor, ama
-     ilk gerçek toplayıcı çalışmasından sonra Firestore'da `prices/*` dolduğunu ben ayrıca doğrulayacağım.
+   - **✅ DOĞRULANDI (14 Eylül, deploy sonrası canlıda test edildi).** Yahoo Finance GitHub Actions'tan
+     sorunsuz erişilebiliyor — `sync_prices()` ilk gerçek çalıştırmada **4/4 sembolü** başarıyla çekti
+     (`prices: refreshed 4/4 symbols` log satırı), Firestore'da WHEAT için 1256 günlük bar (2021→2026)
+     doğrulandı. Canlı sitede WHEAT/CORN/SBM/FREIGHT hepsinde birleşik grafik + sağ fiyat ekseni +
+     hover tooltip test edildi, çalışıyor. MACRO'nun ayrı TradingView kutusu dokunulmamış hâliyle
+     doğrulandı.
 
-9. **✅ UYGULANDI (14 Eylül) — Masaüstü ding + bildirim.** Sekme açıkken BREAKING ya da etki ≥ 75
+9. **✅ UYGULANDI (14 Eylül, aynı gün ikinci düzeltme) — Daily'de fiyat çizgisi görünmüyordu.** Mete'nin
+    fark ettiği gerçek eksiklik: eski TradingView widget'ı Daily seçiliyken o günün **canlı/anlık**
+    (saatlik mum) hareketini gösteriyordu; birleşik grafik ise sadece günlük kapanışları kullandığı
+    için 1 günlük pencerede en fazla 1 nokta düşüyor, çizgi çizilemiyordu (bu bir hata değildi, veri
+    çözünürlüğünün doğal bir sonucuydu, ama Mete'nin istediği "canlı" his kayboluyordu). Çözüm:
+    `collector.py`'ye ayrı bir `fetch_intraday_series()` eklendi — aynı Yahoo Finance endpoint'inden
+    bu kez `range=2d&interval=5m` ile 5 dakikalık barlar çekiliyor, `prices/{product}.intraday`
+    alanına yazılıyor, **her toplayıcı çalıştırmasında** (günlük seriyi 4 saatte bir yenileyen
+    `PRICE_REFRESH_HOURS` mantığından bağımsız) tazeleniyor — böylece Daily görünümü gerçekten canlıya
+    yakın kalıyor. `index.html` tarafında `renderNewsChart()`, seçili aralık `'1D'` ise `bars` yerine
+    `intraday` dizisini kullanıyor, diğer aralıklarda (Weekly/Monthly/1Y/5Y) değişiklik yok. Firestore
+    kuralı değişmedi (`prices/{product}` zaten okunabilir), sadece yeni bir alan eklendi — ayrıca
+    Publish gerekmiyor. **Bu değişiklik henüz canlıda test edilmedi** (toplayıcı yeniden yüklenip
+    çalışana kadar `intraday` alanı dolmayacak, o ana kadar Daily'de yine boş/az veri görülebilir).
+
+10. **✅ UYGULANDI (14 Eylül) — Masaüstü ding + bildirim.** Sekme açıkken BREAKING ya da etki ≥ 75
    olay geldiğinde iki tonlu bir "ding" (Web Audio API, harici ses dosyası yok) + tarayıcı
    `Notification`'ı çıkıyor. Var olan 🔔 Alerts butonunun aynı izin/localStorage durumunu kullanıyor —
    ayrı bir açma/kapama eklenmedi. Mobil push (FCM) bu değişiklikten etkilenmedi, aynı şekilde çalışıyor.
 
-10. **Not (14 Eylül) — Ukrayna demiryolu tahıl ihracatı haberi.** 7. maddedeki ürün değerlendirmesinde
+11. **Not (14 Eylül) — Ukrayna demiryolu tahıl ihracatı haberi.** 7. maddedeki ürün değerlendirmesinde
     bu haberi (58% düşüş + fazla malın elde kalması, BEARISH) yanlışlıkla Fransa rekolte örneğiyle
     "aynı aile hata" diye nitelemiştim. Mete haklı olarak düzeltti: Fransa örneği gerçek bir hataydı
     (rekolte düşüşü = az arz = BULLISH olmalıydı, ama BEARISH etiketlenmişti). Ukrayna haberi ise
     farklı bir mantık — ihracat düşüp mal elde kalması bir arz fazlası/zayıf talep göstergesi, bu da
     zaten BEARISH'i destekliyor. İkisi ilgisiz, karıştırılmamalı — ✅ düzeltildi, ayrı bir aksiyon
     gerekmiyor.
+
+12. **✅ UYGULANDI (15 Eylül) — buğday geniş jeopolitik/ateşkes haberlerini
+    kaçırıyor, çünkü sorgularımız hep "tahıl/ihracat" kelimesi arıyor.** 14 Eylül akşamı (VN 22:00-
+    22:05) ZW.Z26 5 dakikada -14 cent (727.75 → 713.75) düştü, 15-20 dk içinde ~720'ye toparlandı.
+    Firestore'daki ham `news` verisi (WebFetch ile, tarayıcı o an bağlı değildi) o dakikalarda hiçbir
+    qualifying WHEAT haberi göstermiyordu — en yakın WHEAT kaydı 30 dk sonra, etki 40 (eşiğin altı).
+    Mete VN saatiyle 22:07'de kendi telefonundaki bir breaking-news uygulamasında şu başlığı buldu:
+    *"Trump: Ukraine has agreed not to hit Russian Energy targets. Russia has agreed to do, likewise.
+    The World's Diesel price rise is mostly caused by the Russia/Ukraine War, not Iran"* (Washington,
+    D.C. · Ukraine/Iran/Middle East etiketli). Zamanlama (düşüş barının tam içinde/hemen ardında) ve
+    mekanizma (Rusya-Ukrayna'da kısmi de-eskalasyon sinyali → buğdayın uzun süredir taşıdığı "savaş
+    risk primi" satılır → BEARISH) gayet tutarlı; muhtemel gerçek tetikleyici bu.
+
+    **Kök sebep:** Bu başlık hiç "wheat/grain/export" kelimesi geçmiyor ("enerji hedefleri"nden
+    bahsediyor), bu yüzden `GOOGLE_NEWS_QUERIES`'teki hiçbir WHEAT ya da "Black Sea grain..." sorgusuna
+    takılmıyor — modelin "savaş azalırsa buğday risk primi azalır" çıkarımını yapabilmesi için önce
+    haberin toplanması lazım, o da hiç gerçekleşmedi. Ayrıca bu bir Trump açıklaması/birincil kaynak —
+    bizim Google News RSS + 31 site feed hattımız böyle anlık açıklamaları genelde saniyeler değil,
+    ikincil bir haber makalesi yayınlandıktan sonra (dakikalar-saatler) yakalıyor.
+
+    **✅ Yapıldı (15 Eylül) —** `collector.py`'nin `GOOGLE_NEWS_QUERIES`'ine grain kelimesi aramayan
+    yeni bir sorgu eklendi: `Russia Ukraine ceasefire OR truce OR "peace deal" OR "peace plan" OR
+    "energy targets" OR "agreed not to strike" OR "agreed not to hit" OR de-escalation`. Böylece
+    tahıldan hiç bahsetmeyen ama savaş risk primini etkileyen başlıklar da toplanıp classifier'a
+    gidebilecek (classifier zaten "savaş azalması = buğday BEARISH" çıkarımını `SYSTEM_PROMPT`'taki
+    mevcut mantıkla yapabiliyor, sorun sadece toplama/kapsama tarafındaydı). **Henüz GitHub'a
+    yüklenip deploy edilmedi** — Mete'ye bu turda yeni `collector.py`/`index.html` gönderildi.
+
+13. **✅ UYGULANDI (15 Eylül) — MACRO sorgusu tahvil faizi/Treasury
+    haberlerini hiç yakalamıyor.** Aynı gün (14 Eylül) ABD 10 yıllık tahvil faizi 2023'ten beri ilk
+    kez %5'i geçti (Brent $108, enflasyon korkusu, bu hafta Fed kararı öncesi — Bloomberg/CNBC/CNN/
+    Yahoo Finance doğruladı: Nasdaq -%1.08, S&P -%0.83, Dow -%0.55, VIX +%11.24). Bu, ders kitabı
+    tarzı bir MACRO haberiydi ama Firestore'a hiç düşmedi. Sebep net: `GOOGLE_NEWS_QUERIES`'teki
+    MACRO sorgusu — `Brent crude OR "Fed rate" OR "dollar index" OR VIX commodities` — içinde
+    **"Treasury yield" / "10-year" / "bond" gibi hiçbir kelime yok**, o yüzden bu manşetlerin hiçbiri
+    eşleşmedi. **Not:** aynı gün 12. maddede incelenen WHEAT'teki VN 22:00 sert düşüşün bu tahvil
+    haberiyle **ilgisi olmadığı ayrıca doğrulandı** — aynı 5 dakikalık pencerede SBM tamamen düz
+    kaldı, CORN'da da buğdaydaki gibi bir çöküş yoktu; geniş bir makro/dolar satışı olsaydı tüm
+    kompleksi aynı anda vururdu, vurmadı — bu yüzden 12. maddedeki Ukrayna/Trump açıklaması hâlâ en
+    güçlü aday olarak duruyor, bu iki bulgu birbirinden bağımsız.
+
+    **✅ Yapıldı (15 Eylül) —** `GOOGLE_NEWS_QUERIES`'e yeni bir MACRO sorgusu eklendi:
+    `"Treasury yield" OR "10-year yield" OR "10-year Treasury" OR "bond yield" OR "10-year note" OR
+    "Treasury sell-off"`. 12. maddedeki sorguyla aynı oturumda yapıldı. **Henüz GitHub'a yüklenip
+    deploy edilmedi.**
+
+14. **"flash haber" formülü: CTE'nin kaçırdığı
+    türde ani, tahıl kelimesi içermeyen ama fiyatı vuran haberleri (12. maddedeki Trump örneği gibi)
+    yakalamak için genel bir yaklaşım lazım. Sorgu listesini genişletmek (12/13. maddeler) tek başına
+    yeterli olmaz — dünyada hangi flash haberin fiyatı hareket ettireceğini önceden tahmin edip her
+    ihtimali sorguya yazmak mümkün değil. İki tamamlayıcı fikir var, ikisi birlikte düşünülecek:
+
+    **A) ✅ UYGULANDI (15 Eylül) — Kapsamı genişletmek (proaktif, ama asla tam olmaz):** 12/13.
+    maddelerdeki iki yeni sorguya ek olarak, ISW/Karen Braun/Andrey Sizov için kullandığımız
+    `rss.xcancel.com` (X köprüsü) yöntemi `SITE_FEEDS`'e yeni bir satır olarak da uygulandı:
+    **Walter Bloomberg / "Breaking Market News (X)"** (`rss.xcancel.com/DeItaone/rss`) — piyasa
+    masalarının Trump/Fed/jeopolitik gibi birincil-kaynak flash başlıkları Google News'in ikincil
+    habere dönüşmesini beklemeden ilk gördüğü hesaplardan biri, tam da 14 Eylül'de Mete'nin telefonda
+    yakaladığı türden bir haber. **Henüz GitHub'a yüklenip deploy edilmedi.**
+
+    **B) Fiyat-anomali alarmı (reaktif güvenlik ağı — asıl yeni fikir):** Kaynak listesi ne kadar
+    genişlerse genişlesin, dünyanın her flash haberini önceden öngörüp sorguya yazmak imkânsız. Bunun
+    yerine sistemin kendisi "fiyat haber olmadan hareket ediyor" durumunu fark etsin: her ürün için,
+    son N dakikadaki (örn. 15-30 dk) intraday fiyat değişimi bir eşiği (örn. ürüne göre %1-1.5)
+    aşarsa VE aynı pencerede qualifying net-impact bu hareketi açıklamıyorsa (sıfıra yakın, ya da
+    yönü ters), News sekmesinde görünür bir uyarı çıksın: *"⚠️ WHEAT 5 dk'da -%1.9 hareket etti,
+    açıklayan qualifying haber yok — dış kaynak kontrol et."* Bu, tam olarak Mete'nin bugün elle
+    yaptığı şeyi (fiyat grafiğinde tuhaflık fark edip telefondan haber araması) otomatikleştirir —
+    hangi haberi kaçırdığımızı bilmesek bile, kaçırdığımızı ANINDA fark ettirir. `collector.py`
+    tarafında hesaplanıp Firestore'a yazılabilir (örn. `news_meta/anomalies`) ya da `index.html`
+    tarafında zaten elimizdeki `intraday` fiyat verisi + `newsSeries()` net-impact'i karşılaştırılarak
+    tamamen istemci tarafında da hesaplanabilir — ek bir backend değişikliği gerekmez, sadece yeni bir
+    UI bileşeni. İkinci yol muhtemelen daha hızlı uygulanır.
+
+    **✅ UYGULANDI (15 Eylül) —** Eşik Mete'nin dediği gibi **±%1** (son 15 dakikada). Tamamen
+    istemci tarafında (`index.html`): `computePriceAnomalies()` her ürün için son 15 dk'lık intraday
+    fiyat hareketini, `renderNewsAnomalyBanner()` ise News sekmesinin en üstünde (özet kutucuklarının
+    hemen üstünde) kırmızı bir uyarı şeridi olarak gösteriyor — "⚠️ WHEAT 15 dk'da -%1.9 hareket etti,
+    açıklayan qualifying haber yok (net -10) — dış kaynak kontrol et." Açıklama kontrolü: son 60
+    dakikadaki qualifying (impact≥50, conf≥50) haberlerin net etkisi, fiyat hareketiyle aynı yönde ve
+    en az ±20 değilse "açıklanmadı" sayılıyor. Aynı olay için tekrar tekrar dingletmemek adına
+    (ürün × 15-dk zaman dilimi) bazında bir kez, ve sadece 🔔 Alerts açıksa (aynı buton/izin) ding +
+    masaüstü bildirimi de gönderiyor. Ek backend değişikliği yok, ek Firestore okuma yok. **Henüz
+    GitHub'a yüklenip deploy edilmedi.**
+
+15. **✅ UYGULANDI (15 Eylül, Mete istedi) — Her sabah VN saatiyle 07:00'de otomatik "Morning Report"
+    (gün sonu özeti).** İstenen içerik: bir önceki günün özeti — gece çıkan flash haberler, hangi
+    ürünü nasıl etkiledi (BULLISH/BEARISH, impact), CBOT futures ne kadar arttı/azaldı. Mete "başka
+    bir ekleme olursa değerlendirebiliriz" dedi, içerik listesi genişleyebilir kalsın diye tasarlandı.
+
+    **Nasıl yapıldı:**
+    - `collector.py`: yeni `maybe_send_morning_report()`, her çalıştırmada (GitHub Actions zaten
+      ~15 dk'da bir çalışıyor) "şu an Vietnam saatiyle 07 mi VE bugün için rapor zaten yazıldı mı"
+      kontrolü yapıyor — böyle idempotent, cron'un tam 07:00'i tutturmasına gerek yok, saat 07 içindeki
+      herhangi bir çalıştırma yeter, günde bir kez üretiyor. `build_morning_report()` son 24 saatteki
+      `news` dokümanlarını okuyup ürün başına net impact/bull/bear/qualifying sayısı hesaplıyor
+      (index.html'deki NEWS_MIN_IMPACT/CONF=50/50 ile birebir aynı eşik), `prices/{product}`'tan da
+      24 saatlik % fiyat değişimini (`_price_pct_change`, önce intraday sonra daily seri) çıkarıyor;
+      ayrıca en yüksek etkili 6 başlığı ekliyor. Sonuç `news_meta/morning_report`'a (canlı, sayfa
+      buradan okuyor) ve ayrı bir `morning_reports/{tarih}` dokümanına (geçmiş kaydı, sayfa henüz
+      okumuyor) yazılıyor, sonra `push_morning_report()` ile mevcut FCM cihaz listesine "☀️ Morning
+      Report — CTE" bildirimi gidiyor (mevcut `push_alerts()` ile aynı altyapı).
+    - `index.html`: `news_meta/morning_report`'a `onSnapshot` ile abone olunuyor; rapor bugüne aitse
+      (son 20 saat içinde üretilmişse) ve o tarih için kapatılmamışsa, News sekmesinin en üstünde
+      ürün başına net/bull/bear/fiyat-% özet satırları ve en önemli 4 başlıkla bir kart çıkıyor,
+      sağ üstteki ✕ ile kapatılabiliyor (kapatma o tarihe özel, yarın yeniden çıkar).
+    - Firestore kuralı değişikliği gerekmedi: `news_meta/{id}` zaten herkese açık okunabilir durumda
+      (mevcut kural), `morning_reports` koleksiyonu sayfa tarafından okunmadığı için kural gerekmiyor.
+    **Henüz GitHub'a yüklenip deploy edilmedi.**
 
 ## Kurulum — sırayla
 
