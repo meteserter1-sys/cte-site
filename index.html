@@ -206,6 +206,7 @@
   .news-tile-name{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); font-weight:700; }
   .news-tile-price{ font-family:var(--mono); font-size:10px; color:var(--text-dim); white-space:nowrap; }
   .news-tile-price .chg.pos{ color:var(--good); } .news-tile-price .chg.neg{ color:var(--bad); }
+  .news-tile-price.unreliable{ color:#e0a020; border-bottom:1px dashed #e0a020; }
   .news-tile-proxy{ font-size:8.5px; color:var(--text-dim); opacity:.75; text-transform:uppercase; letter-spacing:.04em; }
   .news-tile-val{ font-family:var(--mono); font-size:19px; font-weight:700; margin:1px 0; color:var(--text-dim); }
   .news-tile.pos .news-tile-val{ color:var(--good); }
@@ -3065,13 +3066,30 @@ function renderNewsBody(){
 // Firestore prices/{product} data the merged chart already holds in `newsPrices` — no extra network
 // call. Prefers the intraday series (freshest, refreshed every collector run) and falls back to the
 // daily series if intraday hasn't synced yet; returns null (tile just omits the price) if neither has.
+//
+// 2026-09-15: cleanIntraday()'s despike filter only rejects a brief, MINORITY-of-bars flicker — it
+// cannot and should not override a SUSTAINED bad stretch, because after enough consecutive bad bars
+// that stretch legitimately becomes the "median". Seen live: FREIGHT/BZ=F's intraday feed sat wrong
+// (~102.5-102.7) for 20+ minutes across 6+ consecutive bars while the real market (and this page's
+// own separately-fetched DAILY series, 107.56) stayed around 107.7 — so add a second, independent
+// guard: if the despiked intraday reading has still drifted implausibly far from the last trusted
+// daily close, don't show a confident number that's probably wrong — fall back to that daily close
+// and mark the reading `unreliable` so the tile can say so instead of silently guessing.
+const INTRADAY_SANITY_PCT = 3.0;
 function newsLatestPrice(product){
   const rec = newsPrices[product];
   if (!rec) return null;
   const intraday = Array.isArray(rec.intraday) ? cleanIntraday(rec.intraday) : [];
   const daily = Array.isArray(rec.bars) ? rec.bars : [];
-  const live = intraday.length ? intraday[intraday.length - 1] : (daily.length ? daily[daily.length - 1] : null);
+  let live = intraday.length ? intraday[intraday.length - 1] : (daily.length ? daily[daily.length - 1] : null);
   if (!live) return null;
+  const lastDaily = daily.length ? daily[daily.length - 1] : null;
+  let unreliable = false;
+  if (intraday.length && lastDaily && lastDaily.c &&
+      Math.abs(live.c - lastDaily.c) / lastDaily.c * 100 > INTRADAY_SANITY_PCT){
+    live = lastDaily;
+    unreliable = true;
+  }
   // Day-over-day % vs the most recent daily close from BEFORE the live bar's own calendar day
   // (UTC date compare — precise enough for a ticker-style % figure, no exchange-session math needed).
   const liveDay = new Date(live.t).toISOString().slice(0, 10);
@@ -3080,7 +3098,7 @@ function newsLatestPrice(product){
     if (new Date(daily[i].t).toISOString().slice(0, 10) < liveDay){ prevClose = daily[i].c; break; }
   }
   const pct = prevClose ? (live.c - prevClose) / prevClose * 100 : null;
-  return { price: live.c, pct };
+  return { price: live.c, pct, unreliable };
 }
 
 // Summary tiles: trailing-24h reading "now" for every product.
@@ -3093,8 +3111,9 @@ function renderNewsSummary(){
     const tile = document.createElement('div');
     tile.className = 'news-tile ' + tone + (newsUI.chartProduct === p ? ' sel' : '');
     const q = PRICE_PRODUCTS.includes(p) ? newsLatestPrice(p) : null;
+    const priceTitle = `${PRICE_LABELS[p] || ''}${q && q.unreliable ? ' — intraday feed looks off right now, showing last daily close instead' : ''}`;
     const priceHtml = q
-      ? `<span class="news-tile-price" title="${PRICE_LABELS[p] || ''}">${newsFmtPrice(q.price)}${p === 'FREIGHT' ? ' <span class="news-tile-proxy">Brent</span>' : ''}${q.pct != null ? ` <span class="chg ${q.pct > 0 ? 'pos' : q.pct < 0 ? 'neg' : ''}">${q.pct > 0 ? '▲' : q.pct < 0 ? '▼' : '·'}${Math.abs(q.pct).toFixed(1)}%</span>` : ''}</span>`
+      ? `<span class="news-tile-price${q.unreliable ? ' unreliable' : ''}" title="${priceTitle}">${q.unreliable ? '≈' : ''}${newsFmtPrice(q.price)}${p === 'FREIGHT' ? ' <span class="news-tile-proxy">Brent</span>' : ''}${q.pct != null ? ` <span class="chg ${q.pct > 0 ? 'pos' : q.pct < 0 ? 'neg' : ''}">${q.pct > 0 ? '▲' : q.pct < 0 ? '▼' : '·'}${Math.abs(q.pct).toFixed(1)}%</span>` : ''}</span>`
       : '';
     tile.innerHTML = `<div class="news-tile-head"><span class="news-tile-name">${p}</span>${priceHtml}</div>` +
       `<div class="news-tile-val">${now.n ? newsFmtSigned(now.net) : '—'}</div>` +
