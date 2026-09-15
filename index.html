@@ -2391,7 +2391,7 @@ let newsVotes = {};                // id -> 'like' | 'dislike'
 let newsUnsub = null;
 let newsLoaded = null;             // promise resolved after the first snapshot
 let newsClockTimer = null;
-let newsUI = { product: 'ALL', search: '', chartProduct: 'WHEAT', minImpactOn: false, chartRange: '1M' };
+let newsUI = { product: 'ALL', search: '', chartProduct: 'WHEAT', minImpactOn: false, chartRange: '1D' };
 
 // Daily futures price history (2026-09-14), written by collector.py's sync_prices() into
 // Firestore `prices/{product}`. Kept separate from newsDocs/newsSeries — this merges into the
@@ -2598,12 +2598,47 @@ const NEWS_ANOMALY_NEWS_WINDOW_MS = 60 * 60 * 1000;  // wider window checked for
 const NEWS_ANOMALY_EXPLAIN_NET = 20;                 // minimum same-direction net impact that "explains" it
 const NEWS_ANOMALY_STALE_MS = 30 * 60 * 1000;        // don't alarm on a price feed that stopped updating
 
+function medianClose(bars){
+  const closes = bars.map(b => b.c).filter(c => typeof c === 'number' && isFinite(c)).sort((a, b) => a - b);
+  const n = closes.length;
+  if (!n) return null;
+  return n % 2 ? closes[(n - 1) / 2] : (closes[n / 2 - 1] + closes[n / 2]) / 2;
+}
+
+// ── Intraday despike filter ──────────────────────────────────────────────────────────────────────
+// 2026-09-15: Yahoo Finance's intraday feed printed a bogus tick on FREIGHT/BZ=F — real price was a
+// steady ~107.4-107.8, but two of the last three 5-min bars read ~102.5 (107.44, 107.46, 102.46,
+// 107.57, 102.49), which showed up EVERYWHERE that reads `intraday` raw: the anomaly alert (fixed
+// first), but also the WHEAT/CORN/SBM/FREIGHT tile price and the Daily chart's price line — Mete
+// caught this because the tile kept showing 102.49 as "the price" when the real market was ~107.8.
+// Fixing this once, here, instead of in each of the three call sites: a centered 5-bar median for
+// every interior bar (a real move is confirmed by neighbors on both sides; a lone bad tick isn't),
+// and a trailing 5-bar median for the newest bar (it has no future neighbor yet to confirm it, so
+// lean on the last few bars rather than trust one fresh tick outright — verified against the exact
+// data above: 3 real vs. 2 glitched bars still resolves to ~107.44). `cleanIntraday()` is the single
+// place every consumer should read the intraday series through from now on.
+const INTRADAY_DESPIKE_N = 5;
+function cleanIntraday(bars){
+  if (!Array.isArray(bars) || bars.length < 3) return Array.isArray(bars) ? bars : [];
+  const half = Math.floor(INTRADAY_DESPIKE_N / 2);
+  return bars.map((b, i) => {
+    if (i === bars.length - 1){
+      const win = bars.slice(Math.max(0, i - INTRADAY_DESPIKE_N + 1), i + 1);
+      const m = medianClose(win);
+      return m == null ? b : { ...b, c: m };
+    }
+    const lo = Math.max(0, i - half), hi = Math.min(bars.length - 1, i + half);
+    const m = medianClose(bars.slice(lo, hi + 1));
+    return m == null ? b : { ...b, c: m };
+  });
+}
+
 function computePriceAnomalies(){
   const out = [];
   const now = Date.now();
   for (const product of PRICE_PRODUCTS){
     const rec = newsPrices[product];
-    const intraday = rec && Array.isArray(rec.intraday) ? rec.intraday : [];
+    const intraday = rec && Array.isArray(rec.intraday) ? cleanIntraday(rec.intraday) : [];
     if (intraday.length < 2) continue;
     const last = intraday[intraday.length - 1];
     if (now - last.t > NEWS_ANOMALY_STALE_MS) continue;
@@ -2633,8 +2668,8 @@ function renderNewsAnomalyBanner(){
   bar.innerHTML = anomalies.map(a => {
     const dirTxt = a.pct > 0 ? `+${a.pct.toFixed(1)}%` : `${a.pct.toFixed(1)}%`;
     const netTxt = a.net > 0 ? `+${a.net}` : `${a.net}`;
-    return `<div class="news-anomaly-row">⚠️ <b>${a.product}</b> ${a.windowMin} dk'da ${dirTxt} hareket etti, ` +
-           `açıklayan qualifying haber yok (net ${netTxt}) — dış kaynak kontrol et.</div>`;
+    return `<div class="news-anomaly-row">⚠️ <b>${a.product}</b> moved ${dirTxt} in ${a.windowMin} min with no ` +
+           `qualifying news explaining it (net ${netTxt}) — check an outside source.</div>`;
   }).join('');
   return bar;
 }
@@ -2652,8 +2687,8 @@ function newsMaybeAlertAnomalies(anomalies){
     if (!on) continue;
     newsPlayDing();
     try{
-      const n = new Notification(`⚠️ ${a.product} ${a.pct > 0 ? '▲' : '▼'} ${Math.abs(a.pct).toFixed(1)}% — haber yok`, {
-        body: `${a.windowMin} dk'da fiyat hareket etti ama açıklayan qualifying haber bulunamadı.`,
+      const n = new Notification(`⚠️ ${a.product} ${a.pct > 0 ? '▲' : '▼'} ${Math.abs(a.pct).toFixed(1)}% — no explaining news`, {
+        body: `Price moved in the last ${a.windowMin} min but no qualifying news explains it.`,
         tag: `anomaly_${a.product}`,
       });
       n.onclick = () => { window.focus(); };
@@ -3033,7 +3068,7 @@ function renderNewsBody(){
 function newsLatestPrice(product){
   const rec = newsPrices[product];
   if (!rec) return null;
-  const intraday = Array.isArray(rec.intraday) ? rec.intraday : [];
+  const intraday = Array.isArray(rec.intraday) ? cleanIntraday(rec.intraday) : [];
   const daily = Array.isArray(rec.bars) ? rec.bars : [];
   const live = intraday.length ? intraday[intraday.length - 1] : (daily.length ? daily[daily.length - 1] : null);
   if (!live) return null;
@@ -3107,7 +3142,7 @@ function renderNewsChart(){
   const priceRec = newsPrices[newsUI.chartProduct];
   const useIntraday = rangeDef.key === '1D';
   const rawBars = priceRec && Array.isArray(useIntraday ? priceRec.intraday : priceRec.bars)
-    ? (useIntraday ? priceRec.intraday : priceRec.bars) : [];
+    ? (useIntraday ? cleanIntraday(priceRec.intraday) : priceRec.bars) : [];
   const priceBars = rawBars.filter(b => b.t >= xMin && b.t <= xMax).sort((a, b) => a.t - b.t);
 
   const hasPriceLine = priceBars.length >= 2;
