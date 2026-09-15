@@ -2408,7 +2408,7 @@ const PRICE_LABELS = {
   WHEAT: 'Wheat futures',
   CORN: 'Corn futures',
   SBM: 'Soybean meal futures',
-  FREIGHT: 'Brent crude (freight proxy)',
+  FREIGHT: 'Brent crude',
 };
 // `bars` = 5y daily closes (for Weekly/Monthly/1Y/5Y). `intraday` = ~2 days of 5-minute bars,
 // refreshed every collector run (2026-09-14 addition) — used only for the "Daily" range so it shows
@@ -2606,23 +2606,30 @@ function medianClose(bars){
   return n % 2 ? closes[(n - 1) / 2] : (closes[n / 2 - 1] + closes[n / 2]) / 2;
 }
 
-// ── Intraday despike filter ──────────────────────────────────────────────────────────────────────
-// 2026-09-15: Yahoo Finance's intraday feed printed a bogus tick on FREIGHT/BZ=F — real price was a
-// steady ~107.4-107.8, but two of the last three 5-min bars read ~102.5 (107.44, 107.46, 102.46,
-// 107.57, 102.49), which showed up EVERYWHERE that reads `intraday` raw: the anomaly alert (fixed
-// first), but also the WHEAT/CORN/SBM/FREIGHT tile price and the Daily chart's price line — Mete
-// caught this because the tile kept showing 102.49 as "the price" when the real market was ~107.8.
-// Fixing this once, here, instead of in each of the three call sites: a centered 5-bar median for
-// every interior bar (a real move is confirmed by neighbors on both sides; a lone bad tick isn't),
-// and a trailing 5-bar median for the newest bar (it has no future neighbor yet to confirm it, so
-// lean on the last few bars rather than trust one fresh tick outright — verified against the exact
-// data above: 3 real vs. 2 glitched bars still resolves to ~107.44). `cleanIntraday()` is the single
-// place every consumer should read the intraday series through from now on.
+// ── Intraday despike + sanity filter ────────────────────────────────────────────────────────────
+// 2026-09-15: Yahoo Finance's intraday feed printed bogus ticks on FREIGHT/BZ=F — real price was a
+// steady ~107.4-107.8, but a run of 5-min bars read ~102.5. This showed up everywhere that reads
+// `intraday` raw: the anomaly alert, the WHEAT/CORN/SBM/FREIGHT tile price, and the Daily chart's
+// price line — Mete caught it because the tile and the chart's low point both kept showing ~102.5
+// while the real market was ~107.7. `cleanIntraday()` is the one place every consumer should read
+// the intraday series through, in two steps:
+//  1) DESPIKE — a centered 5-bar median for every interior bar (a real move is confirmed by
+//     neighbors on both sides, a lone bad tick isn't), trailing 5-bar median for the newest bar.
+//     This alone only rejects a brief, MINORITY flicker (1-2 bad bars). It's not enough on its own:
+//     the glitch above ran 6+ consecutive bars, which starts outvoting the median itself.
+//  2) SANITY TRIM — drop bars off the TAIL, most-recent-first, while they're still implausibly far
+//     (> INTRADAY_SANITY_PCT) from the last trusted DAILY close (a separate Yahoo request, refreshed
+//     at most every 4h, and confirmed correct — 107.56 — while the intraday feed was stuck at
+///    ~102.5-102.7). This only trims the currently-still-bad tail, leaving earlier real history
+//     alone, and naturally recovers on its own once the intraday feed reports sane numbers again.
+// Verified against the exact live data above: steps 1+2 together correctly drop all 6 bad trailing
+// bars and leave the chart/tile pointing at the last good tick (107.38) instead of the glitch.
 const INTRADAY_DESPIKE_N = 5;
-function cleanIntraday(bars){
-  if (!Array.isArray(bars) || bars.length < 3) return Array.isArray(bars) ? bars : [];
+const INTRADAY_SANITY_PCT = 3.0;
+function cleanIntraday(bars, dailyBars){
+  if (!Array.isArray(bars) || bars.length < 3) return Array.isArray(bars) ? bars.slice() : [];
   const half = Math.floor(INTRADAY_DESPIKE_N / 2);
-  return bars.map((b, i) => {
+  const despiked = bars.map((b, i) => {
     if (i === bars.length - 1){
       const win = bars.slice(Math.max(0, i - INTRADAY_DESPIKE_N + 1), i + 1);
       const m = medianClose(win);
@@ -2632,6 +2639,14 @@ function cleanIntraday(bars){
     const m = medianClose(bars.slice(lo, hi + 1));
     return m == null ? b : { ...b, c: m };
   });
+  const lastDaily = Array.isArray(dailyBars) && dailyBars.length ? dailyBars[dailyBars.length - 1] : null;
+  if (lastDaily && lastDaily.c){
+    while (despiked.length &&
+           Math.abs(despiked[despiked.length - 1].c - lastDaily.c) / lastDaily.c * 100 > INTRADAY_SANITY_PCT){
+      despiked.pop();
+    }
+  }
+  return despiked;
 }
 
 function computePriceAnomalies(){
@@ -2639,7 +2654,7 @@ function computePriceAnomalies(){
   const now = Date.now();
   for (const product of PRICE_PRODUCTS){
     const rec = newsPrices[product];
-    const intraday = rec && Array.isArray(rec.intraday) ? cleanIntraday(rec.intraday) : [];
+    const intraday = rec && Array.isArray(rec.intraday) ? cleanIntraday(rec.intraday, rec.bars) : [];
     if (intraday.length < 2) continue;
     const last = intraday[intraday.length - 1];
     if (now - last.t > NEWS_ANOMALY_STALE_MS) continue;
@@ -2968,7 +2983,7 @@ function newsChartSvg(pts, priceBars, xMin, xMax, width, height){
                 `<text x="${padL + w + 6}" y="${(Yp(priceMin) + 3.5).toFixed(1)}" class="news-axis news-price-axis">${newsFmtPrice(priceMin)}</text>`;
   }
 
-  const html = `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="none" class="news-svg" role="img" aria-label="Smoothed net impact${hasPrice ? ' and price' : ''}">
+  const html = `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" preserveAspectRatio="none" class="news-svg" role="img" aria-label="Net impact${hasPrice ? ' and price' : ''}">
     ${ticks.join('')}
     ${netLine}
     ${priceLine}
@@ -3067,29 +3082,18 @@ function renderNewsBody(){
 // call. Prefers the intraday series (freshest, refreshed every collector run) and falls back to the
 // daily series if intraday hasn't synced yet; returns null (tile just omits the price) if neither has.
 //
-// 2026-09-15: cleanIntraday()'s despike filter only rejects a brief, MINORITY-of-bars flicker — it
-// cannot and should not override a SUSTAINED bad stretch, because after enough consecutive bad bars
-// that stretch legitimately becomes the "median". Seen live: FREIGHT/BZ=F's intraday feed sat wrong
-// (~102.5-102.7) for 20+ minutes across 6+ consecutive bars while the real market (and this page's
-// own separately-fetched DAILY series, 107.56) stayed around 107.7 — so add a second, independent
-// guard: if the despiked intraday reading has still drifted implausibly far from the last trusted
-// daily close, don't show a confident number that's probably wrong — fall back to that daily close
-// and mark the reading `unreliable` so the tile can say so instead of silently guessing.
-const INTRADAY_SANITY_PCT = 3.0;
+// 2026-09-15: `intraday` here is already despiked AND sanity-trimmed by cleanIntraday() (see its
+// comment above) — a still-bad trailing stretch has already been dropped, so `live` below is either
+// a genuinely sane recent tick, or (if the whole recent stretch was bad) we fall through to the last
+// daily close, flagged `unreliable` so the tile can say so instead of silently guessing.
 function newsLatestPrice(product){
   const rec = newsPrices[product];
   if (!rec) return null;
-  const intraday = Array.isArray(rec.intraday) ? cleanIntraday(rec.intraday) : [];
   const daily = Array.isArray(rec.bars) ? rec.bars : [];
-  let live = intraday.length ? intraday[intraday.length - 1] : (daily.length ? daily[daily.length - 1] : null);
+  const intraday = Array.isArray(rec.intraday) ? cleanIntraday(rec.intraday, daily) : [];
+  const live = intraday.length ? intraday[intraday.length - 1] : (daily.length ? daily[daily.length - 1] : null);
   if (!live) return null;
-  const lastDaily = daily.length ? daily[daily.length - 1] : null;
-  let unreliable = false;
-  if (intraday.length && lastDaily && lastDaily.c &&
-      Math.abs(live.c - lastDaily.c) / lastDaily.c * 100 > INTRADAY_SANITY_PCT){
-    live = lastDaily;
-    unreliable = true;
-  }
+  const unreliable = !intraday.length && Array.isArray(rec.intraday) && rec.intraday.length > 0;
   // Day-over-day % vs the most recent daily close from BEFORE the live bar's own calendar day
   // (UTC date compare — precise enough for a ticker-style % figure, no exchange-session math needed).
   const liveDay = new Date(live.t).toISOString().slice(0, 10);
@@ -3161,7 +3165,7 @@ function renderNewsChart(){
   const priceRec = newsPrices[newsUI.chartProduct];
   const useIntraday = rangeDef.key === '1D';
   const rawBars = priceRec && Array.isArray(useIntraday ? priceRec.intraday : priceRec.bars)
-    ? (useIntraday ? cleanIntraday(priceRec.intraday) : priceRec.bars) : [];
+    ? (useIntraday ? cleanIntraday(priceRec.intraday, priceRec.bars) : priceRec.bars) : [];
   const priceBars = rawBars.filter(b => b.t >= xMin && b.t <= xMax).sort((a, b) => a.t - b.t);
 
   const hasPriceLine = priceBars.length >= 2;
@@ -3174,7 +3178,7 @@ function renderNewsChart(){
     // it's obvious which line is which without guessing from color alone: blue = net impact (same
     // stroke as .news-line), gold = futures price (same stroke as .news-price-line / var(--accent)).
     (hasPriceLine ? `<span class="news-legend">
-        <span class="news-legend-item"><span class="news-legend-dot" style="background:#5eb3f6"></span>Net impact (smoothed)</span>
+        <span class="news-legend-item"><span class="news-legend-dot" style="background:#5eb3f6"></span>Net impact</span>
         <span class="news-legend-item"><span class="news-legend-dot" style="background:var(--accent)"></span>${PRICE_LABELS[newsUI.chartProduct] || 'Futures price'}</span>
       </span>` : '');
   box.appendChild(head);
@@ -3219,7 +3223,7 @@ function renderNewsChart(){
       guide.style.left = leftPct + '%';
       guide.hidden = false;
       const lines = [`<div class="news-hover-date">${newsFmtTime(ms)}</div>`];
-      if (nearestNet) lines.push(`<div>net impact (smoothed): <b class="${nearestNet.net > 0 ? 'pos' : nearestNet.net < 0 ? 'neg' : ''}">${newsFmtSigned(nearestNet.net)}</b></div>`);
+      if (nearestNet) lines.push(`<div>net impact: <b class="${nearestNet.net > 0 ? 'pos' : nearestNet.net < 0 ? 'neg' : ''}">${newsFmtSigned(nearestNet.net)}</b></div>`);
       if (nearestPrice) lines.push(`<div>price: <b>${newsFmtPrice(nearestPrice.c)}</b></div>`);
       tip.innerHTML = lines.join('');
       tip.style.left = Math.min(Math.max(leftPct, 10), 90) + '%';
