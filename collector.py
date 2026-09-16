@@ -600,16 +600,34 @@ price prices market markets grain grains crop crops trade trading shipment shipm
 wheat corn maize soybean soybeans soy soymeal meal sbm freight
 key main major big large ample tight amid seen hint hints hinting implies implying pointing adding adds
 threat threatens threatening risk risks routine update signal signals'''.split())
-# Country/region names (China, Russia, Brazil, ...) are deliberately NOT stopwords: they are
-# often the one word that ties two differently-worded reports of the very same event together
-# (e.g. two outlets both covering "China buys US soybeans" on the same day). The `same_event()`
-# country gate below only fires when BOTH docs carry a tagged country, so it isn't a substitute
-# for this signal on its own.
+# 2026-09-16, Mete: SBM net impact showed -140 (bearish) on 2026-09-15 while the actual futures price
+# rose. Traced it to Firestore: three separate qualifying SBM docs that day were all wire pickups of
+# the SAME CONAB press release (Brazil's 2025/26 season final tally, "361.7 million tons, a record"),
+# published 1-11 minutes apart in Portuguese by three different outlets — "Safra de grãos 2025/26 é
+# estimada em 361,7 milhões de toneladas pela Conab" / "Safra 2025/26 termina com colheita recorde,
+# aponta Conab" / "Conab eleva previsão de safra total de grãos do Brasil para recorde de 361,7 mi t
+# em 2025/26". cluster() below is supposed to merge exactly this case into one event, but didn't —
+# so one underlying fact got counted (and weighted) three times instead of once. Root cause was in
+# event_tokens(): `re.findall(r'[a-z0-9]{3,}', text)` is ASCII-only, so it silently mangles accented
+# Portuguese/Spanish words instead of matching them whole — "grãos" splits into "gr"+"os" (both under
+# the 3-char minimum, so the word vanishes entirely), "milhões" survives only as "milh", "previsão"
+# only as "previs". Those are exactly the high-signal words that would have proven the three articles
+# were the same story, so the overlap-coefficient check in same_event() came in under CLUSTER_OVERLAP
+# for a case a human reads as obviously identical. Separately, the stopword list below is English-only,
+# so Portuguese/Spanish connector words ("pela", "com", "para", "aponta", "eleva", "termina", ...) were
+# passing through as if they were content tokens, diluting the ratio further. Fixed both: `\w` (Unicode
+# mode, Python 3 default) matches accented letters as part of the same word instead of splitting on
+# them, and a small PT/ES connector list was added alongside the English one. This does NOT touch
+# CLUSTER_OVERLAP itself or the SYMMETRY RULE (a record harvest being called BEARISH is still correct
+# in principle) — it only fixes the dedup miss that let one data point count three times.
+_STOP = _STOP | set('''de da do das dos em no na nos nas por para pelo pela com uma um umas uns que como
+mais menos após ante sobre aponta eleva termina segundo conforme entre desde até sem seu sua seus suas
+este esta estes estas isso esse essa isto e ou mas se foi ser tem têm sao são'''.split())
 
 
 def event_tokens(doc: dict) -> list[str]:
     text = f"{doc.get('summary', '')} {doc.get('headline', '')}".lower()
-    words = re.findall(r'[a-z0-9]{3,}', text)
+    words = re.findall(r'\w{3,}', text, flags=re.UNICODE)
     return sorted({w for w in words if w not in _STOP})
 
 
