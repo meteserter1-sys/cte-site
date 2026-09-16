@@ -2358,7 +2358,7 @@ const NEWS_META_REF = doc(db, 'news_meta', 'status');
 const NEWS_MUTED_REF = doc(db, 'news_meta', 'muted');
 const NEWS_FEEDBACK = collection(db, 'news_feedback');
 const NEWS_DEVICES = collection(db, 'news_devices');
-const NEWS_MIN_IMPACT = 50;
+const NEWS_MIN_IMPACT = 45;
 const NEWS_MIN_CONF = 50;
 const NEWS_WINDOW_MS = 24 * 3600 * 1000; // only for buildNewsSnapshot()'s "top headlines of the day" list below — NOT the impact score, see NEWS_DECAY_* further down
 // 2026-09-14: raised 10 → 30 (Mete's request, to see the 1-month price/news correlation) — must
@@ -3011,12 +3011,16 @@ function newsChartSvg(pts, priceBars, xMin, xMax, width, height){
     priceLine = `<path d="${dp.trim()}" class="news-price-line"/>`;
     priceDot = `<circle cx="${X(lastP.t).toFixed(1)}" cy="${Yp(lastP.c).toFixed(1)}" r="3.5" fill="var(--accent)"/>`;
     const maxY = Yp(priceMax), minY = Yp(priceMin), lastY = Yp(lastP.c);
+    // Live/current price label at the price line's actual last point, and the two fixed max/min axis
+    // labels (= the period's high/day-of-day HOD and low). 2026-09-16, Mete: briefly tried flipping this
+    // so the live badge always renders and the max/min label steps aside instead — reverted the same day.
+    // Seeing the HOD/LOD value on the axis is the correct behavior on Daily too; when the live price IS
+    // the HOD/LOD, the max/min label already shows that same number, so suppressing the live badge in
+    // that case avoids a redundant duplicate label, it isn't a bug. Back to: live badge shows only when
+    // it wouldn't just repeat an axis label. Same newsChartSvg() serves every product (WHEAT/CORN/SBM/
+    // FREIGHT) and every period chip.
     priceAxis = `<text x="${padL + w + 6}" y="${(maxY + 3.5).toFixed(1)}" class="news-axis news-price-axis">${newsFmtPrice(priceMax)}</text>` +
                 `<text x="${padL + w + 6}" y="${(minY + 3.5).toFixed(1)}" class="news-axis news-price-axis">${newsFmtPrice(priceMin)}</text>`;
-    // Live/current price label at the price line's actual last point — the max/min labels above are
-    // fixed to the window's extremes, but Mete wants the line's current (changing) value called out
-    // wherever it actually sits, not just the two endpoints. Skipped when it would sit right on top of
-    // the max or min label (current value IS the extreme, which is common) to avoid double-printing it.
     if (Math.abs(lastY - maxY) > 9 && Math.abs(lastY - minY) > 9){
       const label = newsFmtPrice(lastP.c);
       const bw = 7 + label.length * 5.6;
