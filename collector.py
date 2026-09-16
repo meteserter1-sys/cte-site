@@ -23,10 +23,14 @@ Environment variables
   CLAUDE_MODEL              default "claude-sonnet-5"
   NEWS_MAX_NEW              cap on new stories classified per run (default 80)
   NEWS_MIN_STORE            drop stories scored below this impact (default 30, "tight wire")
-  NEWS_RETENTION_DAYS       delete events older than this (default 30; 2026-09-14, was 10 — bumped
-                            so the site's 1-month chart range has real data to show. Override by
-                            setting this as a GitHub → Settings → Variables entry, no code change
-                            needed)
+  NEWS_RETENTION_DAYS       delete events older than this (default 150; 2026-09-15, was 30 — Mete is
+                            running CTE as an internal 3-month trial (mid-Sept 2026 → ~Jan 2027) and
+                            wants an impact-vs-price-change correlation report at the end of it, which
+                            needs every day's news docs to still exist then. 150 covers the trial
+                            window plus margin. Override by setting this as a GitHub → Settings →
+                            Variables entry (currently set there to 30 from the prior bump — that
+                            override wins over this code default, so it must be updated too or this
+                            change has no effect))
   NEWS_ALERT_IMPACT         push alert threshold (default 75; BREAKING always alerts)
   NEWS_MORNING_HOUR_VN      hour (0-23, Vietnam time, UTC+7) the daily Morning Report is generated
                             in (default 7). Any run whose Vietnam-time hour matches this generates
@@ -318,6 +322,19 @@ same order as the input, nothing else. Fields:
                  framing pull a shrinking crop toward BEARISH, and do not let "good news for farmers"
                  framing pull a growing crop toward BULLISH. The price argument runs on supply tightness,
                  not on whether the news sounds good or bad for the growing country or its farmers.
+                 CRUSH / PROCESSING REPORTS (NOPA and similar monthly national oilseed-processors' crush
+                 data): crush volume is how many bushels of soybeans were actually PROCESSED into meal
+                 and oil that month — it is a SUPPLY figure for SBM (and soyoil), not a demand figure.
+                 A crush number that misses trade estimates, falls year-over-year, or hits a multi-month
+                 low means LESS meal/oil reached the market than expected: that is BULLISH for SBM, the
+                 direct mirror of the crop/yield SYMMETRY RULE above (less produced = tighter supply).
+                 Do not read a falling or below-estimate crush print as "weak demand" and tag it BEARISH
+                 — a plain report of tonnage crushed vs. trade guesses/last year, with no separate claim
+                 about buyer orders or offtake, is a production/supply figure, full stop. (A headline
+                 that explicitly says crush margins are weak and processors are cutting run rates because
+                 buyers aren't ordering meal/oil would be a genuine demand-side story instead — but that
+                 is a distinct claim the headline has to actually make, not the default reading of a
+                 tonnage-vs-estimate report.)
                  MULTI-COMPONENT REPORTS (WASDE, CONAB, USDA supply/demand tables and similar): when one
                  report moves several numbers at once, net the components that matter most for world price
                  (production/yield and ending stocks outweigh minor demand-line tweaks) into ONE direction
@@ -737,7 +754,7 @@ def write_muted(db, muted: set[str]):
 
 # ── Retention: 30 days (2026-09-14, was 10 — Mete wanted a full month of history to line up
 # against the CBOT price charts). The History snapshot keeps each day's reading regardless. ─────
-RETENTION_DAYS = int(os.environ.get('NEWS_RETENTION_DAYS', '30'))
+RETENTION_DAYS = int(os.environ.get('NEWS_RETENTION_DAYS', '150'))
 
 
 def prune_old(db) -> int:

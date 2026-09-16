@@ -2333,7 +2333,7 @@ function handleExcelImport(e){
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// NEWS TAB — market news wire + trailing-24h net impact
+// NEWS TAB — market news wire + decayed net impact
 // ---------------------------------------------------------------------------
 // Data arrives pre-classified from the collector (newsfeed/collector.py) in the
 // Firestore `news` collection: one document per EVENT carrying product /
@@ -2342,8 +2342,9 @@ function handleExcelImport(e){
 //
 //   qualifying event  = impact >= NEWS_MIN_IMPACT && confidence >= NEWS_MIN_CONF
 //   signed impact     = +impact (BULLISH) | -impact (BEARISH) | 0 (NEUTRAL)
-//   net impact (t)    = sum of signed impact over the trailing 24h ending at t
-//   balance %         = net impact / sum of |impact| in the same window
+//   net impact (t)    = sum of signed impact, each weighted by newsDecayWeight(age at t) — see the
+//                       NEWS_DECAY_* block below for the full model and why (2026-09-16)
+//   balance %         = net impact / sum of |impact| in the same (decay-weighted) window
 //
 // Direction is a PRICE argument, not sentiment: BULLISH = argues the CFR cost UP.
 //
@@ -2359,7 +2360,7 @@ const NEWS_FEEDBACK = collection(db, 'news_feedback');
 const NEWS_DEVICES = collection(db, 'news_devices');
 const NEWS_MIN_IMPACT = 50;
 const NEWS_MIN_CONF = 50;
-const NEWS_WINDOW_MS = 24 * 3600 * 1000;
+const NEWS_WINDOW_MS = 24 * 3600 * 1000; // only for buildNewsSnapshot()'s "top headlines of the day" list below — NOT the impact score, see NEWS_DECAY_* further down
 // 2026-09-14: raised 10 → 30 (Mete's request, to see the 1-month price/news correlation) — must
 // stay in lockstep with the `NEWS_RETENTION_DAYS` GitHub Actions variable collector.py prunes to
 // (default also bumped to 30 there); showing more history here than Firestore actually retains
@@ -2500,59 +2501,59 @@ function newsQualifies(s){ return s.impact >= NEWS_MIN_IMPACT && s.confidence >=
 function newsForProduct(product){ return product === 'ALL' ? newsDocs : newsDocs.filter(s => s.product === product); }
 function newsVisible(s){ return newsVotes[s.id] !== 'dislike'; }     // a 👎 hides the row
 
-// Trailing-24h reading ending at `endMs` over an ascending-sorted array of qualifying stories.
+// ── Impact decay model (shared by the tile/header number AND the chart line) ───────────────────
+// 2026-09-16, Mete: the old hard 24h cutoff kept every qualifying headline at full strength right up
+// until the instant it turned exactly 24h old, then it vanished from the sum entirely. Concretely:
+// the FREIGHT tile sat at +655 with a 20-hour-old headline still counted at 100% weight — reading
+// that number, a trader can't tell "something is happening right now" from "an old headline just
+// hasn't aged out yet", which is backwards from how the market actually works (a report's price
+// reaction happens mostly in its first hour or so; by the time it's most of a day old the market has
+// already priced it in). Also, the tile/header and the chart LINE used to run two different models
+// (hard 24h sum vs. a 12h-half-life exponential decay) for what's supposed to be the same number —
+// its own source of confusion, which Mete flagged directly. Both now share this one model, Mete's
+// own proposal: full weight for the first hour (headline is fresh, market hasn't digested it yet),
+// then a straight-line ramp DOWN OF THE ORIGINAL VALUE (not of the remaining value — that's what
+// makes it actually reach zero, unlike the old exponential decay's long tail that technically never
+// hit zero) to zero by NEWS_DECAY_ZERO_H hours old. A 60-point headline: 60 at hour 1, 54 at hour 2,
+// 48 at hour 3, ... 6 at hour 10, 0 at hour 11 — confirmed with Mete before implementing. Nothing
+// else in the file reads a hard 24h impact window anymore; NEWS_WINDOW_MS survives only for the
+// unrelated "top headlines of the day" list in buildNewsSnapshot() below.
+const NEWS_DECAY_PLATEAU_MS = 1 * 3600 * 1000;                    // full weight for the first hour
+const NEWS_DECAY_ZERO_H = 11;                                     // fully zero (and out of the lookback) by this many hours old
+const NEWS_DECAY_RAMP_MS = (NEWS_DECAY_ZERO_H - 1) * 3600 * 1000; // the straight-line part spans this long, right after the plateau
+const NEWS_DECAY_LOOKBACK_MS = NEWS_DECAY_ZERO_H * 3600 * 1000;   // nothing older than this contributes at all
+
+function newsDecayWeight(ageMs){
+  if (ageMs <= NEWS_DECAY_PLATEAU_MS) return 1;
+  const t = (ageMs - NEWS_DECAY_PLATEAU_MS) / NEWS_DECAY_RAMP_MS;
+  return t >= 1 ? 0 : 1 - t;
+}
+
+// Decay-weighted reading as of `endMs` over an ascending-sorted array of qualifying stories — powers
+// both the summary tiles and the chart header (see NEWS_DECAY_* above). `n`/`bull`/`bear`/`neu` are
+// raw counts of headlines still inside the lookback window (unweighted — "how many stories, what
+// split" stays an exact, traceable figure); `net`/`abs`/`balance` are decay-weighted.
 function newsWindowStats(asc, endMs){
-  const startMs = endMs - NEWS_WINDOW_MS;
+  const startMs = endMs - NEWS_DECAY_LOOKBACK_MS;
   let net = 0, abs = 0, n = 0, bull = 0, bear = 0, neu = 0;
   for (const s of asc){
     if (s.ms > endMs) break;
     if (s.ms <= startMs) continue;
-    n++; net += newsSigned(s); abs += s.impact;
+    const wgt = newsDecayWeight(endMs - s.ms);
+    if (wgt <= 0) continue;
+    n++; net += newsSigned(s) * wgt; abs += s.impact * wgt;
     if (s.direction === 'BULLISH') bull++; else if (s.direction === 'BEARISH') bear++; else neu++;
   }
   return { ms: endMs, net, n, bull, bear, neu, balance: abs ? Math.round(1000 * net / abs) / 10 : 0 };
 }
 
-// One point per qualifying story (evaluated at its own timestamp), plus a "now" point. When two
-// consecutive stories are further apart than the window, the trailing sum genuinely empties out in
-// between (the earlier story ages out of the 24h window before the next one arrives) — so we add
-// one extra, honestly-computed point at exactly that moment (previous story's ms + 24h) instead of
-// either leaving a break in the line or drawing a straight segment across the gap that would hide
-// the real dip. The line is always a single continuous path; it just visits the true value at the
-// point the window empties, rather than only at story timestamps.
+// "Now" reading for the tile/chart header, plus the qualifying-story count over the product's whole
+// kept history (used for the tile's hover tooltip, not for the decay window itself).
 function newsSeries(product){
   const asc = newsForProduct(product).filter(newsQualifies).slice().sort((a, b) => a.ms - b.ms);
-  const pts = [];
-  let prev = null;
-  for (const s of asc){
-    if (prev !== null && s.ms - prev > NEWS_WINDOW_MS) pts.push(newsWindowStats(asc, prev + NEWS_WINDOW_MS));
-    pts.push(newsWindowStats(asc, s.ms));
-    prev = s.ms;
-  }
   const now = newsWindowStats(asc, Date.now());
-  if (prev !== null && Date.now() - prev > NEWS_WINDOW_MS) pts.push(newsWindowStats(asc, prev + NEWS_WINDOW_MS));
-  pts.push({ ...now, isNow: true });
-  return { pts, now, count: asc.length };
+  return { now, count: asc.length };
 }
-
-// ── Smoothed net-impact series, for the CHART LINE only ──────────────────────
-// newsSeries() above is the exact trailing-24h sum, sampled only at the moments it truly changes
-// (a headline arrives, or one ages out of the window 24h later) — correct and fully traceable, so
-// it stays exactly as-is for the tile numbers and the chart's own header figure. But on a quiet
-// news day it sits dead flat for hours then jumps, which looks disconnected from a continuously
-// moving futures price line (raised 2026-09-14 — compared against a competitor's equivalent chart:
-// same trailing-24h-ish idea, but a much smoother line because they simply see far more qualifying
-// headlines per day for the same product). Rather than chase headline volume, give the LINE a
-// proper time-decay instead of a hard window: each qualifying story's signed impact decays
-// exponentially with a 12h half-life (≈50% weight at 12h, ≈25% at 24h, ≈6% at 48h — "roughly a day
-// matters most", like the hard window, but tapering smoothly instead of snapping to zero at an
-// exact cutoff), resampled on a regular time grid across the whole visible range so the line keeps
-// moving between headlines instead of sitting flat. This intentionally will NOT match the exact
-// hard-window number shown in the tile/header — that number stays the traceable one; this is purely
-// a smoother, continuously-comparable view for eyeballing against the price line.
-const NEWS_DECAY_HALFLIFE_MS = 12 * 3600 * 1000;
-const NEWS_DECAY_TAU = NEWS_DECAY_HALFLIFE_MS / Math.LN2;
-const NEWS_DECAY_LOOKBACK_MS = 4 * NEWS_DECAY_HALFLIFE_MS; // ~48h; a story's weight is ~6% by then
 
 function newsSmoothStep(spanMs){
   // Grid resolution scales with the visible span: fine enough to look continuous on a Daily chart,
@@ -2564,6 +2565,8 @@ function newsSmoothStep(spanMs){
   return 3 * 24 * 3600 * 1000;                                    // longer → 3 days
 }
 
+// Chart line: the SAME decay model as the tile (NEWS_DECAY_* above), resampled on a regular time
+// grid across the visible range so the line keeps moving between headlines instead of sitting flat.
 function newsSmoothSeries(product, xMin, xMax){
   const asc = newsForProduct(product).filter(newsQualifies).slice().sort((a, b) => a.ms - b.ms);
   if (!asc.length) return [];
@@ -2574,7 +2577,7 @@ function newsSmoothSeries(product, xMin, xMax){
   for (; t <= xMax; t += step){
     while (lo < asc.length && t - asc[lo].ms > NEWS_DECAY_LOOKBACK_MS) lo++;
     let net = 0;
-    for (let i = lo; i < asc.length && asc[i].ms <= t; i++) net += newsSigned(asc[i]) * Math.exp(-(t - asc[i].ms) / NEWS_DECAY_TAU);
+    for (let i = lo; i < asc.length && asc[i].ms <= t; i++) net += newsSigned(asc[i]) * newsDecayWeight(t - asc[i].ms);
     pts.push({ ms: t, net });
   }
   // Always end exactly at xMax (usually "now") so the line's right edge lines up with the price
@@ -2582,7 +2585,7 @@ function newsSmoothSeries(product, xMin, xMax){
   if (!pts.length || pts[pts.length - 1].ms < xMax){
     while (lo < asc.length && xMax - asc[lo].ms > NEWS_DECAY_LOOKBACK_MS) lo++;
     let net = 0;
-    for (let i = lo; i < asc.length && asc[i].ms <= xMax; i++) net += newsSigned(asc[i]) * Math.exp(-(xMax - asc[i].ms) / NEWS_DECAY_TAU);
+    for (let i = lo; i < asc.length && asc[i].ms <= xMax; i++) net += newsSigned(asc[i]) * newsDecayWeight(xMax - asc[i].ms);
     pts.push({ ms: xMax, net });
   }
   return pts;
@@ -2702,6 +2705,7 @@ function newsMaybeAlertAnomalies(anomalies){
     const key = `${a.product}_${Math.floor(a.ms / NEWS_ANOMALY_WINDOW_MS)}`;
     if (newsAnomalyAlerted.has(key)) continue;
     newsAnomalyAlerted.add(key);
+    newsLogAnomaly(a, key);
     if (!on) continue;
     newsPlayDing();
     try{
@@ -2713,6 +2717,24 @@ function newsMaybeAlertAnomalies(anomalies){
     }catch(e){ /* the ding above already played */ }
   }
   if (newsAnomalyAlerted.size > 200) newsAnomalyAlerted = new Set(Array.from(newsAnomalyAlerted).slice(-100));
+}
+
+// 2026-09-15: persistent record of every anomaly banner that has ever fired — for the 3-month internal
+// trial (mid-Sept 2026 → ~Jan 2027, Mete's decision point on whether CTE is worth taking further).
+// He wants an impact-vs-price-change correlation report and a false-positive read on this alert at the
+// end of it, which needs a durable log, not just the in-memory `newsAnomalyAlerted` Set above (that
+// resets on every page reload). Reuses `news_feedback` — already writable by the page with no new
+// Firestore rule/Publish step needed — and these docs carry no `vote` field, so the existing 👍/👎
+// tally loop in subscribeNews() silently ignores them. Logged once per (product, 15-min bucket), same
+// key/dedup as the banner itself, and regardless of whether desktop alerts are toggled on: this is a
+// record for later analysis, not a notification, so it must not depend on the alert toggle.
+function newsLogAnomaly(a, key){
+  try{
+    setDoc(doc(NEWS_FEEDBACK, `anomaly_${key}`), {
+      type: 'anomaly_fired', product: a.product, pct: a.pct, net: a.net,
+      windowMin: a.windowMin, ms: a.ms, loggedAt: Date.now()
+    }).catch(() => {});
+  }catch(e){ /* best-effort log; must never block the on-screen alert */ }
 }
 
 // ── Morning report card (VN 07:00 daily summary, README item 15) ────────────────────────────────
@@ -2878,7 +2900,14 @@ function upcomingEvents(n = 6){
     }
   }
   // monthly approximations
-  const monthly = [{ day: 10, timeET: '09:00', name: 'CONAB grain survey (~)', lane: 'REPORTS' }, { day: 22, timeET: '10:00', name: 'IGC Grain Market Report (~)', lane: 'REPORTS' }];
+  // CONAB date corrected 2026-09-16 (10 → 15): Mete asked why the Sep 2026 "Brazil 2026/27 first-look"
+  // story wasn't in Upcoming Releases; checked CONAB's official 2026 calendar — its monthly "Levantamento
+  // de Safras de Grãos" always publishes on the 15th (e.g. 2026-09-15 closed out the 2025/26 season, the
+  // actual 2026/27 season's first official CONAB survey isn't due until 2026-10-15), not the 10th this
+  // code had been approximating with. Separately: the tweet Mete saw was an independent analyst's early
+  // estimate, not CONAB's own report — CONAB hadn't published anything on 2026/27 yet at that point, so
+  // there was no CONAB story for the collector to have missed.
+  const monthly = [{ day: 15, timeET: '09:00', name: 'CONAB grain survey (~)', lane: 'REPORTS' }, { day: 22, timeET: '10:00', name: 'IGC Grain Market Report (~)', lane: 'REPORTS' }];
   for (let k = 0; k < 2; k++){
     const dt = new Date(Date.UTC(day0.getUTCFullYear(), day0.getUTCMonth() + k, 1));
     for (const m of monthly){
@@ -2912,8 +2941,8 @@ function renderNewsEvents(){
 }
 
 // ── SVG line chart (no library: keeps the app a single file) ────────────────
-// Merged net-impact + price chart (2026-09-14, Mete's request): draws the trailing-24h net-impact
-// line (left axis) and the real daily-close price line (right axis, when price data exists for
+// Merged net-impact + price chart (2026-09-14, Mete's request): draws the decayed net-impact
+// line (left axis, see NEWS_DECAY_* above) and the real daily-close price line (right axis, when price data exists for
 // this product) on ONE chart instead of two separate boxes. `xMin`/`xMax` are the selected range
 // window's boundaries in ms — driven by the range chip, not by however much data happens to exist —
 // so "5Y" always spans 5 real years on screen even if net-impact events are sparse in it. Returns
@@ -3119,7 +3148,7 @@ function newsLatestPrice(product){
   return { price: live.c, pct, unreliable };
 }
 
-// Summary tiles: trailing-24h reading "now" for every product.
+// Summary tiles: decay-weighted reading "now" for every product (see NEWS_DECAY_* above).
 function renderNewsSummary(){
   const wrap = document.createElement('div');
   wrap.className = 'news-tiles';
@@ -3135,7 +3164,7 @@ function renderNewsSummary(){
       : '';
     tile.innerHTML = `<div class="news-tile-head"><span class="news-tile-name">${p}</span>${priceHtml}</div>` +
       `<div class="news-tile-val">${now.n ? newsFmtSigned(now.net) : '—'}</div>` +
-      `<div class="news-tile-sub">${now.n ? `${now.bull}▲ ${now.bear}▼ · ${now.n} in 24h · bal ${now.balance > 0 ? '+' : ''}${now.balance}%` : 'no qualifying event in 24h'}</div>`;
+      `<div class="news-tile-sub">${now.n ? `${now.bull}▲ ${now.bear}▼ · ${now.n} in ${NEWS_DECAY_ZERO_H}h · bal ${now.balance > 0 ? '+' : ''}${now.balance}%` : `no qualifying event in ${NEWS_DECAY_ZERO_H}h`}</div>`;
     tile.title = `${count} qualifying ${p} events in the last ${NEWS_HISTORY_DAYS} days — click to chart`;
     tile.addEventListener('click', () => { newsUI.chartProduct = p; renderNewsBody(); });
     wrap.appendChild(tile);
@@ -3161,8 +3190,8 @@ function renderNewsRangeBar(){
 function renderNewsChart(){
   const box = document.createElement('div');
   box.className = 'news-chart';
-  // `now`/`count` stay the exact trailing-24h sum (tile/header number, fully traceable back to
-  // specific headlines); the chart LINE itself uses newsSmoothSeries() below — see its comment.
+  // `now`/`count` power the tile/header number; the chart LINE uses newsSmoothSeries() below —
+  // same decay model (NEWS_DECAY_*), just resampled on a grid so it keeps moving between headlines.
   const { now, count } = newsSeries(newsUI.chartProduct);
   const rangeDef = NEWS_CHART_RANGES.find(r => r.key === newsUI.chartRange) || NEWS_CHART_RANGES[2];
   // The X-axis window is the range chip itself (now − N days → now), not derived from whatever
@@ -3687,7 +3716,7 @@ function renderArchiveNews(container, news){
     tile.className = 'news-tile ' + tone;
     tile.style.cursor = 'default';
     tile.innerHTML = `<div class="news-tile-name">${p}</div><div class="news-tile-val">${v.n ? newsFmtSigned(v.net) : '—'}</div>` +
-      `<div class="news-tile-sub">${v.n ? `${v.bull}▲ ${v.bear}▼ · ${v.n} in 24h · bal ${v.balance > 0 ? '+' : ''}${v.balance}%` : 'no qualifying event'}</div>`;
+      `<div class="news-tile-sub">${v.n ? `${v.bull}▲ ${v.bear}▼ · ${v.n} events · bal ${v.balance > 0 ? '+' : ''}${v.balance}%` : 'no qualifying event'}</div>`;
     wrap.appendChild(tile);
   }
   container.appendChild(wrap);
@@ -3706,7 +3735,7 @@ function renderArchiveNews(container, news){
   }
   const note = document.createElement('div');
   note.className = 'news-count';
-  note.textContent = `reading taken ${newsFmtTime(news.asOf)} Vietnam time · trailing 24h at that moment`;
+  note.textContent = `reading taken ${newsFmtTime(news.asOf)} Vietnam time`;
   container.appendChild(note);
 }
 
