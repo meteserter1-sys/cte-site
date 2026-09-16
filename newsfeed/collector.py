@@ -370,6 +370,14 @@ same order as the input, nothing else. Fields:
   "eventType"  : one of "WEATHER","SUPPLY DEMAND","TRADE FLOW","POLICY","GEOPOLITICS","LOGISTICS","PRICE","DISEASE","ENERGY","FX","OTHER"
   "summary"    : ONE English sentence (max 28 words) stating what happened AND why it matters
                  for the importer's cost, whatever language the headline is in.
+  "duplicate"  : true if this headline reports the SAME underlying fact or data point as one of the
+                 ALREADY-COVERED EVENTS listed at the end of this prompt (when that list is present) —
+                 another outlet's retelling, a translation, or a slightly different number/angle on a
+                 situation the desk has already been told about. This is about whether the desk already
+                 knows this, not whether the wording matches. If duplicate is true, also set impact <= 20
+                 regardless of how dramatic the headline sounds — restating known information is not new
+                 information — and breaking must be false. If no ALREADY-COVERED EVENTS list is present,
+                 or the headline adds a genuinely new fact/number/escalation the list doesn't have, false.
 
 Use round numbers (multiples of 5) for impact and confidence. Be consistent: the same kind of
 story must get the same kind of score every time."""
@@ -403,9 +411,10 @@ CLASSIFY_TOOL = {
                         'breaking': {'type': 'boolean'},
                         'eventType': {'type': 'string', 'enum': list(EVENT_TYPES)},
                         'summary': {'type': 'string'},
+                        'duplicate': {'type': 'boolean'},
                     },
                     'required': ['i', 'product', 'direction', 'impact', 'confidence',
-                                 'country', 'category', 'breaking', 'eventType', 'summary'],
+                                 'country', 'category', 'breaking', 'eventType', 'summary', 'duplicate'],
                 },
             },
         },
@@ -429,7 +438,7 @@ def classify_with_claude(batch: list[dict], model: str) -> list[dict]:
     resp = client.messages.create(
         model=model,
         max_tokens=4000,
-        system=SYSTEM_PROMPT + FEEDBACK_HINT,
+        system=SYSTEM_PROMPT + FEEDBACK_HINT + KNOWN_EVENTS_HINT,
         tools=[CLASSIFY_TOOL],
         tool_choice={'type': 'tool', 'name': 'classify_headlines'},
         messages=[{'role': 'user', 'content': user}],
@@ -457,6 +466,7 @@ def classify_mock(batch: list[dict]) -> list[dict]:
             'breaking': (h >> 22) % 10 == 0,
             'eventType': EVENT_TYPES[(h >> 20) % len(EVENT_TYPES)],
             'summary': f'[mock] {s["headline"][:80]}',
+            'duplicate': False,
         })
     return out
 
@@ -481,17 +491,29 @@ def sanitise(ans: dict, story: dict) -> dict | None:
         cat = 'MACRO' if prod in ('FREIGHT', 'MACRO') else 'AGRI'
     breaking = ans.get('breaking')
     breaking = breaking is True or str(breaking).lower() == 'true'
+    duplicate = ans.get('duplicate')
+    duplicate = duplicate is True or str(duplicate).lower() == 'true'
+    impact = clamp(ans.get('impact'))
+    if duplicate:
+        # 2026-09-16: a retelling of an already-covered event (see known_events_hint()) is not new
+        # information — cap it below NEWS_MIN_STORE (30) so it's dropped at the existing "tight wire"
+        # gate in classify_all() and never reaches Firestore, same as any other routine story. Enforced
+        # here in code rather than trusted to the model's own impact number, which can still run high
+        # for a dramatic-sounding duplicate headline.
+        impact = min(impact, 20)
+        breaking = False
     return {
         **{k: story[k] for k in ('id', 'feed', 'headline', 'url', 'source', 'sourceCount', 'ms')},
         'product': prod,
         'direction': direction,
-        'impact': clamp(ans.get('impact')),
+        'impact': impact,
         'confidence': clamp(ans.get('confidence')),
         'country': str(ans.get('country', '') or '')[:2].upper(),
         'category': cat,
         'breaking': breaking,
         'eventType': et,
         'summary': str(ans.get('summary', '') or '')[:300],
+        'duplicate': duplicate,
         # trend = how many publishers carry this EVENT. Starts at the number of outlets Google
         # returned for this exact headline; clustering (below) adds differently-worded reports.
         'trend': int(story.get('sourceCount', 1)),
@@ -671,6 +693,8 @@ def cluster(docs: list[dict], events: list[dict]) -> tuple[list[dict], dict[str,
                 'id': doc['id'], 'ms': doc['ms'], 'product': doc['product'], 'direction': doc['direction'],
                 'country': doc.get('country', ''), 'tokens': sorted(toks),
                 'trend': doc['trend'], 'sources': list(doc['sources']),
+                'summary': doc.get('summary', ''),  # 2026-09-16: kept so known_events_hint() can show the
+                                                     # desk a readable one-liner, not just a token bag — see below.
             })
             new_heads.append(doc)
             this_run[doc['id']] = doc
@@ -687,6 +711,53 @@ def cluster(docs: list[dict], events: list[dict]) -> tuple[list[dict], dict[str,
         else:                                      # head already in Firestore from an earlier run
             updates[match['id']] = {'trend': match['trend'], 'sources': list(match['sources'])}
     return new_heads, updates
+
+
+# 2026-09-16, Mete: cluster()/same_event() above catches near-verbatim wire pickups of ONE press
+# release (the SBM/CONAB fix earlier today) — but it missed a different, very common case: several
+# outlets independently WRITING UP the same underlying situation in their own words (or in Russian)
+# over a few hours. Example that triggered this: "Russia Reroutes Grain Exports as Black Sea Strikes
+# Halve Shipments" (Global Agriculture), "Black Sea disruptions fuel rally in corn, wheat markets"
+# (Wisconsin Farmer), and a Russian-language SovEcon pickup — three sources, same underlying fact
+# (Russian wheat exports down on Black Sea strikes), 20-40 minutes apart, each scored BULLISH 65-75
+# by the classifier as if it were fresh. Measured the token overlap between these three: 0.10-0.33,
+# nowhere near CLUSTER_OVERLAP (0.50) — a paraphrase in different words, and especially a different
+# LANGUAGE headline, just doesn't share enough literal tokens with an English one, no matter the
+# threshold. Lowering CLUSTER_OVERLAP to catch this would risk merging genuinely distinct stories
+# that happen to share a few generic words. Token overlap is the wrong tool for "is this the same
+# underlying fact, retold" — that's a semantic judgment, which is exactly what the classifier model
+# is good at and the token-bag heuristic isn't.
+# So instead of another cluster() tweak, the classifier itself now gets a short briefing of what the
+# desk has ALREADY been told in the last DEDUP_HOURS (below), built from the same `events` cache
+# cluster() already maintains, and returns a new `duplicate` field per headline (see CLASSIFY_TOOL /
+# SYSTEM_PROMPT). A duplicate is capped to impact<=20 in sanitise(), which puts it under
+# NEWS_MIN_STORE (30) — so a re-telling of an already-known story is dropped at the same "tight
+# wire" gate as any routine update, and never reaches Firestore or the desk at all, same as Mete
+# asked for ("bize dusmesi bile sacma").
+# Cost note: this text rides along on every classify_with_claude() call for the rest of THIS run
+# (same pattern as FEEDBACK_HINT below), so it's kept deliberately small — a 24h window and at most
+# DEDUP_MAX one-line summaries, not the full 3-day EVENT_DAYS cache.
+DEDUP_HOURS = 24
+DEDUP_MAX = 18
+KNOWN_EVENTS_HINT = ''
+
+
+def known_events_hint(events: list[dict]) -> str:
+    global KNOWN_EVENTS_HINT
+    cutoff = int(time.time() * 1000) - DEDUP_HOURS * 3600 * 1000
+    recent = sorted((e for e in events if e.get('ms', 0) >= cutoff and e.get('summary')),
+                     key=lambda e: -e['ms'])[:DEDUP_MAX]
+    if not recent:
+        KNOWN_EVENTS_HINT = ''
+        return KNOWN_EVENTS_HINT
+    lines = [f"  - {e['product']} {e['direction']}: {e['summary'][:130]}" for e in recent]
+    KNOWN_EVENTS_HINT = (
+        f"\n\nALREADY-COVERED EVENTS the desk has seen in the last {DEDUP_HOURS}h — if a headline below "
+        "reports the same underlying fact/data point as one of these (same situation retold by another "
+        "outlet, in another language, or with a marginally different number/angle), set duplicate=true "
+        "for it:\n" + '\n'.join(lines)
+    )
+    return KNOWN_EVENTS_HINT
 
 
 def existing_ids(db, ids: list[str]) -> set[str]:
@@ -1157,6 +1228,9 @@ def main():
         print('nothing new. done.')
         return
 
+    hint = known_events_hint(events)
+    if hint:
+        print(f'  dedup context: {hint.count(chr(10)) - 1} known events from the last {DEDUP_HOURS}h')
     print(f'classifying {len(new_stories)} stories with {"MOCK" if args.mock else model}…')
     docs, processed = classify_all(new_stories, args.mock, model)
     failed = len(new_stories) - len(processed)
