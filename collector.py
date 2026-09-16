@@ -356,8 +356,17 @@ same order as the input, nothing else. Fields:
                  "REPORTS"  = a scheduled/official release or data from USDA, NOAA, CONAB, Bolsa de Cereales de Buenos Aires,
                               IKAR, SovEcon, IGC, FAO, ministry statistics — the source itself is an agency or its report
                  "MACRO"    = freight, Brent/energy, Fed rate, dollar index, VIX, FX
-  "breaking"   : true ONLY for a fresh, market-defining development on these markets (port attack, sudden export ban,
-                 major crop-estimate shock, big surprise tender). Routine updates are false. Expect fewer than 1 in 10.
+  "breaking"   : true ONLY when the headline itself reports a discrete NEW incident, decision, or data point that
+                 just happened (port attack, sudden export ban, major crop-estimate shock, big surprise tender).
+                 false for a recap / explainer / "state of play" piece that summarizes an ALREADY-ONGOING situation
+                 (weeks of Black Sea strikes, a running war, a season-long drought, a rerouting trend) even when the
+                 headline uses dramatic wording ("halve", "crisis", "surge", "soar") — ask "does this tell me
+                 something that happened today/yesterday, or is it restating/analyzing a story the desk already
+                 knows about?" A piece built on analyst/consultancy data covering weeks or months (SovEcon, IGC,
+                 trade-flow trackers) describing a trend is a recap, not breaking, regardless of headline tone.
+                 If the piece's own body says the market/price reaction has been modest or limited so far, follow
+                 that over the headline and do not score impact above 40. Routine updates are false. Expect fewer
+                 than 1 in 10.
   "eventType"  : one of "WEATHER","SUPPLY DEMAND","TRADE FLOW","POLICY","GEOPOLITICS","LOGISTICS","PRICE","DISEASE","ENERGY","FX","OTHER"
   "summary"    : ONE English sentence (max 28 words) stating what happened AND why it matters
                  for the importer's cost, whatever language the headline is in.
