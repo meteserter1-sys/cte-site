@@ -963,8 +963,9 @@ def sync_prices(db):
 # already been written?" — idempotent against the exact trigger timing, safe to call on every run.
 VN_OFFSET_HOURS = 7                                                    # Vietnam is UTC+7, no DST
 MORNING_REPORT_HOUR = int(os.environ.get('NEWS_MORNING_HOUR_VN', '7')) # generate once per VN date
-MORNING_MIN_IMPACT = 50    # mirrors index.html's NEWS_MIN_IMPACT — "qualifying" must mean the same
-MORNING_MIN_CONF = 50      # thing here as it does on the page, or the two would quietly disagree.
+MORNING_MIN_IMPACT = 45    # mirrors index.html's NEWS_MIN_IMPACT (2026-09-16: 50 -> 45, Mete's call
+MORNING_MIN_CONF = 50      # after the SBM overnight-move review) — "qualifying" must mean the same
+                            # thing here as it does on the page, or the two would quietly disagree.
 MORNING_WINDOW_MS = 24 * 3600 * 1000
 
 
