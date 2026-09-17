@@ -1,0 +1,15 @@
+{
+  "name": "cte-functions",
+  "description": "Cloud Functions for commodity-trading-engine — Trader News classifier (classifyTraderNews)",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "dependencies": {
+    "firebase-functions": "^6.0.1"
+  },
+  "devDependencies": {
+    "firebase-functions-test": "^3.1.0"
+  }
+}
