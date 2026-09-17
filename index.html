@@ -3736,9 +3736,9 @@ function renderTraderNewsPreview(draft){
 async function commitTraderNews(d){
   const ref = doc(NEWS_COLLECTION);
   const now = Date.now();
-  // Mete's own "Source (optional)" input (who sent it) becomes the row's displayed source, e.g.
-  // "Manual · Hedgepoint" — falls back to the generic "Manual · Trader" tag when left blank.
-  const sourceLabel = d.source ? `Manual · ${d.source}` : 'Manual · Trader';
+  // Mete's own "Source (optional)" input (who sent it) becomes the row's displayed source
+  // as-is, e.g. "Hedgepoint" — no "Manual" prefix. Falls back to just "Trader" when left blank.
+  const sourceLabel = d.source || 'Trader';
   await setDoc(ref, {
     id: ref.id,
     feed: 'manual',
