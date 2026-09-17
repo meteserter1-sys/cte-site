@@ -319,7 +319,8 @@
   .trader-modal .trader-modal-sub{ font-size:11px; color:var(--text-dim); margin-bottom:12px; }
   .trader-modal textarea{ width:100%; box-sizing:border-box; background:var(--input-bg); border:1px solid var(--border); color:var(--text); font-family:inherit; font-size:12.5px; padding:8px 10px; border-radius:8px; resize:vertical; }
   .trader-modal textarea#traderNewsText{ min-height:110px; }
-  .trader-modal textarea#traderNewsNote{ min-height:44px; }
+  .trader-modal textarea#traderNewsSource,
+  .trader-modal textarea#traderNewsNote{ min-height:30px; resize:none; }
   .trader-modal label{ display:block; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--text-dim); margin:10px 0 4px; }
   .trader-modal input[type="file"]{ width:100%; font-size:11.5px; color:var(--text-dim); }
   .trader-modal-file-info{ font-size:11px; color:var(--accent); margin-top:4px; }
@@ -2493,11 +2494,16 @@ const NEWS_VAPID_KEY = 'BNwixm6sFWzxS2O92z0qm1-t22LH8ovlEot6WRrhgXJv1nuxewVRsLSG
 // on. No dedup-against-known-events check here (unlike collector.py's `duplicate` field) — Mete's
 // call: he already knows to skip pasting something World/Commodity News already has.
 const NEWS_LANES = [
+  // 2026-09-18: each lane's match() must exclude manual===true — Trader News is a standalone
+  // lane, not an overlay. Without the `!s.manual` guard, a manually-added AGRI/SBM story matched
+  // BOTH `commodity` (nothing there checked `manual`) AND `trader`, so it rendered twice: once as
+  // a real desk headline in Commodity News, once again in Trader News. Caught live on the first
+  // manual entry (Hedgepoint soybean note) — it showed up duplicated in Commodity News.
   { key: 'world',     title: 'World News',     sub: 'war · politics · trade policy · freight',
-    match: s => s.category === 'POLITICS' || s.product === 'FREIGHT' },
+    match: s => !s.manual && (s.category === 'POLITICS' || s.product === 'FREIGHT') },
   { key: 'commodity', title: 'Commodity News', sub: 'crop · weather · reports · demand',
-    match: s => s.product !== 'FREIGHT' && (s.category === 'AGRI' || s.category === 'REPORTS') },
-  { key: 'trader',     title: 'Trader News',    sub: 'manual · WhatsApp · desk',
+    match: s => !s.manual && s.product !== 'FREIGHT' && (s.category === 'AGRI' || s.category === 'REPORTS') },
+  { key: 'trader',     title: 'Trader News',    sub: '',
     match: s => s.manual === true },
 ];
 
@@ -3538,7 +3544,7 @@ function renderNewsLane(lane){
   rows = rows.slice().sort((a, b) => b.ms - a.ms);
   const head = document.createElement('div');
   head.className = 'news-box-head';
-  const addBtnHtml = lane.key === 'trader' ? `<button type="button" class="news-lane-add-btn" id="traderNewsAddBtn" title="Haber ekle">+</button>` : '';
+  const addBtnHtml = lane.key === 'trader' ? `<button type="button" class="news-lane-add-btn" id="traderNewsAddBtn" title="Add news">+</button>` : '';
   head.innerHTML = `<span class="news-box-title">${lane.title}</span><span class="news-box-sub">${lane.sub}</span>${addBtnHtml}<span class="news-box-count" data-lane-count="${lane.key}">${rows.length}</span>`;
   box.appendChild(head);
   if (lane.key === 'trader'){
@@ -3558,9 +3564,9 @@ function renderNewsLane(lane){
 // ── Trader News: manual paste/screenshot/PDF → Claude classify → editable preview → add ────────
 // 2026-09-18, Mete's request. Two-step flow, nothing hits the live board until he explicitly
 // confirms:
-//   1. "Sınıflandır" calls the classifyTraderNews Cloud Function (functions/index.js), which holds
+//   1. "Classify" calls the classifyTraderNews Cloud Function (functions/index.js), which holds
 //      the Anthropic key server-side and returns a classification — it does NOT touch Firestore.
-//   2. The result renders as an editable draft right here in the modal. Only clicking "Ekle" writes
+//   2. The result renders as an editable draft right here in the modal. Only clicking "Add" writes
 //      it to the `news` collection (client-side, since he's already signed in) — that's the one
 //      moment it starts counting toward tiles/chart/lanes. Closing/cancelling before that leaves no
 //      trace anywhere.
@@ -3593,20 +3599,21 @@ function openTraderNewsModal(){
   overlay.className = 'trader-modal-overlay';
   overlay.innerHTML = `
     <div class="trader-modal">
-      <h3>Trader News ekle</h3>
-      <div class="trader-modal-sub">Metni yapıştır, ya da bir ekran görüntüsü/PDF ekle. Claude sınıflandırdıktan sonra, sen "Ekle" demeden hiçbir şey sayfaya yansımaz.</div>
-      <label>Haber metni (yapıştır)</label>
-      <textarea id="traderNewsText" placeholder="WhatsApp'tan gelen metni buraya yapıştır…"></textarea>
-      <label>Görsel veya PDF ekle (opsiyonel)</label>
+      <h3>Add Trader News</h3>
+      <div class="trader-modal-sub">Paste the text, or attach a screenshot/PDF. AI classifies it first — nothing hits the page until you click "Add".</div>
+      <textarea id="traderNewsText" placeholder="Paste the text here…"></textarea>
+      <label>Add Screenshot or PDF File (optional)</label>
       <input type="file" id="traderNewsFile" accept="image/*,.pdf">
       <div class="trader-modal-file-info" id="traderNewsFileInfo"></div>
-      <label>Not (opsiyonel — kim gönderdi, ek bağlam vs.)</label>
-      <textarea id="traderNewsNote" placeholder="ör. Vietnam masasından geldi…"></textarea>
+      <label>Source (optional)</label>
+      <textarea id="traderNewsSource"></textarea>
+      <label>Notes (optional)</label>
+      <textarea id="traderNewsNote"></textarea>
       <div class="trader-modal-error" id="traderNewsError" style="display:none;"></div>
       <div id="traderNewsPreviewHost"></div>
       <div class="trader-modal-actions" id="traderNewsActions">
-        <button type="button" id="traderNewsCancel">İptal</button>
-        <button type="button" class="primary" id="traderNewsClassifyBtn">Sınıflandır</button>
+        <button type="button" id="traderNewsCancel">Cancel</button>
+        <button type="button" class="primary" id="traderNewsClassifyBtn">Classify</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -3621,50 +3628,53 @@ function openTraderNewsModal(){
     fileInfo.textContent = '';
     if (!file) return;
     if (file.size > TRADER_MAX_FILE_BYTES){
-      fileInfo.textContent = `Dosya çok büyük (${(file.size / 1024 / 1024).toFixed(1)}MB) — 5MB sınırını aşıyor.`;
+      fileInfo.textContent = `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB) — exceeds the 5MB limit.`;
       fileInput.value = '';
       return;
     }
     const isPdf = file.type === 'application/pdf';
     const base64 = await fileToBase64(file);
     attachment = { base64, mediaType: file.type || (isPdf ? 'application/pdf' : 'image/png'), kind: isPdf ? 'pdf' : 'image', name: file.name };
-    fileInfo.textContent = `Eklendi: ${file.name} (${(file.size / 1024).toFixed(0)}KB)`;
+    fileInfo.textContent = `Attached: ${file.name} (${(file.size / 1024).toFixed(0)}KB)`;
   });
 
   document.getElementById('traderNewsClassifyBtn').addEventListener('click', async () => {
     const errEl = document.getElementById('traderNewsError');
     errEl.style.display = 'none';
     const text = document.getElementById('traderNewsText').value.trim();
+    const source = document.getElementById('traderNewsSource').value.trim();
     const note = document.getElementById('traderNewsNote').value.trim();
     if (!text && !attachment){
-      errEl.textContent = 'Metin yapıştır ya da bir görsel/PDF ekle.';
+      errEl.textContent = 'Paste text or attach an image/PDF.';
       errEl.style.display = 'block';
       return;
     }
     const btn = document.getElementById('traderNewsClassifyBtn');
-    btn.disabled = true; btn.textContent = 'Sınıflandırılıyor…';
+    btn.disabled = true; btn.textContent = 'Classifying…';
     document.getElementById('traderNewsCancel').disabled = true;
     try{
       const classifyTraderNewsFn = httpsCallable(fbFunctions, 'classifyTraderNews');
-      const payload = { text: text || undefined, note: note || undefined };
+      const payload = { text: text || undefined, source: source || undefined, note: note || undefined };
       if (attachment && attachment.kind === 'image'){ payload.imageBase64 = attachment.base64; payload.imageMediaType = attachment.mediaType; }
       if (attachment && attachment.kind === 'pdf'){ payload.pdfBase64 = attachment.base64; }
       const result = await classifyTraderNewsFn(payload);
-      renderTraderNewsPreview(result.data);
+      // `source` is Mete's own input, not something the classifier returns — carried through on
+      // the draft object so commitTraderNews can use it as the row's displayed source later.
+      renderTraderNewsPreview({ ...result.data, source });
     }catch(e){
       console.error('traderNewsClassify failed', e);
-      errEl.textContent = 'Sınıflandırma başarısız: ' + (e && e.message ? e.message : e);
+      errEl.textContent = 'Classification failed: ' + (e && e.message ? e.message : e);
       errEl.style.display = 'block';
     }finally{
-      btn.disabled = false; btn.textContent = 'Sınıflandır';
+      btn.disabled = false; btn.textContent = 'Classify';
       document.getElementById('traderNewsCancel').disabled = false;
     }
   });
 }
 
 function renderTraderNewsPreview(draft){
-  // Replace the "Sınıflandır" action row with an editable preview + Ekle/İptal, per Mete's flow:
-  // AI evaluates first, shows a draft, he can edit, THEN "Ekle" commits it — never the other way
+  // Replace the "Classify" action row with an editable preview + Add/Cancel, per Mete's flow:
+  // AI evaluates first, shows a draft, he can edit, THEN "Add" commits it — never the other way
   // around.
   const host = document.getElementById('traderNewsPreviewHost');
   const actions = document.getElementById('traderNewsActions');
@@ -3673,18 +3683,18 @@ function renderTraderNewsPreview(draft){
   const categoryOptions = TRADER_CATEGORIES.map(c => `<option value="${c}"${c === draft.category ? ' selected' : ''}>${c}</option>`).join('');
   host.innerHTML = `
     <div class="trader-preview">
-      <div class="trader-preview-row"><label>Başlık</label><input type="text" id="tpHeadline" value="${escapeHtml(draft.headline || '')}"></div>
-      <div class="trader-preview-row"><label>Ürün</label><select id="tpProduct">${productOptions}</select></div>
-      <div class="trader-preview-row" id="tpSkipNote" style="display:${draft.product === 'SKIP' ? 'block' : 'none'};"><span></span><span class="trader-preview-skip">İlgisiz görünüyor — "Ekle" kapalı. İstersen ürünü elle seçip yine de ekleyebilirsin.</span></div>
-      <div class="trader-preview-row"><label>Yön</label><select id="tpDirection">${directionOptions}</select></div>
+      <div class="trader-preview-row"><label>Headline</label><input type="text" id="tpHeadline" value="${escapeHtml(draft.headline || '')}"></div>
+      <div class="trader-preview-row"><label>Product</label><select id="tpProduct">${productOptions}</select></div>
+      <div class="trader-preview-row" id="tpSkipNote" style="display:${draft.product === 'SKIP' ? 'block' : 'none'};"><span></span><span class="trader-preview-skip">Looks irrelevant — "Add" is disabled. Pick a product by hand if you want to add it anyway.</span></div>
+      <div class="trader-preview-row"><label>Direction</label><select id="tpDirection">${directionOptions}</select></div>
       <div class="trader-preview-row"><label>Impact</label><input type="number" id="tpImpact" min="0" max="100" value="${draft.impact}"></div>
-      <div class="trader-preview-row"><label>Kategori</label><select id="tpCategory">${categoryOptions}</select></div>
+      <div class="trader-preview-row"><label>Category</label><select id="tpCategory">${categoryOptions}</select></div>
       <div class="trader-preview-row"><label>Breaking</label><input type="checkbox" id="tpBreaking" style="width:auto;justify-self:start;" ${draft.breaking ? 'checked' : ''}></div>
-      <div class="trader-preview-row"><label>Özet</label><textarea id="tpSummary">${escapeHtml(draft.summary || '')}</textarea></div>
+      <div class="trader-preview-row"><label>Summary</label><textarea id="tpSummary">${escapeHtml(draft.summary || '')}</textarea></div>
     </div>`;
   actions.innerHTML = `
-    <button type="button" id="traderNewsCancel2">İptal</button>
-    <button type="button" class="primary" id="traderNewsAddConfirm">Ekle</button>`;
+    <button type="button" id="traderNewsCancel2">Cancel</button>
+    <button type="button" class="primary" id="traderNewsAddConfirm">Add</button>`;
   document.getElementById('traderNewsCancel2').addEventListener('click', closeTraderNewsModal);
 
   const productSel = document.getElementById('tpProduct');
@@ -3699,7 +3709,7 @@ function renderTraderNewsPreview(draft){
   syncSkipState();
 
   addBtn.addEventListener('click', async () => {
-    addBtn.disabled = true; addBtn.textContent = 'Ekleniyor…';
+    addBtn.disabled = true; addBtn.textContent = 'Adding…';
     try{
       const edited = {
         ...draft,
@@ -3716,9 +3726,9 @@ function renderTraderNewsPreview(draft){
     }catch(e){
       console.error('traderNews commit failed', e);
       const errEl = document.getElementById('traderNewsError');
-      errEl.textContent = 'Eklenemedi: ' + (e && e.message ? e.message : e);
+      errEl.textContent = 'Could not add: ' + (e && e.message ? e.message : e);
       errEl.style.display = 'block';
-      addBtn.disabled = false; addBtn.textContent = 'Ekle';
+      addBtn.disabled = false; addBtn.textContent = 'Add';
     }
   });
 }
@@ -3726,12 +3736,15 @@ function renderTraderNewsPreview(draft){
 async function commitTraderNews(d){
   const ref = doc(NEWS_COLLECTION);
   const now = Date.now();
+  // Mete's own "Source (optional)" input (who sent it) becomes the row's displayed source, e.g.
+  // "Manual · Hedgepoint" — falls back to the generic "Manual · Trader" tag when left blank.
+  const sourceLabel = d.source ? `Manual · ${d.source}` : 'Manual · Trader';
   await setDoc(ref, {
     id: ref.id,
     feed: 'manual',
     headline: d.headline,
     url: '',
-    source: 'Manuel · Trader',
+    source: sourceLabel,
     sourceCount: 1,
     ms: now,
     product: d.product,
@@ -3745,7 +3758,7 @@ async function commitTraderNews(d){
     summary: d.summary,
     duplicate: false,
     trend: 1,
-    sources: ['Manuel · Trader'],
+    sources: [sourceLabel],
     classifiedAt: now,
     manual: true,
   });
