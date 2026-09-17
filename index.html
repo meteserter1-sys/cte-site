@@ -37,6 +37,41 @@
     font-family:var(--sans); -webkit-font-smoothing:antialiased;
     padding-bottom:60px;
   }
+  /* 2026-09-17: full-screen opaque overlay, shown by default (JS flips it to none once
+     onAuthStateChanged confirms a real signed-in user) — covers header/tabs/main entirely
+     so nothing behind it is visible or reachable until login succeeds. */
+  .login-screen{
+    position:fixed; inset:0; z-index:1000; display:flex;
+    align-items:center; justify-content:center; padding:20px;
+    background:var(--bg);
+  }
+  .login-card{
+    width:min(340px, 100%); background:var(--panel); border:1px solid var(--border);
+    border-radius:12px; padding:28px 24px; display:flex; flex-direction:column; gap:10px;
+  }
+  .login-card h1{
+    margin:0 0 2px; font-size:15px; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--text); font-family:var(--sans);
+  }
+  .login-card h1 .cte-tag{ color:var(--accent); font-weight:700; }
+  .login-sub{ color:var(--text-dim); font-size:12.5px; margin:0 0 6px; }
+  .login-input{
+    background:var(--input-bg); border:1px solid var(--border); color:var(--text);
+    border-radius:8px; padding:10px 12px; font-size:14px; font-family:var(--sans); width:100%;
+  }
+  .login-input:focus{ outline:none; border-color:var(--accent); }
+  .login-btn{
+    background:var(--accent); color:#1b1406; border:none; border-radius:8px;
+    padding:10px 12px; font-size:14px; font-weight:700; cursor:pointer; margin-top:4px;
+    font-family:var(--sans);
+  }
+  .login-btn:disabled{ opacity:.6; cursor:default; }
+  .login-forgot{
+    background:none; border:none; color:var(--text-dim); font-size:12px; cursor:pointer;
+    padding:2px 0; text-align:left; text-decoration:underline; font-family:var(--sans);
+  }
+  .login-error{ color:var(--bad); font-size:12.5px; min-height:14px; }
+  .login-error.login-ok{ color:var(--good); }
   header{
     padding:18px 16px 14px; border-bottom:1px solid var(--border);
     position:sticky; top:0; background:var(--bg); z-index:10;
@@ -322,6 +357,18 @@
 </style>
 </head>
 <body>
+<div id="loginScreen" class="login-screen">
+  <form id="loginForm" class="login-card" autocomplete="on">
+    <div class="eyebrow">Commodity Trading Engine</div>
+    <h1>Sign in <span class="cte-tag">· CTE</span></h1>
+    <p class="login-sub">Internal tool — ask Mete for an account.</p>
+    <input type="email" id="loginEmail" class="login-input" placeholder="Email" autocomplete="username" required>
+    <input type="password" id="loginPassword" class="login-input" placeholder="Password" autocomplete="current-password" required>
+    <button type="submit" id="loginSubmit" class="login-btn">Sign in</button>
+    <button type="button" id="forgotBtn" class="login-forgot">Forgot password?</button>
+    <div id="loginError" class="login-error"></div>
+  </form>
+</div>
 <header>
   <div class="header-row">
     <div>
@@ -341,6 +388,9 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 16.9A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.9"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/></svg>
       </button>
       <input type="file" id="importFile" accept="application/json" style="display:none;">
+      <button class="hbtn" id="logoutBtn" title="Sign out" aria-label="Sign out">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+      </button>
     </div>
   </div>
 </header>
@@ -367,7 +417,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, orderBy, getDocs, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -386,14 +436,20 @@ const db = getFirestore(fbApp);
 const DOC_REF = doc(db, 'app_data', 'main');
 const LOGS_COLLECTION = collection(db, 'logs');
 
+// 2026-09-17, Mete: used to auto sign-in anonymously here so every visitor got a Firestore
+// identity with zero friction — but combined with firestore.rules' old "allow read: if true",
+// that meant the DATA itself was public to anyone with the URL (or a raw Firestore API call),
+// login page or not. Real access control now happens in two places together: this file only
+// calls loadState()/waitForAuth() AFTER a genuine (non-anonymous) sign-in has completed (see the
+// login screen wiring near the bottom of this script), and firestore.rules now requires that
+// same non-anonymous identity for every read/write. By the time loadState() runs, auth.currentUser
+// is already set, so this just waits for Firebase's own state to settle (near-instant) rather
+// than performing a sign-in itself.
 function waitForAuth(){
+  if (auth.currentUser) return Promise.resolve(auth.currentUser);
   const authPromise = new Promise((resolve) => {
-    onAuthStateChanged(auth, (user) => {
-      if (user) resolve(user);
-    });
-    signInAnonymously(auth).catch(err => {
-      console.error('Anonymous sign-in failed', err);
-      resolve(null);
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user){ unsub(); resolve(user); }
     });
   });
   const timeoutPromise = new Promise((resolve) => {
@@ -3751,7 +3807,67 @@ function renderArchiveNews(container, news){
   if (startTab && startTab.dataset.tab === 'newstab') renderNewsTab();
 }
 
-loadState();
+// 2026-09-17: gate the whole app behind a real sign-in. loadState() (and everything it wires up)
+// only runs once onAuthStateChanged reports a genuine, non-anonymous user — see waitForAuth()
+// above and firestore.rules, which both key off the same "not anonymous" identity.
+let appBooted = false;
+function showApp(){
+  document.getElementById('loginScreen').style.display = 'none';
+  const errEl = document.getElementById('loginError');
+  if (errEl) errEl.textContent = '';
+  if (!appBooted){
+    appBooted = true;
+    loadState();
+  }
+}
+function showLogin(errMsg){
+  appBooted = false;
+  document.getElementById('loginScreen').style.display = 'flex';
+  const errEl = document.getElementById('loginError');
+  if (errEl){ errEl.classList.remove('login-ok'); errEl.textContent = errMsg || ''; }
+}
+onAuthStateChanged(auth, (user) => {
+  if (user) showApp(); else showLogin();
+});
+document.getElementById('loginForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const btn = document.getElementById('loginSubmit');
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  signInWithEmailAndPassword(auth, email, password)
+    .catch(err => {
+      const code = err && err.code;
+      const msg = (code === 'auth/invalid-credential' || code === 'auth/wrong-password' ||
+                   code === 'auth/user-not-found' || code === 'auth/invalid-email')
+        ? 'Wrong email or password.'
+        : (code === 'auth/too-many-requests' ? 'Too many attempts — wait a bit and try again.' : 'Sign-in failed. Try again.');
+      showLogin(msg);
+    })
+    .finally(() => { btn.disabled = false; btn.textContent = 'Sign in'; });
+});
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  signOut(auth);
+});
+document.getElementById('forgotBtn').addEventListener('click', () => {
+  const email = document.getElementById('loginEmail').value.trim();
+  const errEl = document.getElementById('loginError');
+  if (!email){
+    errEl.classList.remove('login-ok');
+    errEl.textContent = 'Type your email above first, then tap "Forgot password?" again.';
+    return;
+  }
+  sendPasswordResetEmail(auth, email)
+    .then(() => {
+      errEl.classList.add('login-ok');
+      errEl.textContent = 'If that email has an account, a reset link was sent.';
+    })
+    .catch(() => {
+      // Same message on failure as on success — do not reveal whether an email is registered.
+      errEl.classList.add('login-ok');
+      errEl.textContent = 'If that email has an account, a reset link was sent.';
+    });
+});
 </script>
 <script>
 if ('serviceWorker' in navigator) {
