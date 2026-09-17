@@ -3825,7 +3825,17 @@ function showLogin(errMsg){
   const errEl = document.getElementById('loginError');
   if (errEl){ errEl.classList.remove('login-ok'); errEl.textContent = errMsg || ''; }
 }
+// 2026-09-17, Mete: a browser that had visited before this login gate existed can still be
+// holding an old ANONYMOUS session (Firebase Auth persists sign-ins across reloads by default,
+// and this app used to call signInAnonymously() on every load — see waitForAuth()'s comment
+// above). Left unhandled, onAuthStateChanged fires with that stale anonymous user, `if (user)`
+// is true, showApp() runs and skips the login screen entirely — but firestore.rules' isAuthed()
+// correctly rejects that same anonymous identity, so every read then fails with "Missing or
+// insufficient permissions" (the "Could not connect" banner). Signing out an anonymous session
+// here is a one-time, automatic cleanup: the next onAuthStateChanged call fires with user=null
+// and the real login screen shows, same as for a browser that was never signed in at all.
 onAuthStateChanged(auth, (user) => {
+  if (user && user.isAnonymous){ signOut(auth); return; }
   if (user) showApp(); else showLogin();
 });
 document.getElementById('loginForm').addEventListener('submit', (e) => {
