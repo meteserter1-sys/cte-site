@@ -143,6 +143,7 @@ exports.classifyTraderNews = onCall({ secrets: [ANTHROPIC_API_KEY], timeoutSecon
 
   const data = request.data || {};
   const text = typeof data.text === 'string' ? data.text.trim() : '';
+  const source = typeof data.source === 'string' ? data.source.trim() : '';
   const note = typeof data.note === 'string' ? data.note.trim() : '';
   const imageBase64 = typeof data.imageBase64 === 'string' ? data.imageBase64 : '';
   const imageMediaType = typeof data.imageMediaType === 'string' && data.imageMediaType ? data.imageMediaType : 'image/png';
@@ -164,6 +165,7 @@ exports.classifyTraderNews = onCall({ secrets: [ANTHROPIC_API_KEY], timeoutSecon
   }
   let instructions = '';
   if (text) instructions += `Message text:\n${text}\n\n`;
+  if (source) instructions += `Source / sender (from Mete, not part of the message itself): ${source}\n\n`;
   if (note) instructions += `Desk note / context (from Mete, not part of the message itself):\n${note}\n\n`;
   if (!text && (imageBase64 || pdfBase64)) {
     instructions += 'The message text was not pasted separately — read it from the attached image/PDF (e.g. a WhatsApp screenshot).\n\n';
