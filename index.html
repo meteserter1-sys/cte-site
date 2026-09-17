@@ -308,6 +308,32 @@
   .news-box-title{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); font-weight:700; }
   .news-box-sub{ font-size:10.5px; color:var(--text-dim); flex:1; }
   .news-box-count{ font-family:var(--mono); font-size:10.5px; color:var(--text-dim); }
+  /* Trader News "+" button (2026-09-18) — sits left of the count, per Mete: "sağ üst köşesinde ama
+     haber sayısının solunda". */
+  .news-lane-add-btn{ width:20px; height:20px; line-height:18px; padding:0; border-radius:6px; border:1px solid var(--border); background:var(--panel-2); color:var(--accent); font-size:15px; font-weight:700; cursor:pointer; flex-shrink:0; }
+  .news-lane-add-btn:hover{ border-color:var(--accent); background:var(--accent-soft); }
+  /* Trader News modal (paste/attach → classify → editable preview → add) */
+  .trader-modal-overlay{ position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:16px; }
+  .trader-modal{ background:var(--panel); border:1px solid var(--border); border-radius:10px; width:100%; max-width:520px; max-height:88vh; overflow-y:auto; padding:16px 18px 18px; }
+  .trader-modal h3{ margin:0 0 4px; font-size:14px; letter-spacing:.03em; color:var(--accent); }
+  .trader-modal .trader-modal-sub{ font-size:11px; color:var(--text-dim); margin-bottom:12px; }
+  .trader-modal textarea{ width:100%; box-sizing:border-box; background:var(--input-bg); border:1px solid var(--border); color:var(--text); font-family:inherit; font-size:12.5px; padding:8px 10px; border-radius:8px; resize:vertical; }
+  .trader-modal textarea#traderNewsText{ min-height:110px; }
+  .trader-modal textarea#traderNewsNote{ min-height:44px; }
+  .trader-modal label{ display:block; font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--text-dim); margin:10px 0 4px; }
+  .trader-modal input[type="file"]{ width:100%; font-size:11.5px; color:var(--text-dim); }
+  .trader-modal-file-info{ font-size:11px; color:var(--accent); margin-top:4px; }
+  .trader-modal-actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
+  .trader-modal-actions button{ padding:7px 14px; font-size:12px; border-radius:7px; border:1px solid var(--border); background:var(--panel-2); color:var(--text); cursor:pointer; }
+  .trader-modal-actions button.primary{ background:var(--accent); border-color:var(--accent); color:#04121c; font-weight:700; }
+  .trader-modal-actions button:disabled{ opacity:.5; cursor:default; }
+  .trader-modal-error{ font-size:11.5px; color:var(--bad); margin-top:8px; }
+  .trader-preview{ margin-top:14px; padding-top:14px; border-top:1px solid var(--border); }
+  .trader-preview-row{ display:grid; grid-template-columns:90px 1fr; gap:8px; align-items:center; margin-bottom:8px; }
+  .trader-preview-row label{ margin:0; }
+  .trader-preview-row input, .trader-preview-row select{ background:var(--input-bg); border:1px solid var(--border); color:var(--text); font-family:inherit; font-size:12.5px; padding:6px 8px; border-radius:7px; width:100%; box-sizing:border-box; }
+  .trader-preview-row textarea{ min-height:60px; }
+  .trader-preview-skip{ font-size:12px; color:var(--text-dim); font-style:italic; }
   .news-events-list{ display:grid; grid-template-columns:repeat(auto-fit, minmax(330px, 1fr)); gap:3px 18px; }
   .news-event{ display:flex; gap:8px; align-items:baseline; font-size:11.5px; padding:2px 0; }
   .news-event-when{ font-family:var(--mono); color:var(--text-dim); font-size:10.5px; white-space:nowrap; min-width:118px; }
@@ -323,8 +349,9 @@
      and Commodity News each take half the row instead of a third (Mete: "world news ve commodity
      news kutularini genisletebilirsin. sayfaya tam sigsin"). Mobile is unchanged: single column,
      just one fewer box stacked in it. */
+  /* 2026-09-18: back to 3 equal columns now that Trader News joins World News / Commodity News. */
   .news-lanes{ display:grid; grid-template-columns:1fr; gap:10px; }
-  @media (min-width:1100px){ .news-lanes{ grid-template-columns:1fr 1fr; } }
+  @media (min-width:1100px){ .news-lanes{ grid-template-columns:1fr 1fr 1fr; } }
   .news-lane-box{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 10px 4px; display:flex; flex-direction:column; }
   .news-lane-list{ height:440px; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-right:2px; }
   .news-row{ display:grid; grid-template-columns:44px 40px 1fr 26px; gap:8px; padding:8px 2px; border-bottom:1px solid var(--border); align-items:start; }
@@ -420,6 +447,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, orderBy, getDocs, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-functions.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDd4ldLMPWLdy2AigeeEU5dtNnmvQh2NQk",
@@ -434,6 +462,11 @@ const firebaseConfig = {
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
+// 2026-09-18, Mete: backs the Trader News "+" button (see NEWS_LANES / traderNewsClassify below) —
+// a Cloud Function that holds the Anthropic key server-side and classifies one manually-pasted
+// item on demand. Needs the Blaze plan (Cloud Functions can't reach the outside internet on Spark),
+// which is why this only exists now that CTE is on Blaze.
+const fbFunctions = getFunctions(fbApp);
 const DOC_REF = doc(db, 'app_data', 'main');
 const LOGS_COLLECTION = collection(db, 'logs');
 
@@ -2406,7 +2439,7 @@ function handleExcelImport(e){
 // Direction is a PRICE argument, not sentiment: BULLISH = argues the CFR cost UP.
 //
 // Layout (agreed with the desk): clocks + CBOT LIVE → tiles + chart → breaking
-// ticker → upcoming releases → two fixed boxes (World News / Commodity News) with
+// ticker → upcoming releases → three fixed boxes (World News / Commodity News / Trader News) with
 // their own scroll → 👍 👎 on every row. Times are shown in Vietnam time.
 // 2026-09-17, Mete: MACRO (its own tile, product, category and "Macro" box) removed entirely — a
 // cost-reduction request after seeing high per-run Claude token usage. FREIGHT already carries
@@ -2444,19 +2477,28 @@ const NEWS_TZ = 'Asia/Ho_Chi_Minh';
 // Public by design (it is the "VAPID public key"); paste it here once generated.
 const NEWS_VAPID_KEY = 'BNwixm6sFWzxS2O92z0qm1-t22LH8ovlEot6WRrhgXJv1nuxewVRsLSGywCbPNooBO9CYJfr07cjz5jMy53oqYY';
 
-// The two boxes and the categories that feed them. ("Macro" box removed 2026-09-17 along with the
-// MACRO product/category — see the block comment above.)
+// The three boxes and what routes into each. ("Macro" box removed 2026-09-17; Trader News added
+// 2026-09-18 — see the two dated notes below.)
 // 2026-09-17, Mete's clarification after the MACRO removal: FREIGHT-product stories belong in World
 // News ALWAYS, not just the ones classified POLITICS — "freight haberleri world news icinde
 // listelenmeli" (dry-bulk rates, vessel supply etc. are a broad/general-market read, not a crop
 // fundamental, so they don't belong mixed into Commodity News next to WHEAT/CORN/SBM). Commodity
 // News is therefore WHEAT/CORN/SBM only now; `category` (still POLITICS/AGRI/REPORTS, see
 // collector.py) keeps deciding World vs. Commodity for those three, same as before.
+// 2026-09-18, Mete: added a third box, Trader News — manually-entered items (paste text, or attach
+// a screenshot/PDF of a trader's WhatsApp message) that the automatic collector.py pipeline has no
+// way to ever see. Classified on demand by the traderNewsClassify Cloud Function, same scoring
+// language as the automatic feed (see functions/index.js), but routed here by `manual === true`
+// rather than by category/product — it's its own lane regardless of what product/category it lands
+// on. No dedup-against-known-events check here (unlike collector.py's `duplicate` field) — Mete's
+// call: he already knows to skip pasting something World/Commodity News already has.
 const NEWS_LANES = [
   { key: 'world',     title: 'World News',     sub: 'war · politics · trade policy · freight',
     match: s => s.category === 'POLITICS' || s.product === 'FREIGHT' },
   { key: 'commodity', title: 'Commodity News', sub: 'crop · weather · reports · demand',
     match: s => s.product !== 'FREIGHT' && (s.category === 'AGRI' || s.category === 'REPORTS') },
+  { key: 'trader',     title: 'Trader News',    sub: 'manual · WhatsApp · desk',
+    match: s => s.manual === true },
 ];
 
 let newsDocs = [];                 // newest first, as delivered by Firestore
@@ -3496,8 +3538,12 @@ function renderNewsLane(lane){
   rows = rows.slice().sort((a, b) => b.ms - a.ms);
   const head = document.createElement('div');
   head.className = 'news-box-head';
-  head.innerHTML = `<span class="news-box-title">${lane.title}</span><span class="news-box-sub">${lane.sub}</span><span class="news-box-count" data-lane-count="${lane.key}">${rows.length}</span>`;
+  const addBtnHtml = lane.key === 'trader' ? `<button type="button" class="news-lane-add-btn" id="traderNewsAddBtn" title="Haber ekle">+</button>` : '';
+  head.innerHTML = `<span class="news-box-title">${lane.title}</span><span class="news-box-sub">${lane.sub}</span>${addBtnHtml}<span class="news-box-count" data-lane-count="${lane.key}">${rows.length}</span>`;
   box.appendChild(head);
+  if (lane.key === 'trader'){
+    head.querySelector('#traderNewsAddBtn').addEventListener('click', openTraderNewsModal);
+  }
   const list = document.createElement('div');
   list.className = 'news-lane-list';
   list.dataset.lane = lane.key;
@@ -3507,6 +3553,202 @@ function renderNewsLane(lane){
   for (const s of rows) list.appendChild(renderNewsRow(s));
   box.appendChild(list);
   return box;
+}
+
+// ── Trader News: manual paste/screenshot/PDF → Claude classify → editable preview → add ────────
+// 2026-09-18, Mete's request. Two-step flow, nothing hits the live board until he explicitly
+// confirms:
+//   1. "Sınıflandır" calls the classifyTraderNews Cloud Function (functions/index.js), which holds
+//      the Anthropic key server-side and returns a classification — it does NOT touch Firestore.
+//   2. The result renders as an editable draft right here in the modal. Only clicking "Ekle" writes
+//      it to the `news` collection (client-side, since he's already signed in) — that's the one
+//      moment it starts counting toward tiles/chart/lanes. Closing/cancelling before that leaves no
+//      trace anywhere.
+// firestore.rules has a matching narrow rule: authed users may CREATE a `news` doc only when
+// `manual === true`, and can't update/delete any doc (collector-written or their own) — see rules.
+const TRADER_PRODUCTS = ['WHEAT', 'CORN', 'SBM', 'FREIGHT', 'SKIP'];
+const TRADER_CATEGORIES = ['POLITICS', 'AGRI', 'REPORTS'];
+const TRADER_MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB — keeps the callable payload and Claude cost bounded
+
+function closeTraderNewsModal(){
+  const el = document.getElementById('traderNewsModal');
+  if (el) el.remove();
+}
+
+function fileToBase64(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function openTraderNewsModal(){
+  closeTraderNewsModal();
+  let attachment = null; // { base64, mediaType, kind: 'image'|'pdf', name }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'traderNewsModal';
+  overlay.className = 'trader-modal-overlay';
+  overlay.innerHTML = `
+    <div class="trader-modal">
+      <h3>Trader News ekle</h3>
+      <div class="trader-modal-sub">Metni yapıştır, ya da bir ekran görüntüsü/PDF ekle. Claude sınıflandırdıktan sonra, sen "Ekle" demeden hiçbir şey sayfaya yansımaz.</div>
+      <label>Haber metni (yapıştır)</label>
+      <textarea id="traderNewsText" placeholder="WhatsApp'tan gelen metni buraya yapıştır…"></textarea>
+      <label>Görsel veya PDF ekle (opsiyonel)</label>
+      <input type="file" id="traderNewsFile" accept="image/*,.pdf">
+      <div class="trader-modal-file-info" id="traderNewsFileInfo"></div>
+      <label>Not (opsiyonel — kim gönderdi, ek bağlam vs.)</label>
+      <textarea id="traderNewsNote" placeholder="ör. Vietnam masasından geldi…"></textarea>
+      <div class="trader-modal-error" id="traderNewsError" style="display:none;"></div>
+      <div id="traderNewsPreviewHost"></div>
+      <div class="trader-modal-actions" id="traderNewsActions">
+        <button type="button" id="traderNewsCancel">İptal</button>
+        <button type="button" class="primary" id="traderNewsClassifyBtn">Sınıflandır</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeTraderNewsModal(); });
+  document.getElementById('traderNewsCancel').addEventListener('click', closeTraderNewsModal);
+
+  const fileInput = document.getElementById('traderNewsFile');
+  const fileInfo = document.getElementById('traderNewsFileInfo');
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files && fileInput.files[0];
+    attachment = null;
+    fileInfo.textContent = '';
+    if (!file) return;
+    if (file.size > TRADER_MAX_FILE_BYTES){
+      fileInfo.textContent = `Dosya çok büyük (${(file.size / 1024 / 1024).toFixed(1)}MB) — 5MB sınırını aşıyor.`;
+      fileInput.value = '';
+      return;
+    }
+    const isPdf = file.type === 'application/pdf';
+    const base64 = await fileToBase64(file);
+    attachment = { base64, mediaType: file.type || (isPdf ? 'application/pdf' : 'image/png'), kind: isPdf ? 'pdf' : 'image', name: file.name };
+    fileInfo.textContent = `Eklendi: ${file.name} (${(file.size / 1024).toFixed(0)}KB)`;
+  });
+
+  document.getElementById('traderNewsClassifyBtn').addEventListener('click', async () => {
+    const errEl = document.getElementById('traderNewsError');
+    errEl.style.display = 'none';
+    const text = document.getElementById('traderNewsText').value.trim();
+    const note = document.getElementById('traderNewsNote').value.trim();
+    if (!text && !attachment){
+      errEl.textContent = 'Metin yapıştır ya da bir görsel/PDF ekle.';
+      errEl.style.display = 'block';
+      return;
+    }
+    const btn = document.getElementById('traderNewsClassifyBtn');
+    btn.disabled = true; btn.textContent = 'Sınıflandırılıyor…';
+    document.getElementById('traderNewsCancel').disabled = true;
+    try{
+      const classifyTraderNewsFn = httpsCallable(fbFunctions, 'classifyTraderNews');
+      const payload = { text: text || undefined, note: note || undefined };
+      if (attachment && attachment.kind === 'image'){ payload.imageBase64 = attachment.base64; payload.imageMediaType = attachment.mediaType; }
+      if (attachment && attachment.kind === 'pdf'){ payload.pdfBase64 = attachment.base64; }
+      const result = await classifyTraderNewsFn(payload);
+      renderTraderNewsPreview(result.data);
+    }catch(e){
+      console.error('traderNewsClassify failed', e);
+      errEl.textContent = 'Sınıflandırma başarısız: ' + (e && e.message ? e.message : e);
+      errEl.style.display = 'block';
+    }finally{
+      btn.disabled = false; btn.textContent = 'Sınıflandır';
+      document.getElementById('traderNewsCancel').disabled = false;
+    }
+  });
+}
+
+function renderTraderNewsPreview(draft){
+  // Replace the "Sınıflandır" action row with an editable preview + Ekle/İptal, per Mete's flow:
+  // AI evaluates first, shows a draft, he can edit, THEN "Ekle" commits it — never the other way
+  // around.
+  const host = document.getElementById('traderNewsPreviewHost');
+  const actions = document.getElementById('traderNewsActions');
+  const productOptions = TRADER_PRODUCTS.map(p => `<option value="${p}"${p === draft.product ? ' selected' : ''}>${p}</option>`).join('');
+  const directionOptions = ['BULLISH', 'BEARISH', 'NEUTRAL'].map(d => `<option value="${d}"${d === draft.direction ? ' selected' : ''}>${d}</option>`).join('');
+  const categoryOptions = TRADER_CATEGORIES.map(c => `<option value="${c}"${c === draft.category ? ' selected' : ''}>${c}</option>`).join('');
+  host.innerHTML = `
+    <div class="trader-preview">
+      <div class="trader-preview-row"><label>Başlık</label><input type="text" id="tpHeadline" value="${escapeHtml(draft.headline || '')}"></div>
+      <div class="trader-preview-row"><label>Ürün</label><select id="tpProduct">${productOptions}</select></div>
+      <div class="trader-preview-row" id="tpSkipNote" style="display:${draft.product === 'SKIP' ? 'block' : 'none'};"><span></span><span class="trader-preview-skip">İlgisiz görünüyor — "Ekle" kapalı. İstersen ürünü elle seçip yine de ekleyebilirsin.</span></div>
+      <div class="trader-preview-row"><label>Yön</label><select id="tpDirection">${directionOptions}</select></div>
+      <div class="trader-preview-row"><label>Impact</label><input type="number" id="tpImpact" min="0" max="100" value="${draft.impact}"></div>
+      <div class="trader-preview-row"><label>Kategori</label><select id="tpCategory">${categoryOptions}</select></div>
+      <div class="trader-preview-row"><label>Breaking</label><input type="checkbox" id="tpBreaking" style="width:auto;justify-self:start;" ${draft.breaking ? 'checked' : ''}></div>
+      <div class="trader-preview-row"><label>Özet</label><textarea id="tpSummary">${escapeHtml(draft.summary || '')}</textarea></div>
+    </div>`;
+  actions.innerHTML = `
+    <button type="button" id="traderNewsCancel2">İptal</button>
+    <button type="button" class="primary" id="traderNewsAddConfirm">Ekle</button>`;
+  document.getElementById('traderNewsCancel2').addEventListener('click', closeTraderNewsModal);
+
+  const productSel = document.getElementById('tpProduct');
+  const addBtn = document.getElementById('traderNewsAddConfirm');
+  const skipNote = document.getElementById('tpSkipNote');
+  const syncSkipState = () => {
+    const isSkip = productSel.value === 'SKIP';
+    skipNote.style.display = isSkip ? 'block' : 'none';
+    addBtn.disabled = isSkip;
+  };
+  productSel.addEventListener('change', syncSkipState);
+  syncSkipState();
+
+  addBtn.addEventListener('click', async () => {
+    addBtn.disabled = true; addBtn.textContent = 'Ekleniyor…';
+    try{
+      const edited = {
+        ...draft,
+        headline: document.getElementById('tpHeadline').value.trim() || draft.headline,
+        product: productSel.value,
+        direction: document.getElementById('tpDirection').value,
+        impact: Math.max(0, Math.min(100, Number(document.getElementById('tpImpact').value) || 0)),
+        category: document.getElementById('tpCategory').value,
+        breaking: document.getElementById('tpBreaking').checked,
+        summary: document.getElementById('tpSummary').value.trim(),
+      };
+      await commitTraderNews(edited);
+      closeTraderNewsModal();
+    }catch(e){
+      console.error('traderNews commit failed', e);
+      const errEl = document.getElementById('traderNewsError');
+      errEl.textContent = 'Eklenemedi: ' + (e && e.message ? e.message : e);
+      errEl.style.display = 'block';
+      addBtn.disabled = false; addBtn.textContent = 'Ekle';
+    }
+  });
+}
+
+async function commitTraderNews(d){
+  const ref = doc(NEWS_COLLECTION);
+  const now = Date.now();
+  await setDoc(ref, {
+    id: ref.id,
+    feed: 'manual',
+    headline: d.headline,
+    url: '',
+    source: 'Manuel · Trader',
+    sourceCount: 1,
+    ms: now,
+    product: d.product,
+    direction: d.direction,
+    impact: d.impact,
+    confidence: d.confidence,
+    country: d.country || '',
+    category: d.category,
+    breaking: !!d.breaking,
+    eventType: d.eventType || 'OTHER',
+    summary: d.summary,
+    duplicate: false,
+    trend: 1,
+    sources: ['Manuel · Trader'],
+    classifiedAt: now,
+    manual: true,
+  });
 }
 
 function renderNewsRow(s){

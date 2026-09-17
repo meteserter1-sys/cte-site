@@ -1,37 +1,67 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // 2026-09-17, Mete: the entire "allow read: if true" pattern below used to mean this data
+    // (real trading positions/prices, not just the news feed) was PUBLIC — anyone with the
+    // project's URL, or a raw unauthenticated Firestore REST call, could read it, no login page
+    // or account needed. This came up because a stray HTML export of the page was almost seen by
+    // someone outside the team; the export itself is a side issue, the real gap was that the
+    // backing data was open regardless of any UI gate. index.html no longer signs anyone in
+    // anonymously (that used to trivially satisfy "request.auth != null" for literally any
+    // visitor) — the only way to get a real, non-anonymous auth.currentUser now is to sign in
+    // with an email/password account Mete created by hand in the Firebase Console. isAuthed()
+    // below is what actually enforces that, matched to the app's login screen.
+    function isAuthed() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
     match /app_data/main {
-      allow read: if true;
-      allow write: if request.auth != null;
+      allow read, write: if isAuthed();
     }
     match /logs/{date} {
-      allow read: if true;
-      allow write: if request.auth != null;
+      allow read, write: if isAuthed();
     }
-    // Newsfeed events: the page only READS. Writes come from the GitHub Actions collector,
-    // which uses a service account and therefore bypasses these rules entirely.
+    // Newsfeed events: the page mostly READS. Writes come from the GitHub Actions collector, which
+    // uses a service account and therefore bypasses these rules entirely (that's why "write" was
+    // simply false below, full stop, until now).
+    //
+    // 2026-09-18, Mete: added Trader News — a signed-in user can paste/attach a trader's WhatsApp
+    // message in the page, have functions/classifyTraderNews.js (a Cloud Function holding the
+    // Anthropic key) score it, review/edit the result, and only THEN write it straight from the
+    // page. This narrow `create` rule is what that last "Ekle" step relies on: it allows creating a
+    // brand-new doc, only when it's flagged `manual == true` and has the same shape the automatic
+    // pipeline already guarantees (sanitise() in collector.py) — but still allows no update and no
+    // delete on ANY doc, manual or collector-written, so a signed-in user can add a new manual event
+    // but can never edit or remove an existing one (their own included) straight from the page.
     match /news/{id} {
-      allow read: if true;
-      allow write: if false;
+      allow read: if isAuthed();
+      allow create: if isAuthed()
+        && request.resource.data.manual == true
+        && request.resource.data.product in ['WHEAT', 'CORN', 'SBM', 'FREIGHT']
+        && request.resource.data.direction in ['BULLISH', 'BEARISH', 'NEUTRAL']
+        && request.resource.data.category in ['POLITICS', 'AGRI', 'REPORTS']
+        && request.resource.data.impact is number
+        && request.resource.data.impact >= 0 && request.resource.data.impact <= 100;
+      allow update, delete: if false;
     }
     match /news_meta/{id} {
-      allow read: if true;
+      allow read: if isAuthed();
       allow write: if false;
     }
     // Desk votes (👍 / 👎) and push-alert device registrations: written from the page.
     match /news_feedback/{id} {
-      allow read: if true;
-      allow write: if request.auth != null;
+      allow read, write: if isAuthed();
     }
     match /news_devices/{token} {
       allow read: if false;
-      allow write: if request.auth != null;
+      allow write: if isAuthed();
     }
     // Daily futures price history (2026-09-14) backing the merged net-impact + price chart. Same
     // read-only-from-the-page pattern as /news: the collector's service account writes it.
     match /prices/{product} {
-      allow read: if true;
+      allow read: if isAuthed();
       allow write: if false;
     }
   }
