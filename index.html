@@ -233,8 +233,11 @@
   .news-meta-right{ display:flex; align-items:center; gap:10px; }
   .news-lastrun{ font-family:var(--mono); font-size:10.5px; white-space:nowrap; }
   .news-alerts-btn{ padding:5px 9px; font-size:11px; }
-  .news-tiles{ display:grid; grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)); gap:8px; margin-bottom:10px; }
-  .news-tile{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 10px 7px; cursor:pointer; }
+  /* 2026-09-17: minmax bumped 118px → 140px now that MACRO's tile is gone (Mete: "wheat, corn, sbm,
+     freight kutularini biraz daha buyutebilirsin macro ciktigi icin") — the remaining four tiles get
+     more room instead of just leaving the freed-up row width unused. */
+  .news-tiles{ display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px; margin-bottom:10px; }
+  .news-tile{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px 12px 8px; cursor:pointer; }
   .news-tile:hover{ border-color:var(--accent); }
   .news-tile.sel{ border-color:var(--accent); background:var(--accent-soft); }
   .news-tile-head{ display:flex; align-items:baseline; justify-content:space-between; gap:6px; }
@@ -243,7 +246,7 @@
   .news-tile-price .chg.pos{ color:var(--good); } .news-tile-price .chg.neg{ color:var(--bad); }
   .news-tile-price.unreliable{ color:#e0a020; border-bottom:1px dashed #e0a020; }
   .news-tile-proxy{ font-size:8.5px; color:var(--text-dim); opacity:.75; text-transform:uppercase; letter-spacing:.04em; }
-  .news-tile-val{ font-family:var(--mono); font-size:19px; font-weight:700; margin:1px 0; color:var(--text-dim); }
+  .news-tile-val{ font-family:var(--mono); font-size:22px; font-weight:700; margin:2px 0; color:var(--text-dim); }
   .news-tile.pos .news-tile-val{ color:var(--good); }
   .news-tile.neg .news-tile-val{ color:var(--bad); }
   .news-tile-sub{ font-size:10px; color:var(--text-dim); font-family:var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -253,14 +256,9 @@
   .news-chart-latest{ font-family:var(--mono); font-size:17px; font-weight:700; color:var(--text-dim); }
   .news-chart-latest.pos{ color:var(--good); } .news-chart-latest.neg{ color:var(--bad); }
   .news-chart-sub{ font-size:11px; color:var(--text-dim); font-family:var(--mono); }
-  .news-price-widget .news-chart-sub{ margin-left:auto; }
   .news-legend{ display:flex; gap:12px; margin-left:auto; }
   .news-legend-item{ display:flex; align-items:center; gap:5px; font-size:10.5px; color:var(--text-dim); font-family:var(--mono); white-space:nowrap; }
   .news-legend-dot{ width:8px; height:8px; border-radius:50%; display:inline-block; flex-shrink:0; }
-  .news-price-embed{ display:flex; gap:8px; flex-wrap:wrap; }
-  .news-price-embed > div{ min-width:220px; }
-  .news-price-extra-link{ display:block; font-size:11px; color:var(--accent); text-decoration:none; padding:0 4px 6px; margin-top:-4px; }
-  .news-price-extra-link:hover{ text-decoration:underline; }
   .news-svg{ display:block; }
   .news-axis{ fill:var(--text-dim); font-family:var(--mono); font-size:9.5px; }
   .news-price-axis{ fill:var(--accent); }
@@ -321,8 +319,12 @@
   .news-search{ flex:1; min-width:140px; background:var(--input-bg); border:1px solid var(--border); color:var(--text); font-family:var(--mono); font-size:12px; padding:6px 9px; border-radius:14px; }
   .news-search:focus{ outline:none; border-color:var(--accent); }
   .news-count{ font-size:10.5px; color:var(--text-dim); font-family:var(--mono); margin:2px 2px 6px; }
+  /* 2026-09-17: 3 boxes → 2 (Macro box removed) — desktop goes 1fr 1fr 1fr → 1fr 1fr so World News
+     and Commodity News each take half the row instead of a third (Mete: "world news ve commodity
+     news kutularini genisletebilirsin. sayfaya tam sigsin"). Mobile is unchanged: single column,
+     just one fewer box stacked in it. */
   .news-lanes{ display:grid; grid-template-columns:1fr; gap:10px; }
-  @media (min-width:1100px){ .news-lanes{ grid-template-columns:1fr 1fr 1fr; } }
+  @media (min-width:1100px){ .news-lanes{ grid-template-columns:1fr 1fr; } }
   .news-lane-box{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:8px 10px 4px; display:flex; flex-direction:column; }
   .news-lane-list{ height:440px; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-right:2px; }
   .news-row{ display:grid; grid-template-columns:44px 40px 1fr 26px; gap:8px; padding:8px 2px; border-bottom:1px solid var(--border); align-items:start; }
@@ -2404,8 +2406,14 @@ function handleExcelImport(e){
 // Direction is a PRICE argument, not sentiment: BULLISH = argues the CFR cost UP.
 //
 // Layout (agreed with the desk): clocks + CBOT LIVE → tiles + chart → breaking
-// ticker → upcoming releases → three fixed boxes (World / Crop / Macro) with their
-// own scroll → 👍 👎 on every row. Times are shown in Vietnam time.
+// ticker → upcoming releases → two fixed boxes (World News / Commodity News) with
+// their own scroll → 👍 👎 on every row. Times are shown in Vietnam time.
+// 2026-09-17, Mete: MACRO (its own tile, product, category and "Macro" box) removed entirely — a
+// cost-reduction request after seeing high per-run Claude token usage. FREIGHT already carries
+// everything cost-relevant (dry-bulk rates, canal/vessel disruption), so the standalone macro lane
+// (Brent/energy, Fed rate, dollar index, VIX, FX) was pure extra classification spend the desk
+// wasn't acting on. "Crop News" renamed "Commodity News" (same POLITICS/AGRI+REPORTS split as
+// before, just one fewer box) — see collector.py for the matching pipeline-side removal.
 // ═══════════════════════════════════════════════════════════════════════════
 
 const NEWS_COLLECTION = collection(db, 'news');
@@ -2430,17 +2438,25 @@ const NEWS_QUERY_LIMIT = NEWS_HISTORY_DAYS * 120;
 // decide when to ding/desktop-notify for a live tab, a client-side mirror of the server's own
 // push-alert threshold, not a second source of truth for it.
 const NEWS_ALERT_IMPACT_JS = 75;
-const NEWS_PRODUCTS = ['ALL', 'WHEAT', 'CORN', 'SBM', 'FREIGHT', 'MACRO'];
+const NEWS_PRODUCTS = ['ALL', 'WHEAT', 'CORN', 'SBM', 'FREIGHT'];
 const NEWS_TZ = 'Asia/Ho_Chi_Minh';
 // Web-push public key from Firebase Console → Cloud Messaging → Web Push certificates.
 // Public by design (it is the "VAPID public key"); paste it here once generated.
 const NEWS_VAPID_KEY = 'BNwixm6sFWzxS2O92z0qm1-t22LH8ovlEot6WRrhgXJv1nuxewVRsLSGywCbPNooBO9CYJfr07cjz5jMy53oqYY';
 
-// The three boxes and the categories that feed them.
+// The two boxes and the categories that feed them. ("Macro" box removed 2026-09-17 along with the
+// MACRO product/category — see the block comment above.)
+// 2026-09-17, Mete's clarification after the MACRO removal: FREIGHT-product stories belong in World
+// News ALWAYS, not just the ones classified POLITICS — "freight haberleri world news icinde
+// listelenmeli" (dry-bulk rates, vessel supply etc. are a broad/general-market read, not a crop
+// fundamental, so they don't belong mixed into Commodity News next to WHEAT/CORN/SBM). Commodity
+// News is therefore WHEAT/CORN/SBM only now; `category` (still POLITICS/AGRI/REPORTS, see
+// collector.py) keeps deciding World vs. Commodity for those three, same as before.
 const NEWS_LANES = [
-  { key: 'world', title: 'World News', sub: 'war · politics · trade policy', cats: ['POLITICS'] },
-  { key: 'crop',  title: 'Crop News',  sub: 'crop · weather · reports · demand', cats: ['AGRI', 'REPORTS'] },
-  { key: 'macro', title: 'Macro',      sub: 'freight · energy · rates · FX', cats: ['MACRO'] },
+  { key: 'world',     title: 'World News',     sub: 'war · politics · trade policy · freight',
+    match: s => s.category === 'POLITICS' || s.product === 'FREIGHT' },
+  { key: 'commodity', title: 'Commodity News', sub: 'crop · weather · reports · demand',
+    match: s => s.product !== 'FREIGHT' && (s.category === 'AGRI' || s.category === 'REPORTS') },
 ];
 
 let newsDocs = [];                 // newest first, as delivered by Firestore
@@ -2454,8 +2470,9 @@ let newsUI = { product: 'ALL', search: '', chartProduct: 'WHEAT', minImpactOn: f
 
 // Daily futures price history (2026-09-14), written by collector.py's sync_prices() into
 // Firestore `prices/{product}`. Kept separate from newsDocs/newsSeries — this merges into the
-// SAME chart at render time (see renderNewsChart) rather than being its own data model. MACRO has
-// no entry here on purpose: it keeps its existing separate TradingView DXY/VIX widgets.
+// SAME chart at render time (see renderNewsChart) rather than being its own data model. Now covers
+// every remaining product — MACRO (which used a separate TradingView DXY/VIX widget instead) was
+// removed entirely 2026-09-17, so that widget code is gone too (see renderNewsBody).
 const PRICE_PRODUCTS = ['WHEAT', 'CORN', 'SBM', 'FREIGHT'];
 // Labels for the chart legend and tile — WHEAT/CORN/SBM show their own futures, but FREIGHT's price
 // line is Brent crude (BZ=F, see collector.py PRICE_SYMBOLS), used as a bunker-fuel/freight-cost
@@ -2837,7 +2854,7 @@ function renderMorningReportCard(){
   });
   return card;
 }
-const PRODUCTS_MORNING = ['WHEAT', 'CORN', 'SBM', 'FREIGHT', 'MACRO'];
+const PRODUCTS_MORNING = ['WHEAT', 'CORN', 'SBM', 'FREIGHT'];
 
 // Compact reading for the History snapshot: one number per product + the day's top events.
 function buildNewsSnapshot(){
@@ -2916,7 +2933,7 @@ const NEWS_FIXED_EVENTS = [
   { date: '2027-03-31', timeET: '12:00', name: 'USDA Prospective Plantings + Grain Stocks', lane: 'REPORTS' },
   { date: '2027-06-30', timeET: '12:00', name: 'USDA Acreage + Grain Stocks', lane: 'REPORTS' },
   ...['2026-09-16', '2026-10-28', '2026-12-09', '2027-01-27', '2027-03-17', '2027-04-28', '2027-06-09', '2027-07-28', '2027-09-15', '2027-10-27', '2027-12-08']
-    .map(d => ({ date: d, timeET: '14:00', name: 'FOMC rate decision', lane: 'MACRO' })),
+    .map(d => ({ date: d, timeET: '14:00', name: 'FOMC rate decision', lane: 'REPORTS' })),
 ];
 // Weekly recurrences (ET). Crop Progress runs April–November.
 const NEWS_WEEKLY_EVENTS = [
@@ -3153,13 +3170,9 @@ function renderNewsBody(){
   body.appendChild(renderNewsSummary());
   body.appendChild(renderNewsRangeBar());
   body.appendChild(renderNewsChart());
-  // WHEAT/CORN/SBM/FREIGHT now get their price line merged straight into the chart above (see
-  // newsChartSvg/renderNewsChart) — the separate TradingView embed only remains for MACRO
-  // (DXY/VIX), which has no futures price series of its own to merge in. Kept exactly as before.
-  if (newsUI.chartProduct === 'MACRO'){
-    const priceWidget = renderNewsPriceWidget();
-    if (priceWidget) body.appendChild(priceWidget);
-  }
+  // Every remaining product (WHEAT/CORN/SBM/FREIGHT) gets its price line merged straight into the
+  // chart above (see newsChartSvg/renderNewsChart) — the separate TradingView mini-widget embed
+  // this used to fall back to for MACRO (DXY/VIX) was removed along with MACRO itself, 2026-09-17.
   const ticker = renderNewsTicker();
   if (ticker) body.appendChild(ticker);
   body.appendChild(renderNewsEvents());
@@ -3260,8 +3273,9 @@ function renderNewsChart(){
   const xMin = xMax - rangeDef.days * 24 * 3600 * 1000;
   const shownPts = newsSmoothSeries(newsUI.chartProduct, xMin, xMax);
   const rangeNote = '';
-  // Real price history from Firestore prices/{product} (collector.py's sync_prices()). MACRO never
-  // has one — it keeps its separate TradingView DXY/VIX widgets below, untouched. "Daily" uses the
+  // Real price history from Firestore prices/{product} (collector.py's sync_prices()) — every
+  // remaining product has one now that MACRO (which used a separate TradingView DXY/VIX widget
+  // instead, see the removal note above renderNewsPriceWidget's old spot) is gone. "Daily" uses the
   // live-ish intraday series (5-minute bars, refreshed every collector run) instead of the 5y daily
   // series — a single daily close can't show same-day movement, which is what Daily is for.
   const priceRec = newsPrices[newsUI.chartProduct];
@@ -3337,95 +3351,14 @@ function renderNewsChart(){
   return box;
 }
 
-// Live market reference under the impact chart: TradingView's free public embed widgets (no
-// scraping, no API key). Front-month/continuous only, not the individual forward contracts
-// (WZ26, WH27, …) — those need a licensed data vendor, a separate decision (agreed 2026-09-11).
-//
-// IMPORTANT (found 2026-09-11, after WHEAT/CORN/SBM/DXY/VIX all showed "This symbol is only
-// available on TradingView" in production): TradingView's free embed widgets do NOT carry
-// official-exchange data (CBOT futures like CBOT:ZW1!/ZC1!/ZM1!, or TVC:DXY/TVC:VIX index data)
-// for anonymous embedding on someone else's site — confirmed by testing the same symbols on
-// TradingView's own "Advanced Real-Time Chart" widget, not just the small ones, so it's a data
-// licensing restriction, not a bot-block and not something we can work around technically.
-// Broker CFD symbols (FOREXCOM:*, CAPITALCOM:*, same family as TVC:UKOIL/Brent which already
-// worked) ARE free to embed and track the underlying market closely, so we use those instead.
-// 2026-09-14 update: WHEAT/CORN/SBM/FREIGHT no longer use these CFD-proxy TradingView embeds — a
-// cross-origin iframe can't be read from or merged with our own SVG, so those four now get a real
-// price line (Yahoo Finance ZW=F/ZC=F/ZM=F/BZ=F via collector.py) drawn straight into the net-impact
-// chart itself (see newsChartSvg/renderNewsChart). MACRO is kept exactly as before — DXY/VIX have no
-// futures price series of their own to merge in, so they stay as separate TradingView widgets.
-const NEWS_PRICE_SYMBOLS = {
-  MACRO: [{ symbol: 'CAPITALCOM:DXY', label: 'US Dollar Index (DXY)' }, { symbol: 'CAPITALCOM:VIX', label: 'VIX' }],
-};
-
-// No longer needed now that WHEAT/CORN/SBM/FREIGHT get real price data merged into their own
-// chart directly (see NEWS_PRICE_SYMBOLS comment above) — SBM's chart now shows real ZM=F closes,
-// not the old Soybean CFD proxy, so the "real data is elsewhere" click-through no longer applies.
-const NEWS_PRICE_EXTRA_LINK = {};
-
-// Cache built widget DOM nodes per product+range so switching back to an already-seen combination
-// (or a Firestore-triggered re-render while staying on the same product/range) reuses the live
-// iframe instead of tearing it down and reloading it — TradingView widgets are heavier than our own
-// inline SVG. Keyed by range too (not just product) because the TradingView dateRange is baked into
-// the widget's script config at creation time and can't be changed on an already-built widget.
-const newsPriceWidgetCache = {};
-
-function tvWidget(scriptFile, symbol, height, dateRange){
-  const container = document.createElement('div');
-  container.className = 'tradingview-widget-container';
-  container.appendChild(document.createElement('div'));
-  const script = document.createElement('script');
-  script.src = `https://s3.tradingview.com/external-embedding/embed-widget-${scriptFile}.js`;
-  script.async = true;
-  script.text = JSON.stringify({
-    symbol, width: '100%', height, locale: 'en', dateRange: dateRange || '1D',
-    colorTheme: 'dark', isTransparent: true, autosize: false, chartOnly: false,
-  });
-  container.appendChild(script);
-  return container;
-}
-
-function renderNewsPriceWidget(){
-  const product = newsUI.chartProduct;
-  const specs = NEWS_PRICE_SYMBOLS[product];
-  if (!specs) return null;
-  const rangeDef = NEWS_CHART_RANGES.find(r => r.key === newsUI.chartRange) || NEWS_CHART_RANGES[2];
-  const cacheKey = product + '_' + rangeDef.key;
-  const box = document.createElement('div');
-  box.className = 'news-chart news-price-widget';
-  const head = document.createElement('div');
-  head.className = 'news-chart-head';
-  head.innerHTML = `<span class="news-chart-title">${specs.map(s => s.label).join(' · ')}</span>` +
-    `<span class="news-chart-sub">${rangeDef.label} · live · TradingView</span>`;
-  box.appendChild(head);
-  const extra = NEWS_PRICE_EXTRA_LINK[product];
-  if (extra){
-    const a = document.createElement('a');
-    a.href = extra.href; a.target = '_blank'; a.rel = 'noopener';
-    a.className = 'news-price-extra-link';
-    a.textContent = extra.label;
-    box.appendChild(a);
-  }
-  if (newsPriceWidgetCache[cacheKey]){
-    box.appendChild(newsPriceWidgetCache[cacheKey]);
-    return box;
-  }
-  const wrap = document.createElement('div');
-  wrap.className = 'news-price-embed';
-  for (const { symbol } of specs){
-    const col = document.createElement('div');
-    col.style.flex = specs.length > 1 ? '1 1 260px' : '1 1 100%';
-    // Only the "mini-symbol-overview" widget: it already shows name/price/%chg plus the chart in
-    // one piece. The "symbol-info" strip widget we used before is equity-only (EPS/market cap/P-E
-    // fields) — it silently falls back to a demo AAPL quote for any non-stock symbol, which is
-    // exactly the bug that made WHEAT/CORN/SBM look broken even for symbols that do carry data.
-    col.appendChild(tvWidget('mini-symbol-overview', symbol, 160, rangeDef.tv));
-    wrap.appendChild(col);
-  }
-  newsPriceWidgetCache[cacheKey] = wrap;
-  box.appendChild(wrap);
-  return box;
-}
+// Live market reference under the impact chart used to fall back to TradingView's free public embed
+// widgets (mini-symbol-overview, CAPITALCOM:DXY/VIX) for MACRO, which had no futures price series of
+// its own to merge into the net-impact chart the way WHEAT/CORN/SBM/FREIGHT do (Yahoo Finance
+// ZW=F/ZC=F/ZM=F/BZ=F via collector.py, drawn straight into newsChartSvg/renderNewsChart — see that
+// function). That whole TradingView-widget code path (NEWS_PRICE_SYMBOLS, NEWS_PRICE_EXTRA_LINK,
+// newsPriceWidgetCache, tvWidget(), renderNewsPriceWidget()) was MACRO's only caller, so it was
+// removed along with MACRO itself, 2026-09-17 (cost-reduction request) — every remaining product now
+// always has a real merged price line, no separate widget branch needed.
 
 // Breaking ticker: the newest breaking events of the last 48h, scrolling like a news channel.
 function renderNewsTicker(){
@@ -3558,7 +3491,7 @@ function renderNewsControls(){
 function renderNewsLane(lane){
   const box = document.createElement('div');
   box.className = 'news-lane-box';
-  let rows = newsForProduct(newsUI.product).filter(s => lane.cats.includes(s.category) && newsVisible(s));
+  let rows = newsForProduct(newsUI.product).filter(s => lane.match(s) && newsVisible(s));
   if (newsUI.minImpactOn) rows = rows.filter(s => s.impact >= NEWS_MIN_IMPACT);
   rows = rows.slice().sort((a, b) => b.ms - a.ms);
   const head = document.createElement('div');

@@ -110,17 +110,14 @@ GOOGLE_NEWS_QUERIES = [
     ('site:interfax.com OR site:interfax.com.ua grain OR wheat OR corn',                'en-US', 'US', 'US:en'),
     ('site:agroportal.ua',                                                              'uk', 'UA', 'UA:uk'),
     ('site:bfm.ru зерно OR пшеница OR экспорт',                                         'ru', 'RU', 'RU:ru'),
-    # ── MACRO: only what reaches the grain complex ──
+    # ── FREIGHT: dry-bulk rates, bunker fuel, vessel supply ──
+    # 2026-09-17, Mete: this used to be a broader "MACRO" section that also queried Brent/Fed-rate/
+    # dollar-index/VIX/Treasury-yield stories with no freight or grain angle at all — dropped entirely
+    # (see MACRO removal note by PRODUCTS below) since none of that reached the desk's actual cost
+    # base and it was pure classification spend. The two queries below stay: they're what actually
+    # feeds FREIGHT (dry-bulk rates, bunker cost), which the desk still tracks.
     ('"dry bulk" OR panamax OR supramax OR "Baltic Dry Index" OR "freight rates"',      'en-US', 'US', 'US:en'),
     ('"bunker fuel" price shipping freight',                                            'en-US', 'US', 'US:en'),
-    ('Brent crude OR "Fed rate" OR "dollar index" OR VIX commodities',                  'en-US', 'US', 'US:en'),
-    # 2026-09-15, README item 13: same 14 Eylül session, a textbook MACRO story (US 10-year Treasury
-    # yield above 5% for the first time since 2023, Nasdaq/S&P/Dow down, VIX +11%) never reached
-    # Firestore because nothing above contains "Treasury/yield/bond". Ruled OUT as the WHEAT crash's
-    # cause (SBM/CORN flat in the same window — see item 13), but it's a real, independent MACRO gap
-    # on its own and belongs in the desk's MACRO lane regardless.
-    ('"Treasury yield" OR "10-year yield" OR "10-year Treasury" OR "bond yield" OR "10-year note" OR "Treasury sell-off"',
-                                                                                         'en-US', 'US', 'US:en'),
 ]
 
 # Direct publisher RSS (addresses taken from the desk's Inoreader) and X bridges. A dead feed is
@@ -152,12 +149,19 @@ SITE_FEEDS: list[tuple[str, str]] = [
     ('FreightWaves',                  'https://www.freightwaves.com/news/feed'),
 ]
 
-PRODUCTS = ('SBM', 'CORN', 'WHEAT', 'FREIGHT', 'MACRO')
+# 2026-09-17, Mete: MACRO (Brent/energy, Fed rate, dollar index, VIX, FX) dropped entirely as a
+# product/category — cost-reduction request after seeing high per-run Claude token usage in the
+# GitHub Actions console. Rationale: FREIGHT already carries everything freight-cost-relevant
+# (dry-bulk rates, bunker fuel, canal/vessel disruption incl. Red Sea/Houthi under POLITICS), and
+# genuinely macro stories (Fed rate, DXY, VIX, Treasury yields) were an extra classified-and-stored
+# lane the desk doesn't act on day to day. World News (POLITICS) and Commodity News (AGRI + REPORTS,
+# renamed from "Crop News") now cover the four remaining products end to end.
+PRODUCTS = ('SBM', 'CORN', 'WHEAT', 'FREIGHT')
 # "Tight wire": stories the classifier scores below this impact are relevant but routine (daily
 # wraps, local anecdotes). They are NOT stored — the desk chose a short list over a full one.
 # Classification cost is unchanged; only Firestore and the page get quieter.
 NEWS_MIN_STORE = int(os.environ.get('NEWS_MIN_STORE', '30'))
-CATEGORIES = ('POLITICS', 'AGRI', 'REPORTS', 'MACRO')
+CATEGORIES = ('POLITICS', 'AGRI', 'REPORTS')
 EVENT_TYPES = ('WEATHER', 'SUPPLY DEMAND', 'TRADE FLOW', 'POLICY', 'GEOPOLITICS',
                'LOGISTICS', 'PRICE', 'DISEASE', 'ENERGY', 'FX', 'OTHER')
 
@@ -290,17 +294,17 @@ For every headline you receive, answer with ONE JSON object per headline inside 
 same order as the input, nothing else. Fields:
 
   "i"          : the input index (integer)
-  "product"    : one of "SBM","CORN","WHEAT","FREIGHT","MACRO","SKIP"
+  "product"    : one of "SBM","CORN","WHEAT","FREIGHT","SKIP"
                  SBM = soybeans / soybean meal / crush / soy oil complex / feed demand (hog, poultry herds)
                  FREIGHT = dry bulk rates, FFA, bunker fuel, canals, port congestion, vessel supply.
                            Red Sea / Suez Canal / Bab-el-Mandeb disruption (Houthi attacks, vessel
                            strikes, rerouting via the Cape of Good Hope) is FREIGHT — it raises transit
                            time and cost on Asia-bound trade lanes. Classify it as FREIGHT regardless of
                            country; do not SKIP it as "Yemen/Israel/Iran domestic news".
-                 MACRO = only macro that reaches the grain complex: Brent and natural gas (fertiliser,
-                         biofuel), Fed rate / dollar index (export competitiveness), BRL and ARS
-                         (farmer selling), VIX only when it is a broad commodity risk-off
-                 SKIP = everything else. SKIP ALSO when the story is:
+                 SKIP = everything else, including general macro (Brent/energy moves with no freight-
+                        cost angle, Fed rate, dollar index, VIX, bond yields, FX) that isn't about SBM/
+                        CORN/WHEAT/FREIGHT specifically — the desk no longer tracks a standalone macro
+                        lane (2026-09-17). SKIP ALSO when the story is:
                    - about a country that does not shape world grain supply or demand (Vietnam,
                      Indonesia, Malaysia, Philippines, Guatemala, Nigeria, Bangladesh, Sudan, Iran,
                      Sri Lanka ... and similar). Countries that DO count: USA, Brazil, Argentina,
@@ -350,12 +354,19 @@ same order as the input, nothing else. Fields:
                  big tenders, port disruptions are 55-90. Reserve 90+ for genuinely market-defining events.
   "confidence" : 0-100 integer, how sure you are of direction AND impact given only the headline.
   "country"    : ISO-3166 alpha-2 of the country the story is ABOUT ("" if global).
-  "category"   : the desk's reading lane, one of
+  "category"   : the desk's reading-lane TAG shown on each headline, one of
                  "POLITICS" = government policy, tariffs, export bans/duties, war, conflict, attacks, explosions, sanctions
                  "AGRI"     = crop, harvest, weather, yield, production, planting, good/excellent ratings, ending stocks, export numbers, feed demand
                  "REPORTS"  = a scheduled/official release or data from USDA, NOAA, CONAB, Bolsa de Cereales de Buenos Aires,
                               IKAR, SovEcon, IGC, FAO, ministry statistics — the source itself is an agency or its report
-                 "MACRO"    = freight, Brent/energy, Fed rate, dollar index, VIX, FX
+                 A FREIGHT-product story still needs one of the three categories above like any other —
+                 a canal/strait/port attack or an export-lane policy move is POLITICS, a dry-bulk rate
+                 or vessel-supply story with no political trigger is AGRI even though it isn't a crop —
+                 but note this only picks the TAG text on the row: 2026-09-17, index.html routes every
+                 FREIGHT story into the World News box regardless of this field (see NEWS_LANES there),
+                 since freight belongs in the broad/general lane, not mixed into the WHEAT/CORN/SBM
+                 "Commodity News" box. Get this field right anyway; other products still use it as
+                 written above to pick their box.
   "breaking"   : true ONLY when the headline itself reports a discrete NEW incident, decision, or data point that
                  just happened (port attack, sudden export ban, major crop-estimate shock, big surprise tender).
                  false for a recap / explainer / "state of play" piece that summarizes an ALREADY-ONGOING situation
@@ -456,7 +467,7 @@ def classify_mock(batch: list[dict]) -> list[dict]:
     out = []
     for i, s in enumerate(batch):
         h = int(s['id'][:8], 16)
-        prod = PRODUCTS[h % 4]
+        prod = PRODUCTS[h % len(PRODUCTS)]
         direction = ('BULLISH', 'BEARISH', 'NEUTRAL')[(h >> 4) % 3]
         out.append({
             'i': i, 'product': prod, 'direction': direction,
@@ -488,7 +499,10 @@ def sanitise(ans: dict, story: dict) -> dict | None:
         et = 'OTHER'
     cat = str(ans.get('category', '')).upper()
     if cat not in CATEGORIES:
-        cat = 'MACRO' if prod in ('FREIGHT', 'MACRO') else 'AGRI'
+        # 2026-09-17: MACRO category retired along with the MACRO product — any story (FREIGHT
+        # included) that didn't come back with a valid category falls back to AGRI, the desk's
+        # general commodity-fundamentals lane, same as before for everything that wasn't FREIGHT.
+        cat = 'AGRI'
     breaking = ans.get('breaking')
     breaking = breaking is True or str(breaking).lower() == 'true'
     duplicate = ans.get('duplicate')
@@ -936,8 +950,8 @@ def push_alerts(db, heads: list[dict]) -> int:
 # there's no way to draw our own line into it. Yahoo Finance's public chart endpoint (the same one
 # the popular `yfinance` Python package wraps) gives free, keyless daily OHLC for CBOT/ICE futures
 # continuous front-month contracts — fine for a daily-bar line chart, not meant for tick trading.
-# MACRO is deliberately left out of this (stays on its existing separate DXY/VIX TradingView
-# widgets, per Mete — no price history needed for those here).
+# MACRO (formerly its own product, with separate DXY/VIX TradingView widgets on the page) was
+# removed entirely 2026-09-17 — nothing here to update for it, this dict just never had it.
 #
 # NOT independently verified reachable from GitHub Actions as of this writing — this sandbox's own
 # network policy blocks both this endpoint and its usual fallback (stooq.com) for unrelated reasons
@@ -1135,7 +1149,7 @@ def push_morning_report(db, report: dict):
     if not tokens:
         return
     parts = [f"{p} {report['products'][p]['net']:+d}" for p in PRODUCTS
-              if p != 'MACRO' and report['products'].get(p, {}).get('n')]
+              if report['products'].get(p, {}).get('n')]
     body = ('Overnight: ' + ', '.join(parts)) if parts else 'No qualifying overnight events.'
     title = '☀️ Morning Report — CTE'
     msg = messaging.MulticastMessage(
