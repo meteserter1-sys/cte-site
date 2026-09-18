@@ -258,11 +258,24 @@ def collect() -> dict[str, dict]:
             '_publishers': {source.lower()},
         }
 
+    # 2026-09-18, Mete: was `[:40]`. Google News RSS search is a live "current top results" snapshot,
+    # not a stable chronological log — on a heavily-covered story (proven case: the Black Sea grain
+    # corridor story, 17 Sept), a burst of new coverage can push an older-but-still-relevant article
+    # (including from top-tier wires like the New York Times) out of the top 40 before our next run
+    # (~15-20 min later) ever sees it, and it's then gone for good — no retry, no backfill. Verified
+    # live: NYT's and World Grain's earliest pieces on that story never reached Firestore at all,
+    # while the desk's own trader (via X, unrelated to this feed) had it ~6.5h earlier. Raised to 100
+    # — Google's RSS search endpoint rarely returns much more than that per query anyway, so this
+    # isn't asking for more than Google gives us; it just stops us throwing away the tail of what it
+    # already returns. Classification cost is unaffected in practice: NEWS_MAX_NEW (default 80) caps
+    # new-story classification per run regardless of how many raw entries we collect, and real volume
+    # (2026-09-18 measurement: ~66 stored docs/day across ~80 runs/day) sits far below that ceiling —
+    # this recovers currently-lost headlines, it doesn't add classification spend.
     for q, hl, gl, ceid in GOOGLE_NEWS_QUERIES:
         fp = fetch_feed(gnews_url(q, hl, gl, ceid))
         if not fp:
             continue
-        for e in fp.entries[:40]:
+        for e in fp.entries[:100]:
             add(e, 'wire')
         print(f'  wire  {len(fp.entries):3d}  {q[:60]}')
 
@@ -301,6 +314,16 @@ same order as the input, nothing else. Fields:
                            strikes, rerouting via the Cape of Good Hope) is FREIGHT — it raises transit
                            time and cost on Asia-bound trade lanes. Classify it as FREIGHT regardless of
                            country; do not SKIP it as "Yemen/Israel/Iran domestic news".
+                           2026-09-18, Mete: BLACK SEA GRAIN CORRIDOR / EXPORT-LANE stories are NOT
+                           FREIGHT — do not classify them by the word "corridor" alone. A story about the
+                           Black Sea grain corridor / grain export lane / grain deal (Russia-Ukraine talks
+                           on safe passage, a corridor being opened, extended, suspended, attacked, mined,
+                           or a port/silo/vessel struck as part of that corridor) is fundamentally about
+                           how much WHEAT (or CORN, if the headline is specifically about corn cargoes)
+                           reaches the world market from Russia/Ukraine — classify it as WHEAT (or CORN),
+                           not FREIGHT. Reserve FREIGHT for the generic cost/transit-time story: a
+                           Red Sea/Suez rerouting, a bunker-fuel or charter-rate move, a canal traffic
+                           jam — none of which is about Black Sea grain export volume specifically.
                  SKIP = everything else, including general macro (Brent/energy moves with no freight-
                         cost angle, Fed rate, dollar index, VIX, bond yields, FX) that isn't about SBM/
                         CORN/WHEAT/FREIGHT specifically — the desk no longer tracks a standalone macro
@@ -319,6 +342,12 @@ same order as the input, nothing else. Fields:
                  CFR cost of that product UP (tighter supply, stronger demand, higher freight).
                  A record Brazilian crop is good news and BEARISH. An export ban is bad news and BULLISH.
                  Feed demand: herd expansion / recovery = BULLISH for SBM, disease losses / herd cuts = BEARISH.
+                 BLACK SEA GRAIN CORRIDOR (product WHEAT/CORN per the rule above): the corridor being
+                 opened, restored, extended, or a safe-passage/grain deal being agreed is BEARISH — it
+                 means MORE Russian/Ukrainian grain reaching the world market (more supply). The corridor
+                 being suspended, blocked, mined, or a vessel/port/silo tied to it being attacked is
+                 BULLISH — less grain reaching the market. Do not default this to FREIGHT-style "higher
+                 cost = bullish" reasoning; it is a supply-volume story like any other WHEAT/CORN item.
                  SYMMETRY RULE: crop/yield/rating headlines are two-sided. A record or rising crop/yield/
                  rating is BEARISH (more supply) — and its mirror image, a FALLING crop rating, a yield cut,
                  a downgraded harvest estimate, or a lower-than-expected production number, is BULLISH (less
