@@ -307,6 +307,9 @@
   .news-box-head{ display:flex; align-items:baseline; gap:8px; padding-bottom:6px; border-bottom:1px solid var(--border); margin-bottom:6px; }
   .news-box-title{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); font-weight:700; }
   .news-box-sub{ font-size:10.5px; color:var(--text-dim); flex:1; }
+  .news-box-toggle{ background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:12px; line-height:1; padding:2px 2px; }
+  .news-box-toggle:hover{ color:var(--accent); }
+  .news-events-list.collapsed{ display:none; }
   .news-box-count{ font-family:var(--mono); font-size:10.5px; color:var(--text-dim); }
   /* Trader News "+" button (2026-09-18) — sits left of the count, per Mete: "sağ üst köşesinde ama
      haber sayısının solunda". */
@@ -3044,9 +3047,15 @@ function renderNewsEvents(){
   const head = document.createElement('div');
   head.className = 'news-box-head';
   head.innerHTML = '<span class="news-box-title">Upcoming releases</span><span class="news-box-sub">Vietnam time · (~) approximate</span>';
+  const toggleBtn = document.createElement('button');
+  toggleBtn.type = 'button';
+  toggleBtn.className = 'news-box-toggle';
+  toggleBtn.setAttribute('aria-label', 'Show upcoming releases');
+  toggleBtn.textContent = '▸'; // collapsed by default (2026-09-18, Mete's request)
+  head.appendChild(toggleBtn);
   box.appendChild(head);
   const list = document.createElement('div');
-  list.className = 'news-events-list';
+  list.className = 'news-events-list collapsed';
   for (const e of upcomingEvents(6)){
     const hrs = (e.ms - Date.now()) / 3600000;
     const rel = hrs < 1 ? 'now' : hrs < 24 ? `in ${Math.round(hrs)} h` : `in ${Math.round(hrs / 24)} d`;
@@ -3057,6 +3066,11 @@ function renderNewsEvents(){
     list.appendChild(row);
   }
   box.appendChild(list);
+  toggleBtn.addEventListener('click', () => {
+    const collapsed = list.classList.toggle('collapsed');
+    toggleBtn.textContent = collapsed ? '▸' : '▾';
+    toggleBtn.setAttribute('aria-label', collapsed ? 'Show upcoming releases' : 'Hide upcoming releases');
+  });
   return box;
 }
 
