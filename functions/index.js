@@ -2,7 +2,7 @@
 // trader's WhatsApp text and/or attaches a screenshot/PDF; this function sends it to Claude,
 // holding the Anthropic API key server-side (it never reaches the browser), and returns a
 // classification draft. It does NOT write to Firestore — the page shows the draft, lets Mete
-// edit it, and only the "Ekle" click in index.html writes the doc (client-side, gated by the
+// edit it, and only the "Add" click in index.html writes the doc (client-side, gated by the
 // narrow `create` rule in firestore.rules). No dedup here on purpose: unlike collector.py's
 // automatic pipeline, Trader News is manual by design and the desk decided not to bother
 // checking it against already-known events for this lane.
@@ -14,7 +14,9 @@ const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
 // Kept in sync by hand with collector.py's PRODUCTS / CATEGORIES / EVENT_TYPES and with
 // index.html's TRADER_PRODUCTS / TRADER_CATEGORIES. If one changes, change all three.
-const PRODUCTS = ['WHEAT', 'CORN', 'SBM', 'FREIGHT'];
+// 2026-09-22, Mete: FREIGHT retired here too — the desk stopped tracking freight/shipping-cost news
+// entirely, automatic AND manual, so a Trader News item can no longer be tagged FREIGHT either.
+const PRODUCTS = ['WHEAT', 'CORN', 'SBM'];
 const CATEGORIES = ['POLITICS', 'AGRI', 'REPORTS'];
 const EVENT_TYPES = [
   'WEATHER', 'SUPPLY DEMAND', 'TRADE FLOW', 'POLICY', 'GEOPOLITICS',
@@ -36,16 +38,18 @@ classify_manual_news with:
   "headline"   : a short (max 100 chars) trading-desk-style headline summarizing the single most
                  important fact or argument in the message, in English, regardless of the
                  message's original language.
-  "product"    : one of "SBM","CORN","WHEAT","FREIGHT","SKIP"
+  "product"    : one of "SBM","CORN","WHEAT","SKIP"
                  SBM = soybeans / soybean meal / crush / soy oil complex / feed demand (hog, poultry herds)
-                 FREIGHT = dry bulk rates, FFA, bunker fuel, canals, port congestion, vessel supply,
-                           Red Sea / Suez / Bab-el-Mandeb disruption and rerouting.
-                 SKIP = not about SBM/CORN/WHEAT/FREIGHT specifically, or pure chit-chat with no
-                        market content, general macro with no freight-cost angle (Brent, Fed rate,
-                        DXY, VIX, bond yields), or a country that does not shape world grain supply
-                        or demand. Countries that DO count: USA, Brazil, Argentina, Russia, Ukraine,
-                        Kazakhstan, EU (France, Germany, Romania, Poland), Australia, Canada, India,
-                        China, Egypt, Turkey, Pakistan and the Black Sea region. Still return your
+                 2026-09-22, Mete: FREIGHT retired — dry bulk rates, FFA, bunker fuel, canals, port
+                 congestion, vessel supply, and Red Sea / Suez / Bab-el-Mandeb disruption/rerouting
+                 (including Houthi attacks) are now SKIP, full stop. The desk stopped tracking
+                 freight/shipping-cost news entirely, manual entries included.
+                 SKIP = not about SBM/CORN/WHEAT specifically (including former-FREIGHT topics above),
+                        or pure chit-chat with no market content, general macro with no grain-supply
+                        angle (Brent, Fed rate, DXY, VIX, bond yields), or a country that does not
+                        shape world grain supply or demand. Countries that DO count: USA, Brazil, Argentina,
+                        Russia, Ukraine, Kazakhstan, EU (France, Germany, Romania, Poland), Australia,
+                        Canada, India, China, Egypt, Turkey, Pakistan and the Black Sea region. Still return your
                         best-guess fields even when product is SKIP — the desk may override product
                         by hand and keep the rest.
   "direction"  : "BULLISH" | "BEARISH" | "NEUTRAL" — a PRICE ARGUMENT, not sentiment. BULLISH means
@@ -62,9 +66,8 @@ classify_manual_news with:
   "country"    : ISO-3166 alpha-2 of the country the message is mainly about ("" if global/none).
   "category"   : "POLITICS" (policy, tariffs, export bans/duties, war, conflict, attacks, sanctions),
                  "AGRI" (crop, harvest, weather, yield, production, planting, ratings, ending
-                 stocks, export numbers, feed demand, freight rates/vessel supply with no political
-                 trigger), or "REPORTS" (citing a scheduled/official release — USDA, NOAA, CONAB,
-                 Bolsa de Cereales, IKAR, SovEcon, IGC, FAO, ministry data).
+                 stocks, export numbers, feed demand), or "REPORTS" (citing a scheduled/official
+                 release — USDA, NOAA, CONAB, Bolsa de Cereales, IKAR, SovEcon, IGC, FAO, ministry data).
   "breaking"   : true ONLY if this reports a discrete NEW incident/decision/data point that just
                  happened. false for analysis, recaps, technical commentary, or restating an
                  already-ongoing situation, even with dramatic wording.
@@ -112,7 +115,7 @@ function sanitizeDraft(ans) {
   let eventType = String(ans.eventType || 'OTHER').toUpperCase();
   if (!EVENT_TYPES.includes(eventType)) eventType = 'OTHER';
   const breaking = ans.breaking === true || String(ans.breaking).toLowerCase() === 'true';
-  const headline = String(ans.headline || '').trim().slice(0, 180) || '(başlıksız)';
+  const headline = String(ans.headline || '').trim().slice(0, 180) || '(untitled)';
   return {
     headline,
     product,
