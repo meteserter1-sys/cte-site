@@ -91,11 +91,14 @@ GOOGLE_NEWS_QUERIES = [
     ('site:noticiasagricolas.com.br soja OR milho OR trigo',                            'pt-BR', 'BR', 'BR:pt-419'),
     # ── WORLD: war, politics, trade policy ──
     ('"Black Sea" grain OR "grain corridor" OR "grain exports" Ukraine Russia',         'en-US', 'US', 'US:en'),
-    # Broad on purpose: Houthi/Bab-el-Mandeb/Mocha are specific enough on their own that an AND
-    # with "vessel/attack" words was dropping real coverage ("Why Yemen's Mocha port matters for
-    # global trade" has neither) — 2026-09-11, after finding Houthi coverage missing entirely.
-    ('Houthi OR "Bab-el-Mandeb" OR "Bab al-Mandeb" OR "Mocha port" OR "Red Sea shipping" OR "Red Sea security" OR "Suez Canal"',
-                                                                                         'en-US', 'US', 'US:en'),
+    # 2026-09-22, Mete: the Houthi/Bab-el-Mandeb/Red Sea/Suez query (previously here) and the two
+    # dedicated FREIGHT queries + the FreightWaves site feed (previously in SITE_FEEDS below) were
+    # all removed — the desk stopped tracking freight/shipping-cost news entirely ("freight ile
+    # alakalı haber ve başlıkları takipten ve değerlendirmeden çıkart"). Freight is no longer a
+    # thing this collector collects, classifies or scores; only WHEAT/CORN/SBM stories are kept now
+    # (see PRODUCTS below). Brent crude itself is still tracked as a pure PRICE series (PRICE_SYMBOLS
+    # further down, via sync_prices()) so the page's FREIGHT tile can keep showing a Brent reference
+    # line — that price sync is independent of this news pipeline.
     # 2026-09-15, README item 12: the 14 Eylül WHEAT flash-crash (VN 22:00, ZW.Z26 -14c in 5 min)
     # was very likely Trump's "Ukraine has agreed not to hit Russian Energy targets" statement —
     # a Russia-Ukraine de-escalation headline with NO grain/export keyword in it at all, so it never
@@ -110,14 +113,6 @@ GOOGLE_NEWS_QUERIES = [
     ('site:interfax.com OR site:interfax.com.ua grain OR wheat OR corn',                'en-US', 'US', 'US:en'),
     ('site:agroportal.ua',                                                              'uk', 'UA', 'UA:uk'),
     ('site:bfm.ru зерно OR пшеница OR экспорт',                                         'ru', 'RU', 'RU:ru'),
-    # ── FREIGHT: dry-bulk rates, bunker fuel, vessel supply ──
-    # 2026-09-17, Mete: this used to be a broader "MACRO" section that also queried Brent/Fed-rate/
-    # dollar-index/VIX/Treasury-yield stories with no freight or grain angle at all — dropped entirely
-    # (see MACRO removal note by PRODUCTS below) since none of that reached the desk's actual cost
-    # base and it was pure classification spend. The two queries below stay: they're what actually
-    # feeds FREIGHT (dry-bulk rates, bunker cost), which the desk still tracks.
-    ('"dry bulk" OR panamax OR supramax OR "Baltic Dry Index" OR "freight rates"',      'en-US', 'US', 'US:en'),
-    ('"bunker fuel" price shipping freight',                                            'en-US', 'US', 'US:en'),
 ]
 
 # Direct publisher RSS (addresses taken from the desk's Inoreader) and X bridges. A dead feed is
@@ -140,23 +135,22 @@ SITE_FEEDS: list[tuple[str, str]] = [
     ('IGC via World Grain',           'https://www.world-grain.com/rss/topic/1069-igc-international-grains-council'),
     ('Karen Braun (X)',               'https://rss.xcancel.com/kannbwx/rss'),
     ('Andrey Sizov (X)',              'https://rss.xcancel.com/sizov_andre/rss'),
-    # FREIGHT — dedicated trade press; the Google News keyword queries above miss most of what
-    # these actually publish (dry-bulk rates, canal/strait disruption, vessel supply). Added
-    # 2026-09-11 after comparing against the desk's Inoreader: FreightWaves and Lloyd's List were
-    # both completely absent. FreightWaves' RSS is a general firehose (trucking included, not
-    # just ocean freight) — the classifier's own FREIGHT/SKIP rules do the filtering, same as
-    # every other broad source here.
-    ('FreightWaves',                  'https://www.freightwaves.com/news/feed'),
+    # FreightWaves (dedicated freight trade press) removed 2026-09-22 along with FREIGHT tracking
+    # generally — see the dated note by GOOGLE_NEWS_QUERIES above.
 ]
 
 # 2026-09-17, Mete: MACRO (Brent/energy, Fed rate, dollar index, VIX, FX) dropped entirely as a
 # product/category — cost-reduction request after seeing high per-run Claude token usage in the
-# GitHub Actions console. Rationale: FREIGHT already carries everything freight-cost-relevant
-# (dry-bulk rates, bunker fuel, canal/vessel disruption incl. Red Sea/Houthi under POLITICS), and
-# genuinely macro stories (Fed rate, DXY, VIX, Treasury yields) were an extra classified-and-stored
-# lane the desk doesn't act on day to day. World News (POLITICS) and Commodity News (AGRI + REPORTS,
-# renamed from "Crop News") now cover the four remaining products end to end.
-PRODUCTS = ('SBM', 'CORN', 'WHEAT', 'FREIGHT')
+# GitHub Actions console.
+# 2026-09-22, Mete: FREIGHT dropped too, same direction taken one step further — dry-bulk rates,
+# bunker fuel, canal/vessel disruption and Red Sea/Houthi/Suez coverage are no longer collected,
+# classified or scored at all ("freight haberi gelmesin, freight impact doğrusu olmasın, ... Houti
+# yemen gibi freight ile alakalı haber ve başlıkları takipten ve değerlendirmeden çıkart"). World
+# News (POLITICS) and Commodity News (AGRI + REPORTS) now cover only WHEAT/CORN/SBM end to end. The
+# 'FREIGHT' key survives in PRICE_SYMBOLS further down purely as a Brent-crude price reference for
+# the page's FREIGHT tile/header ("freight header kalsin ve Brent takibi icin") — that is a plain
+# price sync, unrelated to this news-product list.
+PRODUCTS = ('SBM', 'CORN', 'WHEAT')
 # "Tight wire": stories the classifier scores below this impact are relevant but routine (daily
 # wraps, local anecdotes). They are NOT stored — the desk chose a short list over a full one.
 # Classification cost is unchanged; only Firestore and the page get quieter.
@@ -307,27 +301,28 @@ For every headline you receive, answer with ONE JSON object per headline inside 
 same order as the input, nothing else. Fields:
 
   "i"          : the input index (integer)
-  "product"    : one of "SBM","CORN","WHEAT","FREIGHT","SKIP"
+  "product"    : one of "SBM","CORN","WHEAT","SKIP"
                  SBM = soybeans / soybean meal / crush / soy oil complex / feed demand (hog, poultry herds)
-                 FREIGHT = dry bulk rates, FFA, bunker fuel, canals, port congestion, vessel supply.
-                           Red Sea / Suez Canal / Bab-el-Mandeb disruption (Houthi attacks, vessel
-                           strikes, rerouting via the Cape of Good Hope) is FREIGHT — it raises transit
-                           time and cost on Asia-bound trade lanes. Classify it as FREIGHT regardless of
-                           country; do not SKIP it as "Yemen/Israel/Iran domestic news".
-                           2026-09-18, Mete: BLACK SEA GRAIN CORRIDOR / EXPORT-LANE stories are NOT
-                           FREIGHT — do not classify them by the word "corridor" alone. A story about the
-                           Black Sea grain corridor / grain export lane / grain deal (Russia-Ukraine talks
-                           on safe passage, a corridor being opened, extended, suspended, attacked, mined,
-                           or a port/silo/vessel struck as part of that corridor) is fundamentally about
-                           how much WHEAT (or CORN, if the headline is specifically about corn cargoes)
-                           reaches the world market from Russia/Ukraine — classify it as WHEAT (or CORN),
-                           not FREIGHT. Reserve FREIGHT for the generic cost/transit-time story: a
-                           Red Sea/Suez rerouting, a bunker-fuel or charter-rate move, a canal traffic
-                           jam — none of which is about Black Sea grain export volume specifically.
-                 SKIP = everything else, including general macro (Brent/energy moves with no freight-
-                        cost angle, Fed rate, dollar index, VIX, bond yields, FX) that isn't about SBM/
-                        CORN/WHEAT/FREIGHT specifically — the desk no longer tracks a standalone macro
-                        lane (2026-09-17). SKIP ALSO when the story is:
+                 2026-09-22, Mete: FREIGHT retired as a product entirely — dry-bulk rates, FFA,
+                 bunker fuel, canal/port congestion, vessel supply, and Red Sea / Suez Canal /
+                 Bab-el-Mandeb disruption (Houthi attacks, vessel strikes, rerouting via the Cape of
+                 Good Hope) are now SKIP, full stop — the desk stopped tracking freight/shipping-cost
+                 news ("freight ile alakalı haber ve başlıkları takipten ve değerlendirmeden çıkart").
+                 Do not classify a Houthi/Red Sea/Suez/bunker/dry-bulk story as anything but SKIP,
+                 even if it reads as market-moving for transit cost — that lane no longer exists here.
+                 BLACK SEA GRAIN CORRIDOR / EXPORT-LANE stories are the one case to still classify
+                 carefully: do not SKIP them just because they mention a "corridor" or shipping. A
+                 story about the Black Sea grain corridor / grain export lane / grain deal
+                 (Russia-Ukraine talks on safe passage, a corridor being opened, extended, suspended,
+                 attacked, mined, or a port/silo/vessel struck as part of that corridor) is
+                 fundamentally about how much WHEAT (or CORN, if the headline is specifically about
+                 corn cargoes) reaches the world market from Russia/Ukraine — classify it as WHEAT (or
+                 CORN), a supply-volume story, not a freight/transit-cost one.
+                 SKIP = everything else, including former-FREIGHT stories (see above) and general
+                        macro (Brent/energy moves, Fed rate, dollar index, VIX, bond yields, FX) that
+                        isn't about SBM/CORN/WHEAT specifically — the desk no longer tracks a
+                        standalone macro OR freight lane (2026-09-17 / 2026-09-22). SKIP ALSO when the
+                        story is:
                    - about a country that does not shape world grain supply or demand (Vietnam,
                      Indonesia, Malaysia, Philippines, Guatemala, Nigeria, Bangladesh, Sudan, Iran,
                      Sri Lanka ... and similar). Countries that DO count: USA, Brazil, Argentina,
@@ -388,14 +383,9 @@ same order as the input, nothing else. Fields:
                  "AGRI"     = crop, harvest, weather, yield, production, planting, good/excellent ratings, ending stocks, export numbers, feed demand
                  "REPORTS"  = a scheduled/official release or data from USDA, NOAA, CONAB, Bolsa de Cereales de Buenos Aires,
                               IKAR, SovEcon, IGC, FAO, ministry statistics — the source itself is an agency or its report
-                 A FREIGHT-product story still needs one of the three categories above like any other —
-                 a canal/strait/port attack or an export-lane policy move is POLITICS, a dry-bulk rate
-                 or vessel-supply story with no political trigger is AGRI even though it isn't a crop —
-                 but note this only picks the TAG text on the row: 2026-09-17, index.html routes every
-                 FREIGHT story into the World News box regardless of this field (see NEWS_LANES there),
-                 since freight belongs in the broad/general lane, not mixed into the WHEAT/CORN/SBM
-                 "Commodity News" box. Get this field right anyway; other products still use it as
-                 written above to pick their box.
+                 index.html routes POLITICS into the World News box and AGRI/REPORTS into Commodity
+                 News (see NEWS_LANES there) — get this field right, it decides which box the story
+                 lands in.
   "breaking"   : true ONLY when the headline itself reports a discrete NEW incident, decision, or data point that
                  just happened (port attack, sudden export ban, major crop-estimate shock, big surprise tender).
                  false for a recap / explainer / "state of play" piece that summarizes an ALREADY-ONGOING situation
@@ -528,9 +518,9 @@ def sanitise(ans: dict, story: dict) -> dict | None:
         et = 'OTHER'
     cat = str(ans.get('category', '')).upper()
     if cat not in CATEGORIES:
-        # 2026-09-17: MACRO category retired along with the MACRO product — any story (FREIGHT
-        # included) that didn't come back with a valid category falls back to AGRI, the desk's
-        # general commodity-fundamentals lane, same as before for everything that wasn't FREIGHT.
+        # 2026-09-17: MACRO category retired along with the MACRO product; 2026-09-22: FREIGHT
+        # retired too (see PRODUCTS above) — any story that didn't come back with a valid category
+        # falls back to AGRI, the desk's general commodity-fundamentals lane.
         cat = 'AGRI'
     breaking = ans.get('breaking')
     breaking = breaking is True or str(breaking).lower() == 'true'
@@ -991,7 +981,12 @@ PRICE_SYMBOLS = {
     'WHEAT':   'ZW=F',   # CBOT Wheat, continuous front-month
     'CORN':    'ZC=F',   # CBOT Corn
     'SBM':     'ZM=F',   # CBOT Soybean Meal
-    'FREIGHT': 'BZ=F',   # ICE Brent Crude — same proxy the page already used for FREIGHT via TradingView
+    # 2026-09-22, Mete: FREIGHT was retired as a NEWS product (see PRODUCTS above) — no more freight
+    # headlines are collected, classified or scored — but this price entry stays on purpose. It's
+    # what still feeds the page's FREIGHT tile/header with a pure Brent-crude reference line ("freight
+    # header kalsin ve Brent takibi icin ama impact yok"), independent of the news pipeline:
+    # sync_prices() below loops over this dict directly, not over PRODUCTS, so it keeps refreshing.
+    'FREIGHT': 'BZ=F',   # ICE Brent Crude
 }
 PRICE_REFRESH_HOURS = 4    # don't re-fetch the 5y DAILY series more often than this — daily bars
                            # barely move intraday anyway, keeps us a polite, low-volume caller for that
