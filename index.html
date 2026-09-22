@@ -2475,6 +2475,11 @@ const NEWS_QUERY_LIMIT = NEWS_HISTORY_DAYS * 120;
 // decide when to ding/desktop-notify for a live tab, a client-side mirror of the server's own
 // push-alert threshold, not a second source of truth for it.
 const NEWS_ALERT_IMPACT_JS = 75;
+// 2026-09-22, Mete: FREIGHT kept here on purpose even though collector.py no longer produces any
+// FREIGHT news docs ("freight header kalsin ve Brent takibi icin ama impact yok") — this list drives
+// the summary tile row, and FREIGHT's tile is what still carries the Brent-crude price reference
+// (see PRICE_PRODUCTS/PRICE_LABELS below). With no qualifying FREIGHT news left, its impact value
+// naturally reads "—" / "no qualifying event in Xh" — nothing else had to change to get "no impact".
 const NEWS_PRODUCTS = ['ALL', 'WHEAT', 'CORN', 'SBM', 'FREIGHT'];
 const NEWS_TZ = 'Asia/Ho_Chi_Minh';
 // Web-push public key from Firebase Console → Cloud Messaging → Web Push certificates.
@@ -2502,10 +2507,14 @@ const NEWS_LANES = [
   // BOTH `commodity` (nothing there checked `manual`) AND `trader`, so it rendered twice: once as
   // a real desk headline in Commodity News, once again in Trader News. Caught live on the first
   // manual entry (Hedgepoint soybean note) — it showed up duplicated in Commodity News.
-  { key: 'world',     title: 'World News',     sub: 'war · politics · trade policy · freight',
-    match: s => !s.manual && (s.category === 'POLITICS' || s.product === 'FREIGHT') },
+  // 2026-09-22, Mete: freight news retired entirely (collector.py no longer collects/classifies
+  // FREIGHT — see its PRODUCTS comment) — both lanes below dropped their FREIGHT-product carve-out;
+  // `product === 'FREIGHT'` can no longer occur going forward, so it would only ever match a stale
+  // pre-cutover doc still inside the retention window.
+  { key: 'world',     title: 'World News',     sub: 'war · politics · trade policy',
+    match: s => !s.manual && s.category === 'POLITICS' },
   { key: 'commodity', title: 'Commodity News', sub: 'crop · weather · reports · demand',
-    match: s => !s.manual && s.product !== 'FREIGHT' && (s.category === 'AGRI' || s.category === 'REPORTS') },
+    match: s => !s.manual && (s.category === 'AGRI' || s.category === 'REPORTS') },
   { key: 'trader',     title: 'Trader News',    sub: '',
     match: s => s.manual === true },
 ];
@@ -2524,6 +2533,10 @@ let newsUI = { product: 'ALL', search: '', chartProduct: 'WHEAT', minImpactOn: f
 // SAME chart at render time (see renderNewsChart) rather than being its own data model. Now covers
 // every remaining product — MACRO (which used a separate TradingView DXY/VIX widget instead) was
 // removed entirely 2026-09-17, so that widget code is gone too (see renderNewsBody).
+// 2026-09-22: FREIGHT stays in this list even though it's gone from the NEWS product list's actual
+// classification (collector.py's PRODUCTS) — this is a price-only feed (sync_prices() writes it
+// regardless of PRODUCTS), and it's the one thing keeping the FREIGHT tile/chart alive as a Brent
+// reference now that there's no freight news behind it.
 const PRICE_PRODUCTS = ['WHEAT', 'CORN', 'SBM', 'FREIGHT'];
 // Labels for the chart legend and tile — WHEAT/CORN/SBM show their own futures, but FREIGHT's price
 // line is Brent crude (BZ=F, see collector.py PRICE_SYMBOLS), used as a bunker-fuel/freight-cost
@@ -2905,7 +2918,12 @@ function renderMorningReportCard(){
   });
   return card;
 }
-const PRODUCTS_MORNING = ['WHEAT', 'CORN', 'SBM', 'FREIGHT'];
+// 2026-09-22: FREIGHT dropped from the morning report's per-product rows — collector.py's PRODUCTS
+// (which build_morning_report() loops over) no longer includes it, so r.products will never have a
+// FREIGHT key going forward; matching that here instead of showing a permanent "no qualifying event"
+// row for a product that's no longer scored. Brent price tracking itself is unaffected (see the main
+// tile/chart, PRICE_PRODUCTS below) — this only trims the morning-report card.
+const PRODUCTS_MORNING = ['WHEAT', 'CORN', 'SBM'];
 
 // Compact reading for the History snapshot: one number per product + the day's top events.
 function buildNewsSnapshot(){
@@ -3586,7 +3604,11 @@ function renderNewsLane(lane){
 //      trace anywhere.
 // firestore.rules has a matching narrow rule: authed users may CREATE a `news` doc only when
 // `manual === true`, and can't update/delete any doc (collector-written or their own) — see rules.
-const TRADER_PRODUCTS = ['WHEAT', 'CORN', 'SBM', 'FREIGHT', 'SKIP'];
+// 2026-09-22, Mete: FREIGHT dropped — manual Trader News entries can no longer be tagged FREIGHT
+// either, so a freight item can't sneak back into the impact tiles/lanes through this side door.
+// Kept in sync by hand with collector.py's PRODUCTS and functions/index.js's own PRODUCTS constant
+// (see that file's note) — if one changes, change all three.
+const TRADER_PRODUCTS = ['WHEAT', 'CORN', 'SBM', 'SKIP'];
 const TRADER_CATEGORIES = ['POLITICS', 'AGRI', 'REPORTS'];
 const TRADER_MAX_FILE_BYTES = 5 * 1024 * 1024; // 5MB — keeps the callable payload and Claude cost bounded
 
