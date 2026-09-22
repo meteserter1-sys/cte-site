@@ -91,6 +91,16 @@ GOOGLE_NEWS_QUERIES = [
     ('site:noticiasagricolas.com.br soja OR milho OR trigo',                            'pt-BR', 'BR', 'BR:pt-419'),
     # ── WORLD: war, politics, trade policy ──
     ('"Black Sea" grain OR "grain corridor" OR "grain exports" Ukraine Russia',         'en-US', 'US', 'US:en'),
+    # 2026-09-22, Mete caught this live: Russia's Sept-22 resolution zeroing out grain export duties
+    # through end-2026 was first reported by Bloomberg ~Sept 2 ("Russia Pauses Grain Export Duty
+    # through the end of 2026") — CTE never carried it; none of the queries above target "duty/tax"
+    # terms in English, so a non-Russian, non-site-locked story about it had nothing to match. The two
+    # Russian mid-September duty cuts (16/18 Sept) WERE caught, but only via the bfm.ru/Interfax
+    # site-locked queries below — a story from anywhere else (Bloomberg, Reuters, etc.) would have
+    # slipped through the same way. Added explicit duty/tax queries in both languages to close this.
+    ('"export duty" OR "export tax" OR "export levy" grain OR wheat OR corn OR barley Russia',
+                                                                                         'en-US', 'US', 'US:en'),
+    ('пошлина зерно OR пшеница OR кукуруза OR ячмень OR экспортная пошлина',            'ru', 'RU', 'RU:ru'),
     # 2026-09-22, Mete: the Houthi/Bab-el-Mandeb/Red Sea/Suez query (previously here) and the two
     # dedicated FREIGHT queries + the FreightWaves site feed (previously in SITE_FEEDS below) were
     # all removed — the desk stopped tracking freight/shipping-cost news entirely ("freight ile
@@ -1081,9 +1091,10 @@ def sync_prices(db):
 # already been written?" — idempotent against the exact trigger timing, safe to call on every run.
 VN_OFFSET_HOURS = 7                                                    # Vietnam is UTC+7, no DST
 MORNING_REPORT_HOUR = int(os.environ.get('NEWS_MORNING_HOUR_VN', '7')) # generate once per VN date
-MORNING_MIN_IMPACT = 45    # mirrors index.html's NEWS_MIN_IMPACT (2026-09-16: 50 -> 45, Mete's call
-MORNING_MIN_CONF = 50      # after the SBM overnight-move review) — "qualifying" must mean the same
-                            # thing here as it does on the page, or the two would quietly disagree.
+MORNING_MIN_IMPACT = 40    # mirrors index.html's NEWS_MIN_IMPACT (2026-09-16: 50 -> 45; 2026-09-22:
+MORNING_MIN_CONF = 50      # 45 -> 40, Mete's call to count impact-40 stories into the chart/tiles
+                            # too) — "qualifying" must mean the same thing here as it does on the
+                            # page, or the two would quietly disagree.
 MORNING_WINDOW_MS = 24 * 3600 * 1000
 
 

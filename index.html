@@ -2458,7 +2458,10 @@ const NEWS_META_REF = doc(db, 'news_meta', 'status');
 const NEWS_MUTED_REF = doc(db, 'news_meta', 'muted');
 const NEWS_FEEDBACK = collection(db, 'news_feedback');
 const NEWS_DEVICES = collection(db, 'news_devices');
-const NEWS_MIN_IMPACT = 45;
+// 2026-09-22, Mete: 45 -> 40 — wants impact-40 stories counted into the net-impact chart/tiles too.
+// Must stay in lockstep with collector.py's MORNING_MIN_IMPACT (same reasoning as the 2026-09-16
+// 50->45 move) or the page and the morning report would quietly disagree on what "qualifying" means.
+const NEWS_MIN_IMPACT = 40;
 const NEWS_MIN_CONF = 50;
 const NEWS_WINDOW_MS = 24 * 3600 * 1000; // only for buildNewsSnapshot()'s "top headlines of the day" list below — NOT the impact score, see NEWS_DECAY_* further down
 // 2026-09-14: raised 10 → 30 (Mete's request, to see the 1-month price/news correlation) — must
