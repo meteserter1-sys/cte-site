@@ -1591,40 +1591,87 @@ function renderComboTable(el, opts){
 // is what tells "tap" and "drag" apart. Dragging only ever reorders the chips (writes
 // state.monthOrder, shared by all 4 callers — Input/Vietnam/Malaysia/Indonesia all read the same
 // state) — it never changes which months are on/off.
+//
+// 2026-09-24 FOLLOW-UP FIX (same day, Mete: "surukle tasi birak biraz zor calisiyor cok smooth
+// degil"): the first version attached pointermove/pointerup listeners to the CHIP itself and leaned
+// on setPointerCapture() to keep receiving events once the finger/cursor moved off it. Reproduced
+// live on the site (Chrome DevTools drag simulation, then confirmed with an isolated test rig):
+// moving the chip mid-drag via wrap.insertBefore() — the exact thing every reorder does — silently
+// broke that capture. The chip would take ONE step, get stuck with the "dragging" (dimmed) look
+// forever, and never receive pointerup, so the reorder never committed. That's the "zor çalışıyor"
+// Mete hit. Fix: listen on `window` instead of the chip — window-level listeners get every
+// pointermove/pointerup regardless of capture, so a drag can never strand a chip again (capture is
+// still requested, best-effort, just no longer load-bearing). Also FLIP-animates the chips that get
+// pushed aside (150ms slide instead of an instant snap) so the reorder reads as smooth, not jumpy —
+// the "smooth değil" half of the same report.
 const MONTH_DRAG_THRESHOLD_PX = 6;
 function attachMonthDrag(chip, wrap, onTap){
   let startX = 0, startY = 0, dragging = false, pointerId = null;
 
-  // elementsFromPoint() is a pure geometry query — unlike e.target, it isn't redirected by the
-  // pointer capture we take below, so it keeps reporting whichever chip is actually under the
-  // finger/cursor even once the drag has moved off the chip that started it.
+  // elementsFromPoint() is a pure geometry query — independent of pointer capture/event targeting —
+  // so it keeps reporting whichever chip is actually under the finger/cursor at all times.
   const chipUnderPoint = (x, y) => document.elementsFromPoint(x, y)
     .find(n => n !== chip && n.classList && n.classList.contains('month-chip')) || null;
 
+  // FLIP (First-Last-Invert-Play): record every chip's position before the reorder, move the DOM
+  // node, then for every chip that shifted, snap it back to where it visually was via a transform
+  // and let it transition to the new spot — a 150ms slide instead of an instant jump.
+  const reorderTo = (target, before) => {
+    const siblings = Array.from(wrap.querySelectorAll('.month-chip'));
+    const firstRects = new Map(siblings.map(c => [c, c.getBoundingClientRect()]));
+    wrap.insertBefore(chip, before ? target : target.nextSibling);
+    siblings.forEach(c => {
+      if (c === chip) return; // the dragged chip already tracks the pointer directly
+      const first = firstRects.get(c);
+      const last = c.getBoundingClientRect();
+      const dx = first.left - last.left, dy = first.top - last.top;
+      if (!dx && !dy) return;
+      c.style.transition = 'none';
+      c.style.transform = `translate(${dx}px, ${dy}px)`;
+      requestAnimationFrame(() => {
+        c.style.transition = 'transform 150ms ease';
+        c.style.transform = '';
+      });
+    });
+  };
+
+  // Reorder checks are throttled to one per animation frame — pointermove can fire far faster than
+  // 60fps on a trackpad or a high-report-rate touchscreen, and running elementsFromPoint()+layout on
+  // every single event (the old behavior) was the other half of the "not smooth" feel.
+  let lastX = 0, lastY = 0, rafPending = false;
+  const applyPendingMove = () => {
+    rafPending = false;
+    const target = chipUnderPoint(lastX, lastY);
+    if (target && target.parentNode === wrap){
+      const rect = target.getBoundingClientRect();
+      reorderTo(target, lastX < rect.left + rect.width / 2);
+    }
+  };
+
   const onMove = (e) => {
     if (e.pointerId !== pointerId) return;
-    const x = e.clientX, y = e.clientY;
+    lastX = e.clientX; lastY = e.clientY;
     if (!dragging){
-      if (Math.abs(x - startX) < MONTH_DRAG_THRESHOLD_PX && Math.abs(y - startY) < MONTH_DRAG_THRESHOLD_PX) return;
+      if (Math.abs(lastX - startX) < MONTH_DRAG_THRESHOLD_PX && Math.abs(lastY - startY) < MONTH_DRAG_THRESHOLD_PX) return;
       dragging = true;
       chip.classList.add('dragging');
     }
     e.preventDefault();
-    const target = chipUnderPoint(x, y);
-    if (target && target.parentNode === wrap){
-      const rect = target.getBoundingClientRect();
-      const before = x < rect.left + rect.width / 2;
-      wrap.insertBefore(chip, before ? target : target.nextSibling);
-    }
+    if (!rafPending){ rafPending = true; requestAnimationFrame(applyPendingMove); }
   };
 
-  const onUp = (e) => {
-    if (e.pointerId !== pointerId) return;
-    chip.removeEventListener('pointermove', onMove);
-    chip.removeEventListener('pointerup', onUp);
-    chip.removeEventListener('pointercancel', onUp);
+  const cleanup = () => {
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onUp);
     chip.classList.remove('dragging');
+    try{ if (pointerId !== null) chip.releasePointerCapture(pointerId); }catch(err){ /* already released */ }
+  };
+
+  function onUp(e){
+    if (e.pointerId !== pointerId) return;
     const wasDragging = dragging;
+    cleanup();
     dragging = false; pointerId = null;
     if (wasDragging){
       // Commit the DOM order the drag left behind into state.monthOrder, then let every table
@@ -1635,17 +1682,19 @@ function attachMonthDrag(chip, wrap, onTap){
     } else {
       onTap();
     }
-  };
+  }
 
   chip.addEventListener('pointerdown', (e) => {
     if (e.button !== undefined && e.button !== 0) return; // left click only on desktop
     pointerId = e.pointerId;
-    startX = e.clientX; startY = e.clientY;
+    startX = e.clientX; startY = e.clientY; lastX = startX; lastY = startY;
     dragging = false;
-    chip.setPointerCapture(pointerId);
-    chip.addEventListener('pointermove', onMove);
-    chip.addEventListener('pointerup', onUp);
-    chip.addEventListener('pointercancel', onUp);
+    // Best-effort only now — see the 2026-09-24 note above for why event delivery below no longer
+    // depends on this succeeding.
+    try{ chip.setPointerCapture(pointerId); }catch(err){ /* fine without it, window listeners cover it */ }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
   });
 }
 
