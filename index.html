@@ -209,8 +209,13 @@
   .month-chip{
     padding:5px 10px; border-radius:14px; background:var(--panel); border:1px solid var(--border);
     color:var(--text-dim); font-size:12px; font-weight:600; cursor:pointer; user-select:none;
+    /* Press-hold + drag to reorder (2026-09-24, Mete's request, mouse on desktop / touch on mobile)
+       — touch-action:none hands the gesture entirely to our own pointer handler (attachMonthDrag)
+       instead of letting the browser start a page-scroll/zoom on a press-and-move over a chip. */
+    touch-action:none;
   }
   .month-chip.on{ background:var(--accent-soft); color:var(--accent); border-color:var(--accent); }
+  .month-chip.dragging{ opacity:.55; box-shadow:0 3px 10px rgba(0,0,0,.35); position:relative; z-index:2; }
   .month-reset{
     padding:5px 10px; border-radius:14px; background:transparent; border:1px dashed var(--border);
     color:var(--text-dim); font-size:11.5px; cursor:pointer;
@@ -268,6 +273,17 @@
   .news-zero{ stroke:var(--text-dim); stroke-width:1; stroke-dasharray:4 4; }
   .news-line{ fill:none; stroke:#5eb3f6; stroke-width:1.8; stroke-linejoin:round; stroke-linecap:round; }
   .news-price-line{ fill:none; stroke:var(--accent); stroke-width:1.6; stroke-linejoin:round; stroke-linecap:round; }
+  /* Per-headline dots on the net-impact line (2026-09-23, Mete: "impactin olduğu saat doğru da ufak
+     nokta olarak belirsin. Bullish ise yesil nokta, bearish ise kırmızı nokta. Noktaya basinca haber
+     açılsın") — one small dot per qualifying story, sitting exactly on the net-impact line at that
+     story's own timestamp, colored by direction, wrapped in a real <a> so a click opens the source
+     link in a new tab. See newsMarkersFor()/newsChartSvg() below. */
+  .news-marker{ stroke:var(--panel); stroke-width:1; cursor:pointer; }
+  .news-marker-bull{ fill:var(--good); }
+  .news-marker-bear{ fill:var(--bad); }
+  .news-marker-neu{ fill:var(--text-dim); }
+  .news-marker-link{ cursor:pointer; }
+  .news-marker-link:hover .news-marker{ stroke:var(--text); stroke-width:1.5; }
   /* merged net-impact + price chart: hover guide line + tooltip (2026-09-14) */
   .news-svg-wrap{ position:relative; cursor:crosshair; }
   .news-hover-line{ position:absolute; top:10px; bottom:24px; width:1px; background:var(--text-dim); opacity:.6; pointer-events:none; }
@@ -534,6 +550,11 @@ const defaultState = {
     indonesia: [null,null,null,null,null,null, null,null,null,null,null,null]
   },
   visibleMonths: null,
+  // Custom left-to-right order of all 12 months for the Vietnam/Malaysia/Indonesia/Input tables'
+  // month-filter chips (2026-09-24, Mete: drag Jan to sit after Dec so a wrapped-year window like
+  // Sep→Jan reads in the right order). null = natural Jan→Dec order. See monthOrderArr()/
+  // visibleMonthIndices() below and the drag handler in attachMonthDrag().
+  monthOrder: null,
 
   // Malaysia: FOB and Futures are shared with Vietnam (same market). Freight and
   // corn sale price are destination-specific, matching the source file.
@@ -573,17 +594,12 @@ const defaultState = {
     balToSellCorn: [null,null,null,null,null,null, null,null,null,null,null,null],
     avgSoldPriceSBM:  [null,null,null,null,null,null, null,null,null,null,null,null],
     avgSoldPriceCorn: [null,null,null,null,null,null, null,null,null,null,null,null]
-  },
-
-  // FFA reference panel — informational, does not feed the combo engine.
-  // Periods match the source file exactly (not tied to the 12-month grid).
-  ffa: {
-    labels: ['Jul', 'Aug', "Q3'26", "Q4'26", 'Brent Crude'],
-    t1:    [20300, 19800, 20083, 19650, 84.33],
-    today: [20125, 19575, 19775, 19500, 85.85],
-    voyDays: 90,
-    tonnage: 73500
   }
+  // FFA reference panel removed from Input entirely, 2026-09-24 (Mete: "ffa i komple inputtan
+  // cikart") — used to live here (labels/t1/today/voyDays/tonnage), fed only buildFFATable() below
+  // the Vietnam/Malaysia/Indonesia freight tables on the Input tab, purely informational, never read
+  // by the combo engine or by news/collector.py. buildFFATable() and its 3-line call site in
+  // renderGlobalInputs() were removed along with it — nothing else in the file referenced state.ffa.
 };
 
 let state = JSON.parse(JSON.stringify(defaultState));
@@ -595,9 +611,26 @@ function defaultVisibleMonths(){
   return arr;
 }
 
+// All 12 months in Mete's own drag-reordered sequence (state.monthOrder), falling back to plain
+// Jan→Dec when he hasn't customized it yet (or the stored array got corrupted somehow — must be a
+// permutation of all 12 indices, otherwise ignore it rather than let a table silently drop/duplicate
+// a column).
+function defaultMonthOrder(){ return Array.from({ length: 12 }, (_, i) => i); }
+function monthOrderArr(){
+  const o = state.monthOrder;
+  if (!Array.isArray(o) || o.length !== 12 || new Set(o).size !== 12) return defaultMonthOrder();
+  return o;
+}
+
 function visibleMonthIndices(){
   const set = new Set(state.visibleMonths || defaultVisibleMonths());
-  return Array.from(set).sort((a, b) => a - b); // natural Jan→Dec order
+  // 2026-09-24, Mete: columns now follow his own drag-reordered month sequence (monthOrderArr())
+  // instead of always being force-sorted Jan→Dec — that old sort was actively wrong whenever the
+  // visible window wrapped year-end (e.g. Sep-Oct-Nov-Dec-Jan): it put Jan back in FRONT of Sep,
+  // even though Jan is chronologically the month that comes right after Dec. Dragging Jan to sit
+  // after Dec in the filter chips (any of the 4 tabs — they share this one state) now fixes the
+  // column order everywhere at once, since every table reads this same function.
+  return monthOrderArr().filter(i => set.has(i));
 }
 
 function spreadSBM(i){
@@ -1209,61 +1242,10 @@ function balColor(v){
   return '';
 }
 
-function buildFFATable(){
-  const cols = state.ffa.labels;
-  const wrap = document.createElement('div');
-  wrap.className = 'scrollx';
-  const table = document.createElement('table');
-  table.className = 'grid-table';
-
-  const thead = document.createElement('tr');
-  thead.innerHTML = '<th class="rowlabel"></th>' + cols.map(c => `<th>${c}</th>`).join('');
-  table.appendChild(thead);
-
-  function editRow(label, arr){
-    const tr = document.createElement('tr');
-    const tdLabel = document.createElement('td');
-    tdLabel.className = 'rowlabel';
-    tdLabel.textContent = label;
-    tr.appendChild(tdLabel);
-    cols.forEach((c, idx) => {
-      const td = document.createElement('td');
-      td.appendChild(numInput(arr[idx], v => { arr[idx] = (v === null ? 0 : v); }));
-      tr.appendChild(td);
-    });
-    table.appendChild(tr);
-  }
-
-  function readonlyRow(label, getVal){
-    const tr = document.createElement('tr');
-    let html = `<td class="rowlabel" style="color:var(--text-dim); font-size:11.5px;">${label}</td>`;
-    cols.forEach((c, idx) => {
-      const v = getVal(idx);
-      html += `<td style="font-family:var(--mono); color:var(--text-dim);">${v === null ? '—' : v.toFixed(2)}</td>`;
-    });
-    tr.innerHTML = html;
-    table.appendChild(tr);
-  }
-
-  editRow('FFA T-1', state.ffa.t1);
-  editRow('FFA Today', state.ffa.today);
-  readonlyRow('Change', idx => state.ffa.today[idx] - state.ffa.t1[idx]);
-  readonlyRow('FRT / mt', idx => idx === 4 ? null : ((state.ffa.today[idx] - state.ffa.t1[idx]) * state.ffa.voyDays / state.ffa.tonnage));
-
-  wrap.appendChild(table);
-  return wrap;
-}
-
-function singleValueRow(label, getVal, setVal){
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'display:flex; align-items:center; gap:10px; margin:8px 0 4px;';
-  const lbl = document.createElement('span');
-  lbl.textContent = label;
-  lbl.style.cssText = 'color:var(--text-dim); font-size:12.5px;';
-  wrap.appendChild(lbl);
-  wrap.appendChild(numInput(getVal(), v => setVal(v === null ? 0 : v)));
-  return wrap;
-}
+// buildFFATable() and singleValueRow() (the FFA reference panel — labels/T-1/Today/Change/FRT-per-mt,
+// Voy Days, Tonnage) were removed from the Input tab entirely, 2026-09-24 (Mete: "ffa i komple
+// inputtan cikart"). Their only caller was the "5. FFA" section in renderGlobalInputs(), removed
+// below along with them; state.ffa was purely their data source and is gone too — see defaultState.
 
 function renderGlobalInputs(){
   const el = document.getElementById('inputtab');
@@ -1318,11 +1300,9 @@ function renderGlobalInputs(){
   el.appendChild(buildReadonlyRow('→ 3M2C (from 5C ARG)', i => getIDFreight('3M2C', i)));
   el.appendChild(buildReadonlyRow('→ 2M3C (from 5C ARG)', i => getIDFreight('2M3C', i)));
 
-  // 5. FFA
-  el.appendChild(sectionTitle('FFA'));
-  el.appendChild(buildFFATable());
-  el.appendChild(singleValueRow('Voy Days', () => state.ffa.voyDays, v => state.ffa.voyDays = v));
-  el.appendChild(singleValueRow('Tonnage', () => state.ffa.tonnage, v => state.ffa.tonnage = v));
+  // (Section 5 used to be FFA here — removed entirely 2026-09-24, see the comment above
+  // renderGlobalInputs() for why. Section numbering below kept as-is rather than renumbered, so a
+  // diff against the old file stays easy to follow.)
 
   // 6. Futures & Spread
   el.appendChild(sectionTitle('Futures & Spread — SBM'));
@@ -1603,16 +1583,83 @@ function renderComboTable(el, opts){
   }
 }
 
+// Press-hold + drag a month chip left/right to reorder it (2026-09-24, Mete's request — "Jan'ı
+// basılı tutup Dec'in sağına atabileyim, takip eden ayı doğru sırada görmek için", works the same
+// with mouse left-click-drag on desktop and touch press-hold-drag on mobile). Pointer Events unify
+// both input types, so one handler covers all of it. A plain tap/click with no real movement still
+// falls through to `onTap` (the existing on/off toggle) exactly as before — MONTH_DRAG_THRESHOLD_PX
+// is what tells "tap" and "drag" apart. Dragging only ever reorders the chips (writes
+// state.monthOrder, shared by all 4 callers — Input/Vietnam/Malaysia/Indonesia all read the same
+// state) — it never changes which months are on/off.
+const MONTH_DRAG_THRESHOLD_PX = 6;
+function attachMonthDrag(chip, wrap, onTap){
+  let startX = 0, startY = 0, dragging = false, pointerId = null;
+
+  // elementsFromPoint() is a pure geometry query — unlike e.target, it isn't redirected by the
+  // pointer capture we take below, so it keeps reporting whichever chip is actually under the
+  // finger/cursor even once the drag has moved off the chip that started it.
+  const chipUnderPoint = (x, y) => document.elementsFromPoint(x, y)
+    .find(n => n !== chip && n.classList && n.classList.contains('month-chip')) || null;
+
+  const onMove = (e) => {
+    if (e.pointerId !== pointerId) return;
+    const x = e.clientX, y = e.clientY;
+    if (!dragging){
+      if (Math.abs(x - startX) < MONTH_DRAG_THRESHOLD_PX && Math.abs(y - startY) < MONTH_DRAG_THRESHOLD_PX) return;
+      dragging = true;
+      chip.classList.add('dragging');
+    }
+    e.preventDefault();
+    const target = chipUnderPoint(x, y);
+    if (target && target.parentNode === wrap){
+      const rect = target.getBoundingClientRect();
+      const before = x < rect.left + rect.width / 2;
+      wrap.insertBefore(chip, before ? target : target.nextSibling);
+    }
+  };
+
+  const onUp = (e) => {
+    if (e.pointerId !== pointerId) return;
+    chip.removeEventListener('pointermove', onMove);
+    chip.removeEventListener('pointerup', onUp);
+    chip.removeEventListener('pointercancel', onUp);
+    chip.classList.remove('dragging');
+    const wasDragging = dragging;
+    dragging = false; pointerId = null;
+    if (wasDragging){
+      // Commit the DOM order the drag left behind into state.monthOrder, then let every table
+      // that reads it (visibleMonthIndices(), used by all 4 tabs) catch up via a normal renderAll().
+      state.monthOrder = Array.from(wrap.querySelectorAll('.month-chip')).map(c => parseInt(c.dataset.month, 10));
+      scheduleSave();
+      renderAll();
+    } else {
+      onTap();
+    }
+  };
+
+  chip.addEventListener('pointerdown', (e) => {
+    if (e.button !== undefined && e.button !== 0) return; // left click only on desktop
+    pointerId = e.pointerId;
+    startX = e.clientX; startY = e.clientY;
+    dragging = false;
+    chip.setPointerCapture(pointerId);
+    chip.addEventListener('pointermove', onMove);
+    chip.addEventListener('pointerup', onUp);
+    chip.addEventListener('pointercancel', onUp);
+  });
+}
+
 function renderMonthFilter(el){
   const wrap = document.createElement('div');
   wrap.className = 'month-filter';
   const visible = new Set(state.visibleMonths || defaultVisibleMonths());
 
-  MONTHS_FULL.forEach((m, i) => {
+  monthOrderArr().forEach(i => {
     const chip = document.createElement('div');
     chip.className = 'month-chip' + (visible.has(i) ? ' on' : '');
-    chip.textContent = m;
-    chip.addEventListener('click', () => {
+    chip.textContent = MONTHS_FULL[i];
+    chip.dataset.month = i;
+    attachMonthDrag(chip, wrap, () => {
       const set = new Set(state.visibleMonths || defaultVisibleMonths());
       if (set.has(i)){
         if (set.size > 1) set.delete(i); // keep at least one month selected
@@ -1625,6 +1672,19 @@ function renderMonthFilter(el){
     });
     wrap.appendChild(chip);
   });
+
+  // Unused-until-now CSS (.month-reset) already had a spot for exactly this — reset the drag order
+  // back to plain Jan→Dec without touching which months are visible.
+  const reset = document.createElement('div');
+  reset.className = 'month-reset';
+  reset.textContent = '↺ order';
+  reset.title = 'Reset month order back to Jan → Dec';
+  reset.addEventListener('click', () => {
+    state.monthOrder = null;
+    scheduleSave();
+    renderAll();
+  });
+  wrap.appendChild(reset);
 
   el.appendChild(wrap);
 }
@@ -1805,6 +1865,10 @@ function escapeHtml(s){
   div.textContent = s;
   return div.innerHTML;
 }
+// Same as escapeHtml() but also escapes double quotes, so the result is safe to drop straight into
+// a quoted HTML/SVG attribute (href="...", not just text content) — used by the chart's per-headline
+// marker dots (2026-09-23) to build clickable <a href="..."> links from story URLs.
+function escapeAttr(s){ return escapeHtml(s).replace(/"/g, '&quot;'); }
 
 async function logTodaySnapshot(){
   const noteInput = document.getElementById('historyNoteInput');
@@ -2730,6 +2794,27 @@ function newsSmoothSeries(product, xMin, xMax){
   return pts;
 }
 
+// Per-headline dots for the chart (2026-09-23, Mete: "impact doğrusunda impactin oldu saat doğru da
+// ufak nokta olarak belirsin. Bullish ise yesil nokta, bearish İse kırmızı nokta. Noktaya basinca
+// haber açılsın. Link bagla.") — one marker per qualifying story whose own timestamp falls inside the
+// visible [xMin, xMax] window, positioned at the net-impact LINE's own value at that exact moment
+// (not the story's own impact score) so the dot sits exactly on the line, the same way newsSmoothSeries
+// computes each grid point — just evaluated at the story's own ms instead of on a regular grid.
+function newsMarkersFor(product, xMin, xMax){
+  const asc = newsForProduct(product).filter(newsQualifies).slice().sort((a, b) => a.ms - b.ms);
+  const out = [];
+  let lo = 0;
+  for (let i = 0; i < asc.length; i++){
+    const s = asc[i];
+    if (s.ms < xMin || s.ms > xMax) continue;
+    while (lo < asc.length && s.ms - asc[lo].ms > NEWS_DECAY_LOOKBACK_MS) lo++;
+    let net = 0;
+    for (let k = lo; k <= i; k++) net += newsSigned(asc[k]) * newsDecayWeight(s.ms - asc[k].ms);
+    out.push({ ms: s.ms, net, direction: s.direction, impact: s.impact, url: s.url, headline: s.headline });
+  }
+  return out;
+}
+
 // ── Price-anomaly alert ("flash haber" safety net, README item 14B) ─────────────────────────────
 // 2026-09-15, Mete: "%1 artar veya azalırsa sistem alarm versin." No matter how far the collector's
 // source list grows (items 12/13/14A), some flash headline will always slip through uncollected —
@@ -3104,15 +3189,19 @@ function renderNewsEvents(){
 // `{ html, meta }`: meta carries just enough of the pixel<->time mapping for the caller to build a
 // mouse-hover tooltip without re-deriving it (see renderNewsChart) — no closures survive an
 // innerHTML string, so the scale has to be handed back explicitly instead.
-function newsChartSvg(pts, priceBars, xMin, xMax, width, height){
+function newsChartSvg(pts, priceBars, xMin, xMax, width, height, markers){
   const hasPrice = Array.isArray(priceBars) && priceBars.length >= 2;
   const padL = 44, padR = hasPrice ? 50 : 12, padT = 10, padB = 24;
   const w = width - padL - padR, h = height - padT - padB;
   if (pts.length < 2 && !hasPrice){
     return { html: `<div class="note">Not enough qualifying events yet to draw the net-impact line (needs impact ≥ ${NEWS_MIN_IMPACT} and confidence ≥ ${NEWS_MIN_CONF}).</div>`, meta: null };
   }
-  let yMin = Math.min(0, ...pts.map(p => p.net)), yMax = Math.max(0, ...pts.map(p => p.net));
-  if (!pts.length){ yMin = -50; yMax = 50; }
+  const mk = Array.isArray(markers) ? markers : [];
+  // Marker values feed into the y-range too (2026-09-23) — on a coarse grid (long ranges resample
+  // at 4h/1d/3d steps, see newsSmoothStep) a single headline's spike can sit between two grid points
+  // and land outside the range the line's own sampled points would otherwise imply.
+  let yMin = Math.min(0, ...pts.map(p => p.net), ...mk.map(m => m.net)), yMax = Math.max(0, ...pts.map(p => p.net), ...mk.map(m => m.net));
+  if (!pts.length && !mk.length){ yMin = -50; yMax = 50; }
   if (yMax === yMin){ yMax += 50; yMin -= 50; }
   const span = yMax - yMin; yMax += span * 0.1; yMin -= span * 0.1;
   const X = ms => padL + (xMax === xMin ? w / 2 : (ms - xMin) / (xMax - xMin) * w);
@@ -3159,6 +3248,19 @@ function newsChartSvg(pts, priceBars, xMin, xMax, width, height){
     netDot = `<circle cx="${X(last.ms).toFixed(1)}" cy="${Y(last.net).toFixed(1)}" r="3.5" fill="${lastColor}"/>`;
   }
 
+  // Per-headline marker dots (2026-09-23, Mete's request) — small clickable circle at each qualifying
+  // story's own timestamp, sitting on the net-impact line, green for BULLISH / red for BEARISH.
+  // Wrapped in a real SVG <a> so a click opens the story's source URL in a new tab; an <svg:title>
+  // gives a native hover tooltip (time · direction · impact · headline) for free, no extra JS needed.
+  const markerEls = mk.map(m => {
+    const cx = X(m.ms).toFixed(1), cy = Y(m.net).toFixed(1);
+    const cls = m.direction === 'BULLISH' ? 'news-marker-bull' : m.direction === 'BEARISH' ? 'news-marker-bear' : 'news-marker-neu';
+    const arrow = m.direction === 'BULLISH' ? '▲' : m.direction === 'BEARISH' ? '▼' : '•';
+    const tipText = escapeHtml(`${newsFmtTime(m.ms)} · ${arrow} ${m.impact} · ${m.headline || ''}`);
+    const dot = `<circle cx="${cx}" cy="${cy}" r="4" class="news-marker ${cls}"><title>${tipText}</title></circle>`;
+    return m.url ? `<a href="${escapeAttr(m.url)}" target="_blank" rel="noopener" class="news-marker-link">${dot}</a>` : dot;
+  }).join('');
+
   let priceLine = '', priceDot = '', priceAxis = '', priceCurrent = '';
   if (hasPrice){
     const dp = priceBars.map((b, i) => (i ? ' L' : 'M') + X(b.t).toFixed(1) + ' ' + Yp(b.c).toFixed(1)).join('');
@@ -3188,6 +3290,7 @@ function newsChartSvg(pts, priceBars, xMin, xMax, width, height){
     ${ticks.join('')}
     ${netLine}
     ${priceLine}
+    ${markerEls}
     ${netDot}
     ${priceDot}
     ${priceAxis}
@@ -3355,6 +3458,8 @@ function renderNewsChart(){
   const xMax = Date.now();
   const xMin = xMax - rangeDef.days * 24 * 3600 * 1000;
   const shownPts = newsSmoothSeries(newsUI.chartProduct, xMin, xMax);
+  // Per-headline dots for the visible window (2026-09-23, Mete's request) — see newsMarkersFor().
+  const shownMarkers = newsMarkersFor(newsUI.chartProduct, xMin, xMax);
   const rangeNote = '';
   // Real price history from Firestore prices/{product} (collector.py's sync_prices()) — every
   // remaining product has one now that MACRO (which used a separate TradingView DXY/VIX widget
@@ -3386,7 +3491,7 @@ function renderNewsChart(){
   svgWrap.className = 'news-svg-wrap';
   const width = Math.max(320, Math.min(900, (document.getElementById('newstab')?.clientWidth || 360) - 24));
   const height = 150;
-  const { html, meta } = newsChartSvg(shownPts, priceBars, xMin, xMax, width, height);
+  const { html, meta } = newsChartSvg(shownPts, priceBars, xMin, xMax, width, height, shownMarkers);
   svgWrap.innerHTML = html;
   box.appendChild(svgWrap);
 
