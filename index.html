@@ -220,6 +220,30 @@
     padding:5px 10px; border-radius:14px; background:transparent; border:1px dashed var(--border);
     color:var(--text-dim); font-size:11.5px; cursor:pointer;
   }
+  /* ── VN Supply tab (2026-09-25) ───────────────────────────────────────── */
+  .vns-meta{ display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; color:var(--text-dim); font-size:11.5px; line-height:1.5; margin-bottom:14px; align-items:center; }
+  .vns-meta b{ color:var(--text); }
+  .news-tile.accent .news-tile-val{ color:var(--accent); }
+  .vns-chips{ display:flex; flex-wrap:wrap; gap:6px; margin:14px 0; }
+  .vns-chip{
+    padding:5px 10px; border-radius:14px; background:var(--panel); border:1px solid var(--border);
+    color:var(--text-dim); font-size:12px; font-weight:600; cursor:pointer; user-select:none;
+  }
+  .vns-chip.on{ background:var(--accent-soft); color:var(--accent); border-color:var(--accent); }
+  .vns-chart-wrap{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px 14px 6px; margin-bottom:16px; }
+  .vns-chart-legend{ display:flex; gap:16px; font-size:11px; color:var(--text-dim); margin-bottom:2px; }
+  .vns-chart-legend span{ display:inline-flex; align-items:center; gap:5px; }
+  .vns-chart-legend i{ width:9px; height:9px; border-radius:2px; display:inline-block; }
+  .vns-bar-arrived{ fill:var(--good); }
+  .vns-bar-onway{ fill:var(--accent); }
+  .vns-bar-cur{ stroke:var(--text); stroke-width:1; stroke-dasharray:2,2; }
+  .vns-pivot td, .vns-pivot th{ white-space:nowrap; }
+  .vns-pivot .rowlabel{ text-align:left; }
+  .vns-pivot-total-row td, .vns-pivot-total-row th{ background:var(--panel-2); font-weight:700; }
+  .vns-cell-arrived{ color:var(--good); font-family:var(--mono); }
+  .vns-cell-onway{ color:var(--accent); font-family:var(--mono); }
+  .vns-cell-onway.zero{ color:var(--text-dim); opacity:.4; }
+  .vns-import-row{ display:flex; gap:10px; margin:18px 0 4px; flex-wrap:wrap; align-items:center; }
   /* ── News tab ─────────────────────────────────────────────────────────── */
   @media (max-width:560px){ .tab{ font-size:11.5px; padding:8px 4px; } }
   .news-clocks{ display:grid; grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)); gap:6px; margin-bottom:10px; }
@@ -445,6 +469,7 @@
 
 <div class="tabs">
   <div class="tab active" data-tab="newstab">News</div>
+  <div class="tab" data-tab="vnsupply">VN Supply</div>
   <div class="tab" data-tab="vietnam">Vietnam</div>
   <div class="tab" data-tab="malaysia">Malaysia</div>
   <div class="tab" data-tab="indonesia">Indonesia</div>
@@ -454,6 +479,7 @@
 
 <main>
   <section id="newstab" class="active"></section>
+  <section id="vnsupply"></section>
   <section id="vietnam"></section>
   <section id="malaysia"></section>
   <section id="indonesia"></section>
@@ -594,12 +620,36 @@ const defaultState = {
     balToSellCorn: [null,null,null,null,null,null, null,null,null,null,null,null],
     avgSoldPriceSBM:  [null,null,null,null,null,null, null,null,null,null,null,null],
     avgSoldPriceCorn: [null,null,null,null,null,null, null,null,null,null,null,null]
-  }
+  },
   // FFA reference panel removed from Input entirely, 2026-09-24 (Mete: "ffa i komple inputtan
   // cikart") — used to live here (labels/t1/today/voyDays/tonnage), fed only buildFFATable() below
   // the Vietnam/Malaysia/Indonesia freight tables on the Input tab, purely informational, never read
   // by the combo engine or by news/collector.py. buildFFATable() and its 3-line call site in
   // renderGlobalInputs() were removed along with it — nothing else in the file referenced state.ffa.
+
+  vnSupply: {
+    // "VN Supply" tab (2026-09-25, Mete) — Dashboard sheet's "Cargo x Month — Arrived / On
+    // the way (MT)" pivot ONLY (not Origin x Month / Pipeline / Transit time — out of scope per
+    // Mete: "sadece dashboardaki cargo x month'u ekleyecegiz"). Seeded from the
+    // VN_Supply_Report.xlsx he uploaded; re-imported later via the tab's own "Import Excel"
+    // button (importVnSupplyFile()), which overwrites this whole block from a fresh Dashboard sheet.
+    asOf: '2026-09-25',
+    completeTo: '2026-09-23',
+    delayedDays: 15,
+    missingDays: 30,
+    months: ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10", "2026-11", "2026-12"],
+    cargoes: [
+      { name: 'Corn', arrived: [1311605,1174577.5,835871.7,674545.9,809845.8,1427432,1490651.9,942322.6,1009196.4,0,0,0], onway: [0,0,0,0,0,0,0,0,524292.3,1144320.2,1208358.4,0] },
+      { name: 'Wheat', arrived: [631151.8,918133.7,1123064.3,976810.5,507510.2,395903.9,283692.5,198754.1,259625.1,0,0,0], onway: [0,0,0,0,0,0,0,0,44426,129637.7,22576,26161] },
+      { name: 'SBM', arrived: [415746.3,273275.8,341107.7,141265.4,400304,505317.7,385555,440641.8,326945.1,0,0,0], onway: [0,0,0,0,0,0,0,0,66551.7,452713.2,349055,46750] },
+      { name: 'Soybean', arrived: [251588.5,213134.4,269841.8,161060.2,359097.1,290978.1,353231.5,251932.9,59054.4,0,0,0], onway: [0,0,0,0,0,0,0,0,66000,200602,195000,0] },
+      { name: 'Canola Meal', arrived: [19559.2,3500,51129,54785.9,20100,14307.9,29842.4,5869.1,0,0,0,0], onway: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { name: 'PKE', arrived: [24739.6,24653.2,27072.9,16665.7,36925.4,6200,26164.9,24073.7,11900,0,0,0], onway: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { name: 'Barley', arrived: [0,0,33000,33000,0,0,29305.1,0,14366.7,0,0,0], onway: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { name: 'DDGS', arrived: [0,20821.2,30527.3,0,0,0,0,22000,0,0,0,0], onway: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { name: 'Sunflower Meal', arrived: [0,0,0,0,0,0,0,0,0,0,0,0], onway: [0,0,0,0,0,0,0,0,0,36231,4000,0] }
+    ]
+  }
 };
 
 let state = JSON.parse(JSON.stringify(defaultState));
@@ -2344,6 +2394,344 @@ function renderPlaceholder(id, title){
     `<div class="placeholder"><div class="tag">Coming soon</div><p>The <b>${title}</b> page will be added in the next step. For now, let's validate the engine on the Vietnam tab.</p></div>`;
 }
 
+// ── VN Supply tab (2026-09-25) ──────────────────────────────────────────
+// Shows ONLY the Dashboard sheet's "Cargo x Month — Arrived / On the way (MT)" pivot from
+// Mete's VN_Supply_Report.xlsx (Origin x Month / Pipeline status / Actual transit time are out
+// of scope — "sadece dashboardaki cargo x month'u ekleyecegiz"). All the matching logic (line-ups
+// vs arrival reports, buyer-name standardization, Delayed/Missing thresholds) lives inside that
+// Excel file; this tab only displays the finished numbers, and lets Mete re-import a refreshed
+// copy of the same sheet whenever the report updates.
+let vnSupplyUI = { cargo: 'ALL' };
+
+function vnSupplyMonthLabel(ym){
+  const m = parseInt((ym || '').slice(5, 7), 10);
+  return MONTHS_FULL[m - 1] || (ym || '');
+}
+
+function vnSupplyCargoes(){
+  return (state.vnSupply && Array.isArray(state.vnSupply.cargoes)) ? state.vnSupply.cargoes : [];
+}
+
+function vnSupplyMonths(){
+  const m = state.vnSupply && state.vnSupply.months;
+  return (Array.isArray(m) && m.length === 12) ? m : defaultState.vnSupply.months;
+}
+
+function vnSupplySum(arr){
+  return (arr || []).reduce((a, b) => a + (b || 0), 0);
+}
+
+// cargoName === 'ALL' sums every cargo; otherwise the single named cargo's own two series.
+function vnSupplySeries(cargoName){
+  const list = vnSupplyCargoes();
+  if (cargoName && cargoName !== 'ALL'){
+    const row = list.find(c => c.name === cargoName);
+    return row ? { arrived: row.arrived.slice(), onway: row.onway.slice() } : { arrived: Array(12).fill(0), onway: Array(12).fill(0) };
+  }
+  const arrived = Array(12).fill(0), onway = Array(12).fill(0);
+  list.forEach(c => {
+    for (let i = 0; i < 12; i++){ arrived[i] += c.arrived[i] || 0; onway[i] += c.onway[i] || 0; }
+  });
+  return { arrived, onway };
+}
+
+function fmtVnsMT(n){ return Math.round(n || 0).toLocaleString('en-US'); }
+function fmtVnsK(n){ return (Math.round((n || 0) / 100) / 10).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
+
+function vnSupplyChartSvg(series, months, width, height){
+  const { arrived, onway } = series;
+  const totals = arrived.map((a, i) => a + (onway[i] || 0));
+  const maxV = Math.max(1, ...totals);
+  const padL = 46, padR = 10, padT = 10, padB = 22;
+  const w = width - padL - padR, h = height - padT - padB;
+  const n = months.length;
+  const gap = 8;
+  const bw = Math.max(6, (w - gap * (n - 1)) / n);
+  const curYm = new Date().toISOString().slice(0, 7);
+
+  let bars = '', axisLabels = '';
+  for (let i = 0; i < n; i++){
+    const x = padL + i * (bw + gap);
+    const aH = h * (arrived[i] / maxV);
+    const oH = h * ((onway[i] || 0) / maxV);
+    const isCur = months[i] === curYm;
+    if (arrived[i] > 0){
+      bars += `<rect class="vns-bar-arrived${isCur ? ' vns-bar-cur' : ''}" x="${x.toFixed(1)}" y="${(padT + h - aH).toFixed(1)}" width="${bw.toFixed(1)}" height="${aH.toFixed(1)}" rx="2"><title>${vnSupplyMonthLabel(months[i])}: Arrived ${fmtVnsMT(arrived[i])} MT</title></rect>`;
+    }
+    if (onway[i] > 0){
+      bars += `<rect class="vns-bar-onway${isCur ? ' vns-bar-cur' : ''}" x="${x.toFixed(1)}" y="${(padT + h - aH - oH).toFixed(1)}" width="${bw.toFixed(1)}" height="${oH.toFixed(1)}" rx="2"><title>${vnSupplyMonthLabel(months[i])}: On the way ${fmtVnsMT(onway[i])} MT</title></rect>`;
+    }
+    axisLabels += `<text x="${(x + bw / 2).toFixed(1)}" y="${(height - 6).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--text-dim)">${vnSupplyMonthLabel(months[i])}</text>`;
+  }
+  const gridTop = `<line x1="${padL}" y1="${padT}" x2="${width - padR}" y2="${padT}" stroke="var(--border)" stroke-width="1"/>`;
+  const gridBase = `<line x1="${padL}" y1="${(padT + h).toFixed(1)}" x2="${width - padR}" y2="${(padT + h).toFixed(1)}" stroke="var(--border)" stroke-width="1"/>`;
+  const maxLabel = `<text x="${(padL - 6).toFixed(1)}" y="${(padT + 4).toFixed(1)}" text-anchor="end" font-size="9.5" fill="var(--text-dim)">${fmtVnsK(maxV)}k</text>`;
+  const zeroLabel = `<text x="${(padL - 6).toFixed(1)}" y="${(padT + h).toFixed(1)}" text-anchor="end" font-size="9.5" fill="var(--text-dim)">0</text>`;
+
+  return `<svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">${gridTop}${gridBase}${bars}${axisLabels}${maxLabel}${zeroLabel}</svg>`;
+}
+
+function vnSupplyCards(el){
+  const wrap = document.createElement('div');
+  wrap.className = 'news-tiles';
+  const all = vnSupplySeries('ALL');
+  const arrivedTotal = vnSupplySum(all.arrived);
+  const onwayTotal = vnSupplySum(all.onway);
+  const grand = arrivedTotal + onwayTotal;
+  const curIdx = vnSupplyMonths().indexOf(new Date().toISOString().slice(0, 7));
+  const curArrived = curIdx >= 0 ? all.arrived[curIdx] : 0;
+  const curOnway = curIdx >= 0 ? all.onway[curIdx] : 0;
+
+  const cards = [
+    { label: 'Arrived (total)', val: fmtVnsMT(arrivedTotal), tone: 'pos', sub: `${grand ? Math.round(arrivedTotal / grand * 100) : 0}% of total` },
+    { label: 'On the way', val: fmtVnsMT(onwayTotal), tone: 'accent', sub: `${grand ? Math.round(onwayTotal / grand * 100) : 0}% of total` },
+    { label: 'Grand total (MT)', val: fmtVnsMT(grand), tone: '', sub: `${vnSupplyCargoes().length} cargo types` },
+    { label: 'This month', val: fmtVnsMT(curArrived + curOnway), tone: '', sub: curIdx >= 0 ? `${fmtVnsMT(curArrived)} arrived · ${fmtVnsMT(curOnway)} on the way` : 'n/a' }
+  ];
+  cards.forEach(c => {
+    const tile = document.createElement('div');
+    tile.className = 'news-tile' + (c.tone ? ' ' + c.tone : '');
+    tile.innerHTML = `<div class="news-tile-head"><span class="news-tile-name">${c.label}</span></div>` +
+      `<div class="news-tile-val">${c.val}</div>` +
+      `<div class="news-tile-sub">${c.sub}</div>`;
+    wrap.appendChild(tile);
+  });
+  el.appendChild(wrap);
+}
+
+function vnSupplyChipRow(el){
+  const wrap = document.createElement('div');
+  wrap.className = 'vns-chips';
+  const names = ['ALL', ...vnSupplyCargoes().map(c => c.name)];
+  names.forEach(name => {
+    const chip = document.createElement('div');
+    chip.className = 'vns-chip' + (vnSupplyUI.cargo === name ? ' on' : '');
+    chip.textContent = name === 'ALL' ? 'All cargoes' : name;
+    chip.addEventListener('click', () => { vnSupplyUI.cargo = name; renderVnSupplyTab(); });
+    wrap.appendChild(chip);
+  });
+  el.appendChild(wrap);
+}
+
+function vnSupplyChart(el){
+  const wrap = document.createElement('div');
+  wrap.className = 'vns-chart-wrap';
+  const legend = document.createElement('div');
+  legend.className = 'vns-chart-legend';
+  legend.innerHTML = '<span><i style="background:var(--good)"></i>Arrived</span><span><i style="background:var(--accent)"></i>On the way</span>';
+  wrap.appendChild(legend);
+  const chartHost = document.createElement('div');
+  const width = Math.max(320, Math.min(900, (el.clientWidth || 360) - 24));
+  const series = vnSupplySeries(vnSupplyUI.cargo);
+  chartHost.innerHTML = vnSupplyChartSvg(series, vnSupplyMonths(), width, 190);
+  wrap.appendChild(chartHost);
+  el.appendChild(wrap);
+}
+
+function vnSupplyPivot(el){
+  const wrap = document.createElement('div');
+  wrap.className = 'scrollx';
+  const table = document.createElement('table');
+  table.className = 'grid-table vns-pivot';
+
+  const months = vnSupplyMonths();
+  const thead = document.createElement('tr');
+  thead.innerHTML = '<th class="rowlabel">Cargo</th>' + months.map(m => `<th>${vnSupplyMonthLabel(m)}</th>`).join('') + '<th>Total</th>';
+  table.appendChild(thead);
+
+  const buildRow = (name, arrived, onway, isTotal) => {
+    const tr = document.createElement('tr');
+    if (isTotal) tr.className = 'vns-pivot-total-row';
+    let html = `<td class="rowlabel">${name}</td>`;
+    for (let i = 0; i < 12; i++){
+      const a = arrived[i] || 0, o = onway[i] || 0;
+      const aCell = a ? `<div class="vns-cell-arrived">${fmtVnsK(a)}k</div>` : '';
+      const oCell = o ? `<div class="vns-cell-onway">${fmtVnsK(o)}k</div>` : (a ? '' : '<div class="vns-cell-onway zero">–</div>');
+      html += `<td>${aCell}${oCell}</td>`;
+    }
+    const tot = vnSupplySum(arrived) + vnSupplySum(onway);
+    html += `<td style="font-family:var(--mono);">${fmtVnsMT(tot)}</td>`;
+    tr.innerHTML = html;
+    table.appendChild(tr);
+  };
+
+  const all = vnSupplySeries('ALL');
+  buildRow('ALL CARGOES', all.arrived, all.onway, true);
+  vnSupplyCargoes().forEach(c => buildRow(c.name, c.arrived, c.onway, false));
+
+  wrap.appendChild(table);
+  el.appendChild(wrap);
+
+  const note = document.createElement('div');
+  note.className = 'note';
+  note.style.marginTop = '8px';
+  note.innerHTML = 'Values in <b>thousands of MT</b> (k). <span style="color:var(--good)">Green</span> = Arrived, <span style="color:var(--accent)">amber</span> = On the way. The "Total" column is full-precision MT across all 12 months.';
+  el.appendChild(note);
+}
+
+function vnSupplyImportSection(el){
+  const wrap = document.createElement('div');
+  wrap.className = 'vns-import-row';
+
+  const btn = document.createElement('button');
+  btn.className = 'hbtn';
+  btn.style.cssText = 'padding:9px 16px;';
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:5px;"><path d="M20 16.9A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.9"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/></svg>Import Dashboard Excel';
+  wrap.appendChild(btn);
+
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = '.xlsx,.xls';
+  fileInput.style.display = 'none';
+  wrap.appendChild(fileInput);
+
+  const status = document.createElement('span');
+  status.style.cssText = 'font-size:11.5px; color:var(--text-dim);';
+  wrap.appendChild(status);
+
+  btn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => handleVnSupplyImport(e, status));
+
+  el.appendChild(wrap);
+
+  const note = document.createElement('div');
+  note.className = 'note';
+  note.textContent = 'Reads the "Dashboard" sheet of a VN Supply report (same layout as the file Mete first uploaded) and replaces the numbers above with it. Origin x Month, Pipeline status and Actual transit time sections are ignored.';
+  el.appendChild(note);
+}
+
+function excelSerialToISODate(v){
+  if (v === null || v === undefined || v === '') return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === 'number'){
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    return d.toISOString().slice(0, 10);
+  }
+  const m = String(v).match(/(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : null;
+}
+
+// Parses the Dashboard sheet's "Cargo x Month — Arrived / On the way" table (Section A only).
+// Finds the "Cargo | Type | ..." header row rather than assuming a fixed row number, so a future
+// report with a few extra/missing rows above it (a new note, an extra threshold cell) still parses.
+function parseVnSupplyDashboard(wb){
+  const ws = wb.Sheets['Dashboard'];
+  if (!ws) throw new Error('This file has no "Dashboard" sheet.');
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+
+  const findLabelValue = (re) => {
+    for (let r = 0; r < Math.min(rows.length, 10); r++){
+      const row = rows[r] || [];
+      for (let c = 0; c < row.length; c++){
+        if (re.test(String(row[c] || ''))) return row[c + 1];
+      }
+    }
+    return null;
+  };
+  const asOf = excelSerialToISODate(findLabelValue(/arrival reports as of/i));
+  const completeTo = excelSerialToISODate(findLabelValue(/arrivals complete up to/i));
+
+  let headerIdx = -1;
+  for (let i = 0; i < rows.length; i++){
+    const r = rows[i] || [];
+    if (String(r[0]).trim().toLowerCase() === 'cargo' && String(r[1]).trim().toLowerCase() === 'type'){
+      headerIdx = i; break;
+    }
+  }
+  if (headerIdx < 0) throw new Error('Could not find the "Cargo / Type" header row on the Dashboard sheet.');
+
+  const headerRow = rows[headerIdx];
+  const monthCols = [];
+  for (let c = 2; c < headerRow.length; c++){
+    const v = headerRow[c];
+    if (v === '' || v === undefined || /total/i.test(String(v))) break;
+    monthCols.push(c);
+  }
+  if (monthCols.length !== 12){
+    throw new Error(`Expected 12 month columns after Cargo/Type, found ${monthCols.length}.`);
+  }
+  const months = monthCols.map(c => {
+    const iso = excelSerialToISODate(headerRow[c]);
+    return iso ? iso.slice(0, 7) : String(headerRow[c]);
+  });
+
+  const cargoes = [];
+  let cur = null, blanks = 0;
+  for (let i = headerIdx + 1; i < rows.length; i++){
+    const r = rows[i] || [];
+    const a = String(r[0] || '').trim();
+    const b = String(r[1] || '').trim();
+    if (!a && !b){ blanks++; if (blanks >= 2) break; continue; }
+    blanks = 0;
+    if (a) cur = a;
+    if (!cur) continue;
+    if (/^all cargoes$/i.test(cur)) continue; // grand-total row group — recomputed client-side
+    const getRow = () => {
+      let row = cargoes.find(x => x.name === cur);
+      if (!row){ row = { name: cur, arrived: Array(12).fill(0), onway: Array(12).fill(0) }; cargoes.push(row); }
+      return row;
+    };
+    if (/^arrived$/i.test(b)) getRow().arrived = monthCols.map(c => Number(r[c]) || 0);
+    else if (/^on the way$/i.test(b)) getRow().onway = monthCols.map(c => Number(r[c]) || 0);
+    // "Total" type rows are skipped — recomputed client-side as arrived + on-the-way
+  }
+  if (!cargoes.length) throw new Error('No cargo rows found under the Cargo/Type header.');
+
+  return {
+    asOf: asOf || (state.vnSupply && state.vnSupply.asOf) || null,
+    completeTo: completeTo || (state.vnSupply && state.vnSupply.completeTo) || null,
+    delayedDays: (state.vnSupply && state.vnSupply.delayedDays) ?? defaultState.vnSupply.delayedDays,
+    missingDays: (state.vnSupply && state.vnSupply.missingDays) ?? defaultState.vnSupply.missingDays,
+    months,
+    cargoes
+  };
+}
+
+function handleVnSupplyImport(e, statusEl){
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try{
+      const data = new Uint8Array(ev.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const parsed = parseVnSupplyDashboard(wb);
+      const cargoNames = parsed.cargoes.map(c => c.name).join(', ');
+      if (!confirm(`Import ${parsed.cargoes.length} cargo rows (${cargoNames}) as of ${parsed.asOf}? This replaces the current VN Supply numbers.`)) return;
+      state.vnSupply = parsed;
+      scheduleSave();
+      renderVnSupplyTab();
+      if (statusEl){ statusEl.textContent = `Imported — as of ${parsed.asOf}`; statusEl.style.color = 'var(--good)'; }
+    }catch(err){
+      console.error('VN Supply import failed', err);
+      alert('Could not read this file: ' + err.message);
+      if (statusEl){ statusEl.textContent = 'Import failed'; statusEl.style.color = 'var(--bad)'; }
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+}
+
+function renderVnSupplyTab(){
+  const el = document.getElementById('vnsupply');
+  el.innerHTML = '';
+
+  el.appendChild(sectionTitle('VN Supply — Cargo x Month'));
+
+  const meta = document.createElement('div');
+  meta.className = 'vns-meta';
+  const vs = state.vnSupply || defaultState.vnSupply;
+  meta.innerHTML = `<span>Arrival reports as of <b>${vs.asOf || '—'}</b> · arrivals complete to <b>${vs.completeTo || '—'}</b></span>` +
+    `<span>Delayed &gt;${vs.delayedDays ?? '—'}d · Missing/Divert &gt;${vs.missingDays ?? '—'}d</span>`;
+  el.appendChild(meta);
+
+  vnSupplyCards(el);
+  vnSupplyChipRow(el);
+  vnSupplyChart(el);
+  vnSupplyPivot(el);
+  vnSupplyImportSection(el);
+}
+
 function renderAll(){
   renderResults();
   renderMYResults();
@@ -2359,6 +2747,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     document.getElementById(tab.dataset.tab).classList.add('active');
     if (tab.dataset.tab === 'historytab') renderHistoryTab();
     if (tab.dataset.tab === 'newstab') renderNewsTab();
+    if (tab.dataset.tab === 'vnsupply') renderVnSupplyTab();
   });
 });
 
