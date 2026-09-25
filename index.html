@@ -2437,17 +2437,36 @@ function vnSupplySeries(cargoName){
 
 function fmtVnsMT(n){ return Math.round(n || 0).toLocaleString('en-US'); }
 function fmtVnsK(n){ return (Math.round((n || 0) / 100) / 10).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
+function formatDDMMYYYY(iso){
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : (iso || '—');
+}
+
+// Fixed axis ticks (2026-09-25, Mete): 0 / 200k / 400k / 800k / 1200k / 1500k / 1800k / 2000k —
+// deliberately uneven steps, not an auto-computed scale. Covers every single-cargo view (largest
+// is Corn at ~1.53M). Only the "All cargoes" view can run past 2,000k (peak month ~2.71M); rather
+// than clip those bars off the top, extra ticks are appended above 2,000k in 500k steps so nothing
+// is ever cut off, and the axis stays exactly the requested list whenever the data fits under it.
+const VNS_AXIS_TICKS_BASE = [0, 200000, 400000, 800000, 1200000, 1500000, 1800000, 2000000];
+function vnSupplyAxisTicks(maxV){
+  const ticks = VNS_AXIS_TICKS_BASE.slice();
+  while (ticks[ticks.length - 1] < maxV) ticks.push(ticks[ticks.length - 1] + 500000);
+  return ticks;
+}
 
 function vnSupplyChartSvg(series, months, width, height){
   const { arrived, onway } = series;
   const totals = arrived.map((a, i) => a + (onway[i] || 0));
-  const maxV = Math.max(1, ...totals);
+  const dataMax = Math.max(1, ...totals);
+  const ticks = vnSupplyAxisTicks(dataMax);
+  const maxV = ticks[ticks.length - 1];
   const padL = 46, padR = 10, padT = 10, padB = 22;
   const w = width - padL - padR, h = height - padT - padB;
   const n = months.length;
   const gap = 8;
   const bw = Math.max(6, (w - gap * (n - 1)) / n);
   const curYm = new Date().toISOString().slice(0, 7);
+  const yFor = v => padT + h - (v / maxV) * h;
 
   let bars = '', axisLabels = '';
   for (let i = 0; i < n; i++){
@@ -2463,29 +2482,34 @@ function vnSupplyChartSvg(series, months, width, height){
     }
     axisLabels += `<text x="${(x + bw / 2).toFixed(1)}" y="${(height - 6).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--text-dim)">${vnSupplyMonthLabel(months[i])}</text>`;
   }
-  const gridTop = `<line x1="${padL}" y1="${padT}" x2="${width - padR}" y2="${padT}" stroke="var(--border)" stroke-width="1"/>`;
-  const gridBase = `<line x1="${padL}" y1="${(padT + h).toFixed(1)}" x2="${width - padR}" y2="${(padT + h).toFixed(1)}" stroke="var(--border)" stroke-width="1"/>`;
-  const maxLabel = `<text x="${(padL - 6).toFixed(1)}" y="${(padT + 4).toFixed(1)}" text-anchor="end" font-size="9.5" fill="var(--text-dim)">${fmtVnsK(maxV)}k</text>`;
-  const zeroLabel = `<text x="${(padL - 6).toFixed(1)}" y="${(padT + h).toFixed(1)}" text-anchor="end" font-size="9.5" fill="var(--text-dim)">0</text>`;
 
-  return `<svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">${gridTop}${gridBase}${bars}${axisLabels}${maxLabel}${zeroLabel}</svg>`;
+  let gridLines = '', yLabels = '';
+  ticks.forEach(t => {
+    const y = yFor(t).toFixed(1);
+    gridLines += `<line x1="${padL}" y1="${y}" x2="${width - padR}" y2="${y}" stroke="var(--border)" stroke-width="1"/>`;
+    yLabels += `<text x="${(padL - 6).toFixed(1)}" y="${(parseFloat(y) + 3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--text-dim)">${t === 0 ? '0' : fmtVnsK(t) + 'k'}</text>`;
+  });
+
+  return `<svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">${gridLines}${bars}${axisLabels}${yLabels}</svg>`;
 }
 
 function vnSupplyCards(el){
   const wrap = document.createElement('div');
   wrap.className = 'news-tiles';
-  const all = vnSupplySeries('ALL');
-  const arrivedTotal = vnSupplySum(all.arrived);
-  const onwayTotal = vnSupplySum(all.onway);
+  const sel = vnSupplyUI.cargo || 'ALL';
+  const selLabel = sel === 'ALL' ? 'All cargoes' : sel;
+  const cur = vnSupplySeries(sel);
+  const arrivedTotal = vnSupplySum(cur.arrived);
+  const onwayTotal = vnSupplySum(cur.onway);
   const grand = arrivedTotal + onwayTotal;
   const curIdx = vnSupplyMonths().indexOf(new Date().toISOString().slice(0, 7));
-  const curArrived = curIdx >= 0 ? all.arrived[curIdx] : 0;
-  const curOnway = curIdx >= 0 ? all.onway[curIdx] : 0;
+  const curArrived = curIdx >= 0 ? cur.arrived[curIdx] : 0;
+  const curOnway = curIdx >= 0 ? cur.onway[curIdx] : 0;
 
   const cards = [
-    { label: 'Arrived (total)', val: fmtVnsMT(arrivedTotal), tone: 'pos', sub: `${grand ? Math.round(arrivedTotal / grand * 100) : 0}% of total` },
-    { label: 'On the way', val: fmtVnsMT(onwayTotal), tone: 'accent', sub: `${grand ? Math.round(onwayTotal / grand * 100) : 0}% of total` },
-    { label: 'Grand total (MT)', val: fmtVnsMT(grand), tone: '', sub: `${vnSupplyCargoes().length} cargo types` },
+    { label: `Arrived — ${selLabel}`, val: fmtVnsMT(arrivedTotal), tone: 'pos', sub: `${grand ? Math.round(arrivedTotal / grand * 100) : 0}% of total` },
+    { label: `On the way — ${selLabel}`, val: fmtVnsMT(onwayTotal), tone: 'accent', sub: `${grand ? Math.round(onwayTotal / grand * 100) : 0}% of total` },
+    { label: `Total — ${selLabel}`, val: fmtVnsMT(grand), tone: '', sub: sel === 'ALL' ? `${vnSupplyCargoes().length} cargo types` : 'all 12 months' },
     { label: 'This month', val: fmtVnsMT(curArrived + curOnway), tone: '', sub: curIdx >= 0 ? `${fmtVnsMT(curArrived)} arrived · ${fmtVnsMT(curOnway)} on the way` : 'n/a' }
   ];
   cards.forEach(c => {
@@ -2555,9 +2579,9 @@ function vnSupplyPivot(el){
     table.appendChild(tr);
   };
 
+  vnSupplyCargoes().forEach(c => buildRow(c.name, c.arrived, c.onway, false));
   const all = vnSupplySeries('ALL');
   buildRow('ALL CARGOES', all.arrived, all.onway, true);
-  vnSupplyCargoes().forEach(c => buildRow(c.name, c.arrived, c.onway, false));
 
   wrap.appendChild(table);
   el.appendChild(wrap);
@@ -2593,11 +2617,6 @@ function vnSupplyImportSection(el){
   fileInput.addEventListener('change', (e) => handleVnSupplyImport(e, status));
 
   el.appendChild(wrap);
-
-  const note = document.createElement('div');
-  note.className = 'note';
-  note.textContent = 'Reads the "Dashboard" sheet of a VN Supply report (same layout as the file Mete first uploaded) and replaces the numbers above with it. Origin x Month, Pipeline status and Actual transit time sections are ignored.';
-  el.appendChild(note);
 }
 
 function excelSerialToISODate(v){
@@ -2716,17 +2735,16 @@ function renderVnSupplyTab(){
   const el = document.getElementById('vnsupply');
   el.innerHTML = '';
 
-  el.appendChild(sectionTitle('VN Supply — Cargo x Month'));
+  el.appendChild(sectionTitle('Cargo x Month'));
 
   const meta = document.createElement('div');
   meta.className = 'vns-meta';
   const vs = state.vnSupply || defaultState.vnSupply;
-  meta.innerHTML = `<span>Arrival reports as of <b>${vs.asOf || '—'}</b> · arrivals complete to <b>${vs.completeTo || '—'}</b></span>` +
-    `<span>Delayed &gt;${vs.delayedDays ?? '—'}d · Missing/Divert &gt;${vs.missingDays ?? '—'}d</span>`;
+  meta.innerHTML = `<span>Supply report as of <b>${formatDDMMYYYY(vs.asOf)}</b></span>`;
   el.appendChild(meta);
 
-  vnSupplyCards(el);
   vnSupplyChipRow(el);
+  vnSupplyCards(el);
   vnSupplyChart(el);
   vnSupplyPivot(el);
   vnSupplyImportSection(el);
