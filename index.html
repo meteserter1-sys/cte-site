@@ -244,6 +244,31 @@
   .vns-cell-onway{ color:var(--accent); font-family:var(--mono); }
   .vns-cell-onway.zero{ color:var(--text-dim); opacity:.4; }
   .vns-import-row{ display:flex; gap:10px; margin:18px 0 4px; flex-wrap:wrap; align-items:center; }
+  /* ── VN Supply "Overview" rebuild (2026-09-28) ──────────────────────────── */
+  .vns-chiprow-label{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); margin:12px 0 4px; }
+  .vns-chiprow-label:first-child{ margin-top:0; }
+  .vns-tile-delta{ font-family:var(--mono); font-size:12px; font-weight:700; margin-top:2px; }
+  .vns-chart-card{ background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px 14px 8px; margin-bottom:16px; }
+  .vns-chart-title{ font-size:11px; color:var(--text-dim); margin-bottom:6px; }
+  .vns-chart-title b{ color:var(--text); }
+  .vns-avg-line{ stroke:var(--accent); stroke-width:1.6; stroke-dasharray:4,3; fill:none; }
+  .vns-donut-row{ display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; }
+  .vns-donut-legend{ display:flex; flex-direction:column; gap:5px; font-size:11.5px; color:var(--text-dim); padding-top:6px; min-width:150px; }
+  .vns-donut-legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .vns-donut-legend i{ width:9px; height:9px; border-radius:2px; display:inline-block; flex-shrink:0; }
+  .vns-donut-legend b{ color:var(--text); font-family:var(--mono); }
+  .vns-diger-note{ font-size:10.5px; color:var(--text-dim); font-style:italic; margin-top:8px; line-height:1.5; }
+  .vns-buyer-row{ display:grid; grid-template-columns:20px 1fr 90px 52px; gap:8px; align-items:center; padding:7px 4px; border-bottom:1px solid var(--border); font-size:12.5px; }
+  .vns-buyer-row:last-child{ border-bottom:none; }
+  .vns-buyer-rank{ color:var(--accent); font-weight:700; font-family:var(--mono); }
+  .vns-buyer-bar-wrap{ background:var(--input-bg); border-radius:4px; height:16px; position:relative; overflow:hidden; }
+  .vns-buyer-bar{ background:var(--accent-soft); border-right:2px solid var(--accent); height:100%; position:absolute; left:0; top:0; }
+  .vns-buyer-tons{ font-family:var(--mono); font-size:11px; color:var(--text); position:relative; z-index:1; padding-left:6px; line-height:16px; }
+  .vns-buyer-pct{ font-family:var(--mono); font-size:12px; color:var(--text-dim); text-align:right; }
+  .vns-snap-table td, .vns-snap-table th{ white-space:nowrap; }
+  .vns-snap-table .rowlabel{ text-align:left; }
+  .vns-spark{ font-size:13px; letter-spacing:1px; color:var(--accent); font-family:var(--mono); line-height:1; }
+  .vns-peaktrough{ font-size:10.5px; color:var(--text-dim); }
   /* ── News tab ─────────────────────────────────────────────────────────── */
   @media (max-width:560px){ .tab{ font-size:11.5px; padding:8px 4px; } }
   .news-clocks{ display:grid; grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)); gap:6px; margin-bottom:10px; }
@@ -628,26 +653,498 @@ const defaultState = {
   // renderGlobalInputs() were removed along with it — nothing else in the file referenced state.ffa.
 
   vnSupply: {
-    // "VN Supply" tab (2026-09-25, Mete) — Dashboard sheet's "Cargo x Month — Arrived / On
-    // the way (MT)" pivot ONLY (not Origin x Month / Pipeline / Transit time — out of scope per
-    // Mete: "sadece dashboardaki cargo x month'u ekleyecegiz"). Seeded from the
-    // VN_Supply_Report.xlsx he uploaded; re-imported later via the tab's own "Import Excel"
-    // button (importVnSupplyFile()), which overwrites this whole block from a fresh Dashboard sheet.
+    // "VN Supply" tab (2026-09-28, Mete) — rebuilt to mirror the Excel "Overview" sheet:
+    // Arrived-only figures (date <= asOf), split by Region (north/south; "All" = their sum),
+    // plus an origin breakdown and a buyer breakdown, both keyed by cargo. The current-report-
+    // month's monthly-average "boost" (sepLineup/sepSyes*/sepTbal*) mirrors Dashboard's own
+    // Arrived+On-the-way logic so the average isn't dragged down by a mid-month cutoff — see
+    // vnSupplyMonthlyAvg(). Seeded from VN_Supply_Report.xlsx; re-imported via the tab's own
+    // "Import Excel" button, which overwrites this whole block from a fresh workbook.
     asOf: '2026-09-25',
-    completeTo: '2026-09-23',
-    delayedDays: 15,
-    missingDays: 30,
-    months: ["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10", "2026-11", "2026-12"],
+    months: ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'],
     cargoes: [
-      { name: 'Corn', arrived: [1311605,1174577.5,835871.7,674545.9,809845.8,1427432,1490651.9,942322.6,1009196.4,0,0,0], onway: [0,0,0,0,0,0,0,0,524292.3,1144320.2,1208358.4,0] },
-      { name: 'Wheat', arrived: [631151.8,918133.7,1123064.3,976810.5,507510.2,395903.9,283692.5,198754.1,259625.1,0,0,0], onway: [0,0,0,0,0,0,0,0,44426,129637.7,22576,26161] },
-      { name: 'SBM', arrived: [415746.3,273275.8,341107.7,141265.4,400304,505317.7,385555,440641.8,326945.1,0,0,0], onway: [0,0,0,0,0,0,0,0,66551.7,452713.2,349055,46750] },
-      { name: 'Soybean', arrived: [251588.5,213134.4,269841.8,161060.2,359097.1,290978.1,353231.5,251932.9,59054.4,0,0,0], onway: [0,0,0,0,0,0,0,0,66000,200602,195000,0] },
-      { name: 'Canola Meal', arrived: [19559.2,3500,51129,54785.9,20100,14307.9,29842.4,5869.1,0,0,0,0], onway: [0,0,0,0,0,0,0,0,0,0,0,0] },
-      { name: 'PKE', arrived: [24739.6,24653.2,27072.9,16665.7,36925.4,6200,26164.9,24073.7,11900,0,0,0], onway: [0,0,0,0,0,0,0,0,0,0,0,0] },
-      { name: 'Barley', arrived: [0,0,33000,33000,0,0,29305.1,0,14366.7,0,0,0], onway: [0,0,0,0,0,0,0,0,0,0,0,0] },
-      { name: 'DDGS', arrived: [0,20821.2,30527.3,0,0,0,0,22000,0,0,0,0], onway: [0,0,0,0,0,0,0,0,0,0,0,0] },
-      { name: 'Sunflower Meal', arrived: [0,0,0,0,0,0,0,0,0,0,0,0], onway: [0,0,0,0,0,0,0,0,0,36231,4000,0] }
+      { name: 'Corn', arrivedNorth: [580309.2,682945.4,389174.7,114369.5,414225.8,435883.5,581432.2,472270,342208.4,0,0,0], arrivedSouth: [731295.8,491632.1,446697,560176.5,395620,991548.5,909219.7,470052.6,666988,0,0,0], sepLineup: 520292.3, sepSyesNorth: 4000, sepSyesSouth: 0, sepTbalNorth: 0, sepTbalSouth: 0 },
+      { name: 'Wheat', arrivedNorth: [162980.6,278553.7,316617.3,338460,227019.7,159879.5,152209.6,44000,40250.1,0,0,0], arrivedSouth: [468171.2,639580,806446.9,638350.5,280490.5,236024.4,131482.9,154754.1,219375,0,0,0], sepLineup: 26426, sepSyesNorth: 18000, sepSyesSouth: 0, sepTbalNorth: 0, sepTbalSouth: 0 },
+      { name: 'SBM', arrivedNorth: [159509.2,111162,126478.9,26906.8,148834.7,140910.9,153101.9,142411.2,125052.9,0,0,0], arrivedSouth: [256237.1,162113.8,214628.7,114358.6,251469.2,364406.8,232453.1,298230.6,201892.2,0,0,0], sepLineup: 66551.7, sepSyesNorth: 0, sepSyesSouth: 0, sepTbalNorth: 0, sepTbalSouth: 0 },
+      { name: 'Soybean', arrivedNorth: [0,0,36300,0,97752.1,20321,20638.8,19270,0,0,0,0], arrivedSouth: [251588.5,213134.4,233541.8,161060.2,261345,270657.1,332592.7,232662.9,59054.4,0,0,0], sepLineup: 66000, sepSyesNorth: 0, sepSyesSouth: 0, sepTbalNorth: 0, sepTbalSouth: 0 },
+      { name: 'Canola Meal', arrivedNorth: [3014,0,26559.2,10000,6050,8080,2850,0,0,0,0,0], arrivedSouth: [16545.2,3500,24569.7,44785.9,14050,6227.9,26992.4,5869.1,0,0,0,0], sepLineup: 0, sepSyesNorth: 0, sepSyesSouth: 0, sepTbalNorth: 0, sepTbalSouth: 0 },
+      { name: 'PKE', arrivedNorth: [0,0,0,0,0,0,0,0,0,0,0,0], arrivedSouth: [24739.6,24653.2,27072.9,16665.7,36925.4,6200,26164.9,24073.7,11900,0,0,0], sepLineup: 0, sepSyesNorth: 0, sepSyesSouth: 0, sepTbalNorth: 0, sepTbalSouth: 0 },
+      { name: 'Barley', arrivedNorth: [0,0,0,0,0,0,0,0,0,0,0,0], arrivedSouth: [0,0,33000,33000,0,0,29305.1,0,14366.7,0,0,0], sepLineup: 0, sepSyesNorth: 0, sepSyesSouth: 0, sepTbalNorth: 0, sepTbalSouth: 0 },
+      { name: 'DDGS', arrivedNorth: [0,0,0,0,0,0,0,0,0,0,0,0], arrivedSouth: [0,20821.2,30527.3,0,0,0,0,22000,0,0,0,0], sepLineup: 0, sepSyesNorth: 0, sepSyesSouth: 0, sepTbalNorth: 0, sepTbalSouth: 0 },
+      { name: 'Sunflower Meal', arrivedNorth: [0,0,0,0,0,0,0,0,0,0,0,0], arrivedSouth: [0,0,0,0,0,0,0,0,0,0,0,0], sepLineup: 0, sepSyesNorth: 0, sepSyesSouth: 0, sepTbalNorth: 0, sepTbalSouth: 0 },
+    ],
+    origins: [
+      { cargo: 'SBM', origin: 'USA', north: [98708.8,111162,27440,0,0,0,0,39365,0,0,0,0], south: [19155.8,0,25357,0,51696,0,52488,0,9125,0,0,0] },
+      { cargo: 'Wheat', origin: 'Australia', north: [33828.3,0,0,0,0,37858,35000,0,0,0,0,0], south: [128681.4,88450.5,90496.5,37199.5,0,115582,62702.5,36597.1,23000,0,0,0] },
+      { cargo: 'Soybean', origin: 'USA', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [142189.8,142966.4,59860,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', origin: 'Argentina', north: [60800.4,0,65194.8,19998.4,97730,106683.6,132100.8,103046.2,125052.9,0,0,0], south: [180479.9,128042.8,97199.2,26317.3,130832,209488.1,135937.6,216866.3,151728.6,0,0,0] },
+      { cargo: 'Corn', origin: 'Argentina', north: [77609,25090,210514.7,89225.2,317029.8,269885.5,379477.1,456310,270739.5,0,0,0], south: [126255.6,67230.2,67620.5,295653.9,274009,645759.5,482226,177359.9,373773.9,0,0,0] },
+      { cargo: 'Corn', origin: 'Brazil', north: [367631.5,657855.4,114683.7,22144.3,25966,24400,70000,0,71468.9,0,0,0], south: [393324,357671.4,305653.2,94682,47511,63486.4,0,0,293214.1,0,0,0] },
+      { cargo: 'Wheat', origin: 'Brazil', north: [33199.2,66060,0,0,0,0,0,0,0,0,0,0], south: [160309.4,134022.9,0,70594,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', origin: 'Brazil', north: [0,0,33844.2,0,51104.7,0,21001,0,0,0,0,0], south: [56601.4,22640,92072.5,69351.3,60710.6,143283.9,38543.2,81364.3,41038.6,0,0,0] },
+      { cargo: 'Corn', origin: 'USA', north: [135068.7,0,63976.3,0,68730,67798,67995.2,0,0,0,0,0], south: [158216.2,66730.5,73423.3,135340.5,0,0,266485.4,202997.7,0,0,0,0] },
+      { cargo: 'Canola Meal', origin: 'Canada', north: [0,0,0,10000,0,0,0,0,0,0,0,0], south: [16545.2,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', origin: 'Russia', north: [9200,0,0,0,0,0,55053.6,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,23000,0,0,0] },
+      { cargo: 'PKE', origin: 'Indonesia', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [24739.6,19153.2,27072.9,16665.7,36925.4,6200,24514.9,24073.7,11900,0,0,0] },
+      { cargo: 'Canola Meal', origin: 'China', north: [3014,0,26559.2,0,6050,5980,2850,0,0,0,0,0], south: [0,3500,24569.7,44785.9,14050,6227.9,18336.6,5869.1,0,0,0,0] },
+      { cargo: 'Corn', origin: 'India', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [53500,0,0,34500,74100,122459,0,0,0,0,0,0] },
+      { cargo: 'Wheat', origin: 'USA', north: [0,0,0,0,0,35700.5,0,0,30250.1,0,0,0], south: [26600.2,52231.5,0,0,100120.2,0,33802.4,0,16500,0,0,0] },
+      { cargo: 'Wheat', origin: 'Argentina', north: [41788,176993.7,198798.3,245210,176119.7,13474,10898,0,0,0,0,0], south: [126645.2,331875.1,620413.4,530557,121955.3,68743,10779,0,0,0,0,0] },
+      { cargo: 'Soybean', origin: 'Brazil', north: [0,0,0,0,97752.1,20321,20638.8,19270,0,0,0,0], south: [69700.7,70168,138080.8,161060.2,208138.1,270657.1,332592.7,232662.9,59054.4,0,0,0] },
+      { cargo: 'Wheat', origin: 'Canada', north: [44965,0,0,0,36900,0,0,0,0,0,0,0], south: [25935,33000,95537,0,58415,18999.4,24198.9,61400,23681.2,0,0,0] },
+      { cargo: 'Soybean', origin: 'Argentina', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [39698,0,0,0,53206.9,0,0,0,0,0,0,0] },
+      { cargo: 'PKE', origin: 'Malaysia', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,5500,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', origin: '(Unknown)', north: [0,35500,117819,93250,14000,72847,51258,44000,10000,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', origin: 'Paraguay', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,11431,0,18690,0,0,0,0,0,0,0,0] },
+      { cargo: 'DDGS', origin: 'Brazil', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,20821.2,30527.3,0,0,0,0,22000,0,0,0,0] },
+      { cargo: 'Barley', origin: 'Australia', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,33000,33000,0,0,29305.1,0,0,0,0,0] },
+      { cargo: 'Soybean', origin: 'Canada', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,35601,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Soybean', origin: '(Unknown)', north: [0,0,36300,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', origin: 'China', north: [0,0,0,6908.4,0,4998.9,0,0,0,0,0,0], south: [0,0,0,0,8230.7,0,5484.3,0,0,0,0,0] },
+      { cargo: 'Corn', origin: 'China', north: [0,0,0,3000,2500,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', origin: '(Unknown)', north: [0,0,0,0,0,2100,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', origin: '(Unknown)', north: [0,0,0,0,0,29228.3,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', origin: 'South Africa', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,11634.8,0,0,0,0,0,0] },
+      { cargo: 'Corn', origin: 'South Africa', north: [0,0,0,0,0,22000,54660,15960,0,0,0,0], south: [0,0,0,0,0,159843.6,160508.3,89695,0,0,0,0] },
+      { cargo: 'Wheat', origin: 'Ukraine', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,32700,0,0,0,0,0,0] },
+      { cargo: 'Corn', origin: '(Unknown)', north: [0,0,0,0,0,51800,9300,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'PKE', origin: '(Unknown)', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,1650,0,0,0,0,0] },
+      { cargo: 'Canola Meal', origin: 'Russia', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,8655.8,0,0,0,0,0] },
+      { cargo: 'Wheat', origin: 'Bulgaria', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,56757,60000,0,0,0] },
+      { cargo: 'Wheat', origin: 'Latvia', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,33500,0,0,0] },
+      { cargo: 'Wheat', origin: 'Romania', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,39693.8,0,0,0] },
+      { cargo: 'Barley', origin: 'Romania', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,14366.7,0,0,0] }
+    ],
+    buyers: [
+      { cargo: 'SBM', buyer: 'Cargill Vietnam', north: [13450,0,5700,0,4310,6565,10275,3575,3139.4,0,0,0], south: [7201,4536,53650,54351.3,4750,78314.9,430,27295,49130.2,0,0,0] },
+      { cargo: 'SBM', buyer: 'Japfa Comfeed', north: [11000,9000,18000,0,11000,3000,5000,5500,9000,0,0,0], south: [1000,6000,14000,0,6000,8500,1388,4112,3500,0,0,0] },
+      { cargo: 'SBM', buyer: 'AFC', north: [4085,0,5660,0,3135,2520,3040,4000,500,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Nam Viet', north: [3325,3325,0,0,0,3150,0,0,2375,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'ABC Vietnam', north: [21200,7600,9225,1425,8225,4750,6650,7650,4750,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Dai An Tin', north: [5850,0,2500,2000,2450,2530,5100,1900,2375,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Hoa Phat Feed', north: [1900,1900,3900,950,1900,1900,1900,1900,1950,0,0,0], south: [1235,0,968,0,760,2660,570,1330,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Greenfeed Vietnam', north: [5850,2850,6650,0,3800,3875,2375,2375,2988.5,0,0,0], south: [12140,0,7125,0,1900,20840,7600,0,4200,0,0,0] },
+      { cargo: 'SBM', buyer: 'Gold Coin Feedmill', north: [1425,1615,3615,0,1520,1760,2470,2050,1400,0,0,0], south: [3550.8,1710,5557.5,1710,1923.8,7397.5,1900,6460,2660,0,0,0] },
+      { cargo: 'SBM', buyer: 'Guyomarc\'h VCN', north: [2000,0,2430.7,475,1425,0,1050,1027.8,1600,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Thuan An', north: [950,950,0,0,950,3448.9,950,1908.1,3800,0,0,0], south: [760,760,0,0,0,0,0,1050,950,0,0,0] },
+      { cargo: 'SBM', buyer: 'Tan Viet', north: [3800,950,1050,0,950,1425,1425,1425,1425,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Mavin Austfeed', north: [1900,1900,4200,0,2850,1900,2850,1900,950,0,0,0], south: [950,950,3012.4,0,950,3800,2850,950,2882,0,0,0] },
+      { cargo: 'SBM', buyer: 'Agrifeed', north: [950,950,475,475,475,855,855,380,380,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'New Orient', north: [840,760,0,0,0,950,950,950,950,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Taiwan International', north: [760,1900,2755,855,1805,3420,1710,2660,2470,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Easthope', north: [1990.8,7330.6,2522,0,1261,0,0,0,0,0,0,0], south: [970,2565,1164,0,2600,950,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Ha Noi Pharma', north: [1377.5,1377,475,475,475,950,950,950,975,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Thien Ton', north: [1520,570,2400,0,1140,1260,1230,0,1140,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Greenfarm Vietnam', north: [570,1140,0,0,0,570,570,570,570,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Northern Quang Dung', north: [550,0,0,0,0,0,950,950,900,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Hoang Minh', north: [550,0,0,0,564,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Viet Phuong', north: [3325,475,2100,0,950,1425,1425,1425,1425,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Tongwei', north: [1360,1045,2125,0,2035,1520,1520,1520,2251.5,0,0,0], south: [0,1235,1235,1425,4750,4660,1615,1615,1615,0,0,0] },
+      { cargo: 'SBM', buyer: 'Bio Nutrition', north: [1425,475,380,380,380,855,905,380,380,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'CJ Foods VN', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [7199.2,41479.5,15300,29811,12748.1,15600,7200,20250,4400,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Interflour Vietnam', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [63009.5,41638,55269.9,31919.5,46127.6,24200,50445.6,6752.1,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Golden Wheat', north: [9200,0,0,0,0,0,0,0,0,0,0,0], south: [198239.8,112250,170946.8,150892.2,161701.7,90473,16644.3,67477,60000,0,0,0] },
+      { cargo: 'Soybean', buyer: 'Bunge', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [251588.5,213134.4,197940.8,161060.2,261345,267382.9,332592.7,232662.9,59054.4,0,0,0] },
+      { cargo: 'SBM', buyer: 'Quang Dung', north: [0,450,0,3148.4,0,950,950,2675,2700,0,0,0], south: [4725,0,5550,0,950,9894.8,5675,0,1050,0,0,0] },
+      { cargo: 'SBM', buyer: 'LDC Vietnam', north: [125,0,3000,100,19375,0,0,0,0,0,0,0], south: [18770,0,7375,0,40961,25209,13949,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Feed One', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [7844.8,4750,5700,0,2050,7950,9500,15250,4750,0,0,0] },
+      { cargo: 'SBM', buyer: 'Hiep Luc', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [950,0,0,0,1373.8,950,3800,4950,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Anova Feed', north: [285,0,1175,0,1330,360,360,391.2,0,0,0,0], south: [2850,0,1425,0,0,2900,475,0,475,0,0,0] },
+      { cargo: 'SBM', buyer: 'Sunjin Vina', north: [570,697.3,2322.5,0,760,882.5,1200,1207.5,1045,0,0,0], south: [1900,475,2707.5,950,1710,2120,0,4075,1807.5,0,0,0] },
+      { cargo: 'SBM', buyer: 'ADM Vietnam', north: [4000,0,0,0,3000,0,3950,3000,2950,0,0,0], south: [62297,1425,18834.3,7005,0,30319,29359.6,55591.6,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'DaChan VN', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [950,0,0,0,0,950,0,1050,1900,0,0,0] },
+      { cargo: 'SBM', buyer: 'Boca Commodity', north: [0,475,950,0,475,475,950,475,0,0,0,0], south: [950,475,475,0,950,950,0,475,475,0,0,0] },
+      { cargo: 'SBM', buyer: 'Uni President', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [5772.5,4100,8750,3800,12825,8225,7150,16022.8,6375,0,0,0] },
+      { cargo: 'SBM', buyer: 'ANT', north: [950,0,0,0,1900,760,4725,760,0,0,0,0], south: [2650,950,0,0,475,8773.9,3800,1475,5325,0,0,0] },
+      { cargo: 'Corn', buyer: 'De Heus', north: [10990,7375,1900,4750,7010,11400.4,16000,21325,13325,0,0,0], south: [29250,10000,0,19250,17961.7,11489.6,5000,20000,14750,0,0,0] },
+      { cargo: 'Corn', buyer: 'Hai Long Co', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [14440,14725,3705,17905,9040,5460,0,9120,5700,0,0,0] },
+      { cargo: 'Corn', buyer: 'Haid Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [8740,7980,2090,12530,7675,9645,0,6080,7600,0,0,0] },
+      { cargo: 'Corn', buyer: 'Vinh Long Hai Dai', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [5035,6175,1330,7255,4755,5090,0,0,950,0,0,0] },
+      { cargo: 'Corn', buyer: 'Grain JSC', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [2850,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'ADM Vietnam', north: [0,0,0,0,10325,0,9875,0,1187,0,0,0], south: [11343.6,950,1900,0,0,33157.2,0,3775,12505,0,0,0] },
+      { cargo: 'Corn', buyer: 'Gold Coin Feedmill', north: [4275,4575,3990,2000,3325.6,1350,3800,8295,0,0,0,0], south: [13110,4750,4655,24035.2,0,19000,0,19950,7355,0,0,0] },
+      { cargo: 'Corn', buyer: 'Emivest Feedmill', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [26170,10250,19100,30133,27600,23987.6,5400,7125,10400,0,0,0] },
+      { cargo: 'SBM', buyer: 'CP Vietnam', north: [0,40720,0,0,16300,19389.3,17399.9,36222.6,0,0,0,0], south: [61059.7,0,0,0,0,0,27832.1,13749,26392.8,0,0,0] },
+      { cargo: 'SBM', buyer: 'Grainland VN', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [950,950,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'BIGRFeed Group', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [285,285,285,0,0,980,0,945,285,0,0,0] },
+      { cargo: 'SBM', buyer: 'Quynh Trung Agricultural', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [285,285,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Hong Nguyen Agricultural', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [2850,3800,950,950,0,0,0,1028,950,0,0,0] },
+      { cargo: 'SBM', buyer: 'Czarnikow Vietnam', north: [0,630,0,0,0,0,0,0,0,0,0,0], south: [1425,950,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Binh Phuoc Hai Long', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [665,0,142.5,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Vinh Long Hai Dai', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [2375,3700,4465,0,7245.7,4370,5484.3,3420,950,0,0,0] },
+      { cargo: 'SBM', buyer: 'De Heus', north: [950,950,0,0,0,7150.3,3800,1425,0,0,0,0], south: [14201.8,13931,14345,9500,11115,17770.4,17600,46837.4,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Hyper Hope Nutrition (Cambodia)', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [427.5,427.5,760,0,855,950,950,950,950,0,0,0] },
+      { cargo: 'Corn', buyer: 'Boca Commodity', north: [0,950,950,950,0,950,0,0,0,0,0,0], south: [950,950,950,950,950,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Japfa Comfeed', north: [0,35930,6070,15500,9000,7000,30300,7000,0,0,0,0], south: [1303.2,20000,18180.7,26819.3,8000,22400,6790,10300,8000,0,0,0] },
+      { cargo: 'Corn', buyer: 'ANT', north: [0,14000,1900,0,2850,3800,11250,9450,0,0,0,0], south: [32775,11400,0,2850,19000,8400,0,7600,5700,0,0,0] },
+      { cargo: 'Corn', buyer: 'New Hope', north: [0,9500,0,0,9600,0,0,9415,7350,0,0,0], south: [1140,17290,1900,12445,0,11920.9,15105,3150,4750,0,0,0] },
+      { cargo: 'Corn', buyer: 'Velmar Agrobase', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [3800,1425,3800,1425,4275,3800,0,2850,3325,0,0,0] },
+      { cargo: 'Corn', buyer: 'Velcores Agropedia', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [1425,1425,3800,1425,4275,3325,0,2375,1900,0,0,0] },
+      { cargo: 'Corn', buyer: 'Sunjin Vina', north: [410,3847.5,1472.5,0,2913.5,2600,1860,2965,2753,0,0,0], south: [4982.5,2090,5000,7255,0,7652.8,6052.5,7010,9027.5,0,0,0] },
+      { cargo: 'Corn', buyer: 'Czarnikow Vietnam', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [950,950,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Enerfo Vietnam', north: [0,0,0,0,0,0,12495,0,3892.5,0,0,0], south: [9239.6,1425,0,2199,34033.1,39151.1,0,5250,9025,0,0,0] },
+      { cargo: 'Corn', buyer: 'Cargill Vietnam', north: [21248.1,17075,5500,1900,19950,855,9047.8,8505,0,0,0,0], south: [31701.2,3150,21271,48568.8,12132.8,32298.7,0,9757.9,3235.4,0,0,0] },
+      { cargo: 'SBM', buyer: 'CJ Vina', north: [9511.7,0,2850,1913.4,1900,0,0,0,0,0,0,0], south: [3175,4275,5225,1235,2850,0,0,11974.2,9066.6,0,0,0] },
+      { cargo: 'SBM', buyer: 'Nhat Thanh', north: [3325,0,0,0,0,0,0,0,0,0,0,0], south: [11780.7,0,7315,11687.3,19000,8200,5000,33325.8,7750.1,0,0,0] },
+      { cargo: 'SBM', buyer: 'New Hope', north: [7000,4132.5,285,0,8075,3800,7790,3800,950,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Hung Gia Nam', north: [3120,0,3335,1235,4085,6285,2185,2185,2185,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Dong Tinh', north: [1943.7,0,2261.3,665,1805,2375,2375,2375,2375,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Appe JV', north: [950,0,0,0,0,0,1000,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Lac Hong Nutrition', north: [1900,0,1260,0,1140,1140,1140,570,570,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Uni President', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [6650,2375,0,0,4643,5900.4,525,2100,8224.8,0,0,0] },
+      { cargo: 'Corn', buyer: 'Anova Feed', north: [0,475,950,3700,2900,0,900,3250,5625,0,0,0], south: [3325,3863.7,2950,9325,2375,8650,11046.9,3950,9995.6,0,0,0] },
+      { cargo: 'Corn', buyer: 'Thuan An', north: [2010,3978.6,0,0,0,0,5900,0,4300,0,0,0], south: [950,950,0,0,0,1900,1900,0,1900,0,0,0] },
+      { cargo: 'Corn', buyer: 'Tongwei', north: [2689.4,5320,0,0,1615,1375,0,2255,0,0,0,0], south: [1425,1425,0,855,0,0,0,4252.5,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Thien Bang VN Animal Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [285,285,0,570,0,367.5,0,1470,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Tan Long Group', north: [65131,84299.4,0,0,0,136116,0,33275.8,0,0,0,0], south: [0,13018.4,15481.6,0,38000,0,0,0,23750,0,0,0] },
+      { cargo: 'SBM', buyer: 'Enerfo Vietnam', north: [525,0,1900,0,5950,3625,475,0,0,0,0,0], south: [13867.4,950,4750,0,49035.1,7329.5,7325,16589.6,3800,0,0,0] },
+      { cargo: 'Corn', buyer: 'Hiep Luc', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [2850,3800,2000,8550,0,9500,1900,4200,3800,0,0,0] },
+      { cargo: 'Corn', buyer: 'Biochemistry Technology', north: [0,0,0,0,0,0,0,1050,0,0,0,0], south: [1900,3325,0,0,0,0,0,2100,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Khai Anh', north: [208067.5,0,150520.5,3000,135983.6,17160,123842.5,22280,55100.8,0,0,0], south: [317888.8,137846,116725,204421.6,33250,202190.4,476959.3,218806.5,190687.6,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Hai Long Co', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [8099,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Vinh Long Hai Dai', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [4207,0,0,32485.9,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Haid Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [4239.2,0,0,12300,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Pilmico Vietnam', north: [0,0,2100,0,1900,0,0,0,0,0,0,0], south: [1050,665,1710,855,475,3425,713,2355,902.5,0,0,0] },
+      { cargo: 'SBM', buyer: 'Khatoco Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [380,0,0,0,0,760,0,380,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Agri Master', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [1140,0,0,0,0,1140,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'VFM-Wilmar', north: [51821.7,0,0,16242,0,16500,0,0,10000,0,0,0], south: [31731.7,25982,31735.3,45816.2,11122.8,62399.4,9000,10250,46681.2,0,0,0] },
+      { cargo: 'Corn', buyer: 'CJ Vina', north: [11675,10450,11400,0,11400,0,0,0,0,0,0,0], south: [15750,16550,0,23750,3800,0,0,0,4200,0,0,0] },
+      { cargo: 'Corn', buyer: 'Hong Nga SG', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [3800,2850,4750,0,13300,22550,0,2985,2850,0,0,0] },
+      { cargo: 'Corn', buyer: 'QL Vietnam', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [2850,3800,5700,11400,0,5700,6660.3,2850,7125,0,0,0] },
+      { cargo: 'Corn', buyer: 'Nhat Thanh', north: [70720,70000,71500,0,0,0,70000,72818,0,0,0,0], south: [70390.2,71500,68308.2,0,113688.5,133954.9,195222.4,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Hai Duong Haid', north: [13300,10110,11115,11300,8740,8670,8740,13700,5250,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Dabaco Group', north: [18174.6,20900,21600,4750,48400,32250,19458.8,38442.9,17850,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Ha An Phat', north: [4750,4750,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Hung Gia Nam', north: [11410,19625,3325,0,9660,3840,1900,7510,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'VNR', north: [3000,6285,2473.7,0,0,22133.9,0,4623.5,16300,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Ha Noi Feed', north: [1425,1425,0,0,4780,1440,1050,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Fago Feed', north: [1425,1425,0,0,0,0,0,0,1050,0,0,0], south: [0,0,0,0,0,0,0,0,1050,0,0,0] },
+      { cargo: 'Corn', buyer: 'Vinafeed', north: [2850,0,3150,0,797.5,9502.5,3700,0,20831.4,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'ABC Vietnam', north: [17340,23735.4,29188.9,4200,20235,5700,18757,15578,16779,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Vietnam Tequ Hope', north: [1900,950,950,0,0,950,0,0,1050,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Minh Trang SG', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [5829.9,2326.5,5023.1,3572.8,7095.4,2200,4495,6859.9,2020,0,0,0] },
+      { cargo: 'PKE', buyer: 'Phuong Trang Im-Export', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [1800,3300,3749.2,4100,5850,0,1100,2370,2090,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'VNR', north: [3014,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Tan Viet', north: [13384.9,3800,0,1900,1900,960,7095,5375,1650,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Lac Hong Nutrition', north: [3150,3675,0,3026.5,3325,0,9850,1100,4750,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Viet Nhat', north: [14900.4,19000,4750,0,16781.8,13618.2,12535,8031.8,8344.8,0,0,0], south: [0,1425,475,3800,1520,0,0,380,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Tan Phat', north: [950,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Bio Nutrition', north: [6250.1,2755,0,855,665,1260,1260,3310,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Dai An Tin', north: [3800,8200,1000,950,4750,3000,3000,5050,3050,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Khai Anh', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [8581.1,10226.7,2102.9,3892.9,13200,0,5700,6490,3500,0,0,0] },
+      { cargo: 'Wheat', buyer: 'De Heus', north: [0,5500,3150,0,0,0,0,0,0,0,0,0], south: [10500,17500,9600,6650,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Nam Tien JSC', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [840,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'VNFlour Co', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [1100,3850,1100,0,0,7700,0,4700,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Phuoc An Food', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [1100,0,1100,0,1000,0,2700,1100,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Greenfeed Vietnam', north: [1575,0,0,2700,0,0,0,0,0,0,0,0], south: [7875,8240,10500,4560,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Fujinuco JSC', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [735,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'ADM Vietnam', north: [48263.8,0,68350,67420,0,0,0,0,0,0,0,0], south: [21649.8,74720,32619,22295,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Khai Anh', north: [0,71500,33000,61363,94411.2,0,106311.6,0,0,0,0,0], south: [16500,89242,242917.9,142982.6,0,0,0,0,56500,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Nhat Thanh', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [22898.2,0,0,60637,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'CJ Vina', north: [0,0,0,660,0,0,0,0,0,0,0,0], south: [4501.1,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Sunjin Vina', north: [0,330,1745,1960,2422.5,0,0,0,0,0,0,0], south: [1480,2535,5305.5,3420,850,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Uni President', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [900,3150,15145,8000,3000,3052,0,11825,3300,0,0,0] },
+      { cargo: 'SBM', buyer: 'Tan Long Group', north: [15750.4,749.6,0,0,0,4750,9500,4750,5139.5,0,0,0], south: [0,0,0,0,0,4750,4750,4750,2462.5,0,0,0] },
+      { cargo: 'SBM', buyer: 'Viet Nhat', north: [4200,4750,2850,2850,5225,6175,6121.1,11350,14725,0,0,0], south: [0,760,760,760,0,1900,0,3625,475,0,0,0] },
+      { cargo: 'SBM', buyer: 'Hai Duong Haid', north: [3420,2660,4127.7,3135,3135,4945,5280,4695,3135,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Nhat Quang', north: [4705,0,4834.8,0,5225,0,2660,0,2850,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Sheng Long', north: [760,475,3365,665,665,3135,4085,1900,665,0,0,0], south: [0,3072.5,3372.5,0,1377.5,1680,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Tan Chau', north: [570,570,0,0,0,570,570,570,570,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Vietnam Tequ Hope', north: [570,570,0,0,0,475,1105,474,475,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Hiep Hanh', north: [475,475,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Ha Noi Feed', north: [1000,0,950,0,475,950,1000,950,950,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Greenfeed Vietnam', north: [3510,13775,2850,4275,3325,3675,8350,3150,3800,0,0,0], south: [11355,16150,11400,12350,6650,19475,5225,0,950,0,0,0] },
+      { cargo: 'SBM', buyer: 'Garin JSC', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [2854,0,0,0,5700,5700,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Onvista Co', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [1750,0,1320,950,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Mekong Flour Mills', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [25935,86559.4,28756,69574.5,31070.2,3300,26060,29800,48493.8,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Cargill Vietnam', north: [0,2150,1100,1800,0,0,0,0,0,0,0,0], south: [10000,4304.8,9790,24915.2,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Tongwei', north: [0,1980,1830,1440,0,0,0,0,0,0,0,0], south: [5447,3157.5,7350,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Thien Bang VN Animal Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [220,262.5,1050,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Haid Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [990,5120,1050,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Hai Long Co', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [3190,8350,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Vinh Long Hai Dai', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [2420,6060,1050,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Thang Long Bio-Tech', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [2970,7832.9,3100,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Sheng Long', north: [0,0,2310,4050,0,0,0,0,0,0,0,0], south: [1430,5680,4725,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Quang Dung', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [2100,0,0,1900,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Phuc Khanh Nong Ltd', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [550,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Stavian', north: [0,1100,550,0,0,0,0,0,0,0,0,0], south: [110,0,550,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Hoa Phat Feed', north: [0,3300,0,0,0,0,0,0,0,0,0,0], south: [1100,0,1870,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Hiep Luc', north: [0,5371.9,0,0,0,0,0,0,0,0,0,0], south: [2700,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Thuan An', north: [0,2200,2200,0,1000,0,0,0,0,0,0,0], south: [2200,2100,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'LDC Vietnam', north: [0,11550,9477,0,0,0,0,0,0,0,0,0], south: [16550,0,13200,0,0,3300,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Hoa Phat Feed', north: [5700,13925,0,0,2910,6030,3000,18600,3150,0,0,0], south: [950,2850,0,0,0,3142,2525,5150,1425,0,0,0] },
+      { cargo: 'Corn', buyer: 'Mavin Austfeed', north: [7800,7600,1900,2850,4770,3810,4950,9125,2100,0,0,0], south: [3900,1900,2448,6102,1900,1900,7800,3075,3900,0,0,0] },
+      { cargo: 'Corn', buyer: 'Garin JSC', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [3003,2850,0,6755.5,5700,11400,2700,1135.4,11800,0,0,0] },
+      { cargo: 'SBM', buyer: 'Afarm', north: [950,0,0,0,0,0,0,0,950,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'ABC Vietnam', north: [2950,2850,4400,6173,0,3124,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Tien Hung', north: [1530,4400,0,11850,4000,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,2327.4,2600,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Thao An Im-Export Service Trading', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [348.7,550,985,0,500,0,540,0,550,0,0,0] },
+      { cargo: 'PKE', buyer: 'Southeast Asia Agri', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [1350,4400,900,0,0,0,1350,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'TH Phat', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [630,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'CP Vietnam', north: [0,92057.1,15044.1,20069,0,67798,67995.2,40460.5,83687.5,0,0,0], south: [66218.7,67230.2,95423.3,0,0,215718.1,133872.8,71491.2,220849,0,0,0] },
+      { cargo: 'Corn', buyer: 'LDC Vietnam', north: [12529,2362.5,6345,0,3997.4,0,0,14045,0,0,0,0], south: [0,0,10905,29502,0,5275,0,7285,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'AFC', north: [9310,7100,6270,3800,4370.6,1800,5700,15225,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Leong Hup', north: [6790,1995,1900,0,3800,3800,8075,1050,7050,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Guyomarc\'h VCN', north: [1925,0,1050,0,1900,1650,0,2625,475,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Duc Minh', north: [1900,0,0,0,0,960,1855,475,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Viet Trung', north: [950,1140,0,0,1425,0,950,1050,1050,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Onvista Co', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [180,0,0,0,550,0,0,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Tongwei', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [180,0,0,0,220,0,220,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'De Heus', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [905,770,1649.9,0,900,0,4119.8,2620,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Green Agri', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [901,550,1480,1820,2200,900,1070,0,1430,0,0,0] },
+      { cargo: 'PKE', buyer: 'Greenfeed Vietnam', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [734,880,1490,1140,1350,0,630,880,990,0,0,0] },
+      { cargo: 'PKE', buyer: 'Emivest Feedmill', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [1100,0,1220,0,2090,0,670,0,770,0,0,0] },
+      { cargo: 'Corn', buyer: 'Quang Dung', north: [0,0,0,0,0,2300,0,1950,1986.2,0,0,0], south: [2625,3600,1850,6400,0,1187.5,900,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Tin Phat', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [3725,10525,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Golden Wheat', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [4750,4750,9500,0,0,6195,5440,1900,14750,0,0,0] },
+      { cargo: 'Corn', buyer: 'Khatoco Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [1425,0,0,0,1425,1425,1050,0,950,0,0,0] },
+      { cargo: 'Corn', buyer: 'Hong Ha Nutrition', north: [5739.3,5800,3800,1900,5700,3800,10000,7250,8300.2,0,0,0], south: [950,0,950,950,1900,3800,0,2100,3050,0,0,0] },
+      { cargo: 'Corn', buyer: 'Lai Thieu Feed Mill', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [1000,950,0,950,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Nam Tien JSC', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [1187.5,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Fujinuco JSC', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [1187.5,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Phu Sy', north: [1575,0,1575,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Aj International', north: [1100,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Vimaflour', north: [44965,101560,117819,93250,36900,129905.5,35000,44000,30250.1,0,0,0], south: [0,4400,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Greenfarm Vietnam', north: [2490,0,0,0,0,2375,950,4475,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Taiwan International', north: [1990,6165,1710,4305,5925,0,10950,8048.3,4513,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Thien Ton', north: [1490,2090,950,950,2459,5168.6,3350,4575,2375,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Agrifeed', north: [1010,760,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Tuan Minh', north: [1000,0,0,0,950,950,0,950,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Hoang Minh', north: [950,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Stavian', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [2199.9,0,0,0,0,0,1100,1100,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'B&T', north: [0,1900,525,0,950,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Binh Phat', north: [0,4750,0,0,0,0,7000,0,6525,0,0,0], south: [0,0,0,0,0,3325,0,3325,3325,0,0,0] },
+      { cargo: 'Corn', buyer: 'Hiep Hanh', north: [0,2850,2850,2850,0,2850,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Luoc River', north: [0,2850,0,0,0,4450,1575,2525,2850,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Grainland VN', north: [0,1900,0,0,0,16350,5985,0,0,0,0,0], south: [0,0,0,0,0,28619,4222,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'New Orient', north: [0,4750,950,1425,2985,3740,1575,3150,3150,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Hoan Duong', north: [0,950,1900,1900,0,0,0,2002.2,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Rico Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,978.8,1000,0,950,0,0,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Sunjin Vina', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,220,250,0,0,0,220,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Kim Bang', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,1430,1560,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'De Heus', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,1100,3138,0,2100,0,1575,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Minh Trang SG', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,475,2827.2,0,0,1967.9,10586.6,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Hong Nga SG', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,1925,0,0,1100,0,1100,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Phat Nguyen Hoang Co', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,950,0,0,1900,0,0,1900,1900,0,0,0] },
+      { cargo: 'SBM', buyer: 'American Feeds', north: [0,3420,0,0,0,0,1425,0,1425,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Phu Sy', north: [0,1425,0,1425,1425,3092.5,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Quynh Trung Agricultural', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,950,950,950,950,0,0,1050,950,0,0,0] },
+      { cargo: 'Corn', buyer: 'Nam Viet', north: [0,13300,0,0,0,0,19000,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Viet Phuong', north: [0,5525,3150,2100,2850,2850,2625,0,2375,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Minh Hieu', north: [0,4275,0,2850,2900,0,2940,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Viet Agriculture', north: [0,1425,0,950,1425,900,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'American Feeds', north: [0,950,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Dong Tinh', north: [0,7600,0,1900,4750,0,5700,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Thang Long Food', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,5500,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Anova Feed', north: [0,0,645,0,0,0,0,0,0,0,0,0], south: [0,3750,1100,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Hai Duong Haid', north: [0,0,3990,4740,0,0,0,0,0,0,0,0], south: [0,3040,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Enerfo Vietnam', north: [0,0,6890,2940,8610,0,0,0,0,0,0,0], south: [0,12963.1,11481.7,3242.4,0,0,2100,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Vietnam Tequ Hope', north: [0,0,630,550,1465,0,0,0,0,0,0,0], south: [0,475,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Khai Anh', north: [0,0,0,0,0,4500,4500,4500,7740,0,0,0], south: [0,82379.3,19000,15000,62569.9,55547.8,56383.9,0,58818,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Emivest Feedmill', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,4180,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Mavin Austfeed', north: [0,2200,0,0,0,0,0,0,0,0,0,0], south: [0,1570,525,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Ngoc Long', north: [0,950,950,0,1425,1050,2000,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Phat Nguyen Hoang Co', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,475,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Hai Long Co', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,3472.5,2992.5,0,1567.5,4830,0,2565,1520,0,0,0] },
+      { cargo: 'SBM', buyer: 'Haid Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,1520,1710,0,855,2845,1900,3610,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Long Sheng International', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,285,142.5,0,95,0,0,190,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Thang Long Bio-Tech', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,3265,1615,0,1140,3150,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'New Hope', north: [0,14300,3300,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Tan Viet', north: [0,2200,2200,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Guyomarc\'h VCN', north: [0,1100,550,550,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Ha Noi Feed', north: [0,1100,1100,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Leong Hup', north: [0,385,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'BIGRFeed Group', north: [0,330,0,0,0,0,0,0,0,0,0,0], south: [0,0,420,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'ANT', north: [0,3300,2200,0,1900,0,0,0,0,0,0,0], south: [0,2415,1650,1900,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Easthope', north: [0,6600,8400,9450,9025,0,0,0,0,0,0,0], south: [0,2940,2625,3420,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Agrimex', north: [0,3225,0,0,0,2100,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Viet Phuong', north: [0,1100,1650,2200,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Vinafood 1', north: [0,1100,0,1210,3041,0,0,0,0,0,0,0], south: [0,0,1750,0,0,1650,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Thanh Do', north: [0,550,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Dabaco Group', north: [0,7600,0,7000,5000,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Phuc Hung', north: [0,2700,0,0,0,1100,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'CNC International', north: [0,2200,0,3300,0,2200,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Bio Nutrition', north: [0,1430,880,1405,570,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'AFC', north: [0,1350,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'B&T', north: [0,1100,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Dai An Tin', north: [0,1100,1100,2750,0,1650,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Ha Noi Pharma', north: [0,1100,2700,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Viet Agriculture', north: [0,1100,0,0,0,1100,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Nam Viet', north: [0,1050,2200,0,4000,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Boca Commodity', north: [0,900,0,525,475,550,0,0,0,0,0,0], south: [0,0,315,285,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Gold Coin Feedmill', north: [0,900,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Greenfarm Vietnam', north: [0,770,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Phu Thai', north: [0,770,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Asia Feed Mills', north: [0,602.9,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Taiwan International', north: [0,1049,1100,900,1200,1650,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'An Phu', north: [0,550,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'New Orient', north: [0,550,0,0,800,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Viet Anh Cp', north: [0,450,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Asia Feed Mills', north: [0,11115,0,0,0,6117,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Northern Quang Dung', north: [0,1425,0,0,0,1003.7,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'B&T', north: [0,900,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Tan Chau', north: [0,1850,0,0,0,0,1050,0,1050,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Dai Phong Flour', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,5150,2750,0,7700,2750,2272.1,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Grainland VN', north: [0,0,0,0,0,0,10898,0,0,0,0,0], south: [0,3374.3,46690,0,0,0,8679,0,0,0,0,0] },
+      { cargo: 'DDGS', buyer: 'Anova Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,2000,1530,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'DDGS', buyer: 'Grainland VN', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,18821.2,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'VN Flour Corp (Vikybomi)', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,15650,18634,3045,4400,12350,3604.4,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Tin Phuong Anh', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,1100,0,0,770,1100,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Lai Thieu Feed Mill', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,1100,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'PN Trading', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,550,538.3,0,0,0,450,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Vina Intl Commodities', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,2200,0,0,0,2750,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Truong Thanh', north: [0,27500,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Silva Agricultural', north: [0,27500,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Pilmico Vietnam', north: [0,7600,0,0,9500,0,0,5250,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Ha Noi Pharma', north: [0,1900,0,0,1900,2375,2000,3425,1050,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'An Phat', north: [0,950,0,0,0,0,1900,1050,1050,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Livabin', north: [0,950,0,0,0,0,1900,1050,1050,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Rico Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,950,950,950,0,0,0,1050,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Thien Bang VN Animal Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,285,285,285,285,1240,190,190,190,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Golden Eagle', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,550,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Japfa Comfeed', north: [0,0,3221.3,0,0,0,0,0,0,0,0,0], south: [0,1650,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Green Agri', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,3150,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Tan Long Group', north: [0,0,6300,0,0,0,0,0,0,0,0,0], south: [0,9450,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'CP Vietnam', north: [0,0,5500,0,0,0,0,0,0,0,0,0], south: [0,9908.9,31678.2,21560,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Thang Long', north: [0,0,5500,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Hoan Duong', north: [0,0,1900,0,950,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Stavian', north: [0,0,1050,0,475,0,0,0,0,0,0,0], south: [0,0,525,0,950,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Hong Ha Nutrition', north: [0,0,1050,0,1900,950,1964.8,1425,1425,0,0,0], south: [0,0,1050,0,475,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Minh Nhat Production And Trading', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,880,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Barley', buyer: 'Intermalt VN', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,33000,33000,0,0,29305.1,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Mitra Vina', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,4612.8,0,0,2200,0,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Linh Long Development', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,450,0,0,900,1100,0,550,0,0,0] },
+      { cargo: 'SBM', buyer: 'Lucky VCB', north: [0,0,475,475,475,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Agrifeed', north: [0,0,550,1100,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Dong Tinh', north: [0,0,550,1100,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Viet Nhat', north: [0,0,11000,0,13500,0,0,0,0,0,0,0], south: [0,0,1100,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Bunge', north: [0,0,0,1089,0,0,0,0,1158,0,0,0], south: [0,0,4650,4275,0,12979,8033.5,0,20209,0,0,0] },
+      { cargo: 'Corn', buyer: 'Green Agri', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,1178.2,0,0,0,0,0,2375,0,0,0] },
+      { cargo: 'PKE', buyer: 'Boca Commodity', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,1050,0,550,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Agri Master', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,1650,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Binh Dinh Hai Long', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,665,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Mekong Hai Long', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,760,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Emivest Feedmill', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,1900,0,950,9690,8531.3,5880,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Khatoco Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,1049.3,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Onvista Co', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,440,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Hong Nguyen Agricultural', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,3300,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Hong Nga SG', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,2200,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Binh Phat', north: [0,0,1575,1575,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Binh Phuoc Hai Long', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,2665,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Mekong Hai Long', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,2400,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Binh Dinh Hai Long', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,2650,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'VN French', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,3400,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'DDGS', buyer: 'ANT', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,1140,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'DDGS', buyer: 'Vina Intl Commodities', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,3600,0,0,0,0,6300,0,0,0,0] },
+      { cargo: 'DDGS', buyer: 'De Heus', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,4940,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'DDGS', buyer: 'VN French', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,760,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'DDGS', buyer: 'Bunge', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,18557.3,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Van Xuan Agricultural Products', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,1050.9,0,1100,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Anyou Vietnam', north: [0,0,880,0,1000,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Viet Trung', north: [0,0,1200,0,570,950,950,950,950,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Soybean', buyer: 'Dabaco Group', north: [0,0,36300,0,46953.4,0,0,0,0,0,0,0], south: [0,0,35601,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Thuan An', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,550,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'C&D', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,10742.5,0,0,0,0,1119.1,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'An Phat', north: [0,0,420,0,380,380,380,420,380,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Livabin', north: [0,0,630,0,285,285,285,315,285,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Hai Duong Haid', north: [0,0,26559.2,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Fujinuco JSC', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,712.5,712.5,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Nam Tien JSC', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,712.5,712.5,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Hoang Gia', north: [0,0,2850,0,2850,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Farmhope', north: [0,0,1000,0,1900,0,1361,4139,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Hyper Hope Nutrition (Cambodia)', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,525,475,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Greenfeed Vietnam', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,1365,0,1575,0,840,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'ANT', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,2415,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Neo Bright', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,1882,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Nhat Thanh', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,1100,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Thuan An', north: [0,0,0,0,4050,1840,0,0,0,0,0,0], south: [0,0,1100,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'TM XNK TLN', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,1650,0,0,2200,1000,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Farmhope', north: [0,0,0,500,1000,1425.9,1525,1000,1000,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'VN Agroresources', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,2375,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Feedingstuffs', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,1425,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Binh Phuoc Hai Long', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,1050,0,1425,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Mekong Hai Long', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,1470,0,4600,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Binh Dinh Hai Long', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,2205,0,1235,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Thanh Long', north: [0,0,0,1050,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Dabaco Group', north: [0,0,0,5000,0,3615,2850,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'ABC Vietnam', north: [0,0,0,3000,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Agrimex', north: [0,0,0,2000,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Ngoc Long', north: [0,0,0,1050,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Ha An Phat', north: [0,0,0,2100,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'VNR', north: [0,0,0,24057,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Asia Feed Mills', north: [0,0,0,3760,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Anyou Vietnam', north: [0,0,0,2375,0,0,5750,4200,2100,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Minh Trang SG', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,1900,1900,5050,0,3800,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Giay Vang', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,1050,0,1100,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'US Feed', north: [0,0,0,0,570,0,0,0,0,0,0,0], south: [0,0,0,2850,0,1042,950,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Golden Eagle', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,490,440,0,550,550,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Hai Nam Agy', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,2470,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Anifeed Animal', north: [0,0,0,0,22500,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Hung Gia Nam', north: [0,0,0,0,2000,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Viet Nhat', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,630,0,0,0,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Tan Hoa Dong', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,1350,0,1100,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Bunge', north: [0,0,0,0,4418.7,3396.5,1976.1,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Quang Loc', north: [0,0,0,0,330,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Nong Lam Tan Phat', north: [0,0,0,0,330,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Soybean', buyer: 'Dabaco Oil', north: [0,0,0,0,50798.6,20321,20638.8,19270,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Stavian', north: [0,0,0,0,950,1050,3700,1050,950,0,0,0], south: [0,0,0,0,0,3900,2325,0,525,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Green Agri', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,1100,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Anova Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,440,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'ADM Vietnam', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,220,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Bunge', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,4465,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Twins Hai Duong', north: [0,0,0,0,1781.8,730,3780,0,2625,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Minh Hieu', north: [0,0,0,0,1200,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Thinh Phat', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,10971,10899.8,0,1879.2,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Tuan Minh', north: [0,0,0,0,513,500,475,475,500,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Hoang Gia', north: [0,0,0,0,513,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Thang Long Bio-Tech', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,1910,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Sheng Long', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,1140,0,0,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'Wilmar', north: [0,0,0,0,14000,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Khai Anh', north: [0,0,0,0,0,2100,0,0,0,0,0,0], south: [0,0,0,0,0,3050,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Ha Lan Produce', north: [0,0,0,0,0,570,0,570,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'CNC International', north: [0,0,0,0,0,1425,1425,2375,2425,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Thanh Long', north: [0,0,0,0,0,3050,950,1050,950,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Anyou Vietnam', north: [0,0,0,0,0,570,570,885,855,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Ha Lan Produce', north: [0,0,0,0,0,570,570,570,570,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Viet Agriculture', north: [0,0,0,0,0,475.1,475,525,475,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Ha Noi Feed', north: [0,0,0,0,0,525,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Sichuan Newhope', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,2785,0,1330,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Hung Thinh', north: [0,0,0,0,0,420,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Sichuan Newhope', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,1255,1615,0,0,0,0,0] },
+      { cargo: 'Wheat', buyer: 'VN Southern Food (Vinafood II)', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,4300,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Viet Royal', north: [0,0,0,0,0,1800,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Easthope', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,660,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Rico Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,550,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'C&D', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,12675,0,8000,19849.2,0,0,0] },
+      { cargo: 'Corn', buyer: 'Binh Duong Hai Long', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,1785,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Green House', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,5250,0,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Kyodo Sojitz Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,500,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Binh Phat', north: [0,0,0,0,0,1050,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Leong Hup', north: [0,0,0,0,0,1050,2100,3150,4200,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Soybean', buyer: 'CP Vietnam', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,3274.1,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Asia Nutrition', north: [0,0,0,0,0,0,760,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Van Phuc', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,2250,2750,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Thanh Long', north: [0,0,0,0,0,0,2850,5250,7350,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Kyodo Sojitz Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,500,525,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'US Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,950,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Viet An Agri', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,8655.8,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Japfa Comfeed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,1460,0,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Hai Nam Agy', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,525,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'E.N. Prosper VN', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,4281.9,0,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'BIGRFeed Group', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,525,475,0,0,0] },
+      { cargo: 'DDGS', buyer: 'Enerfo Vietnam', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,14650,0,0,0,0] },
+      { cargo: 'DDGS', buyer: 'Cargill Vietnam', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,1050,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Tongwei', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,1800,0,0,0,0] },
+      { cargo: 'Canola Meal', buyer: 'Thien Bang VN Animal Feed', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,200,0,0,0,0] },
+      { cargo: 'PKE', buyer: 'Tan Long Group', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,2203.8,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Oudong Animal Feed (Cambodia)', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,1260,0,0,0,0] },
+      { cargo: 'Corn', buyer: 'Thanh Do', north: [0,0,0,0,0,0,0,950,0,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Twins Hai Duong', north: [0,0,0,0,0,0,0,0,1140,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'Barley', buyer: 'LDC Vietnam', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,14366.7,0,0,0] },
+      { cargo: 'Corn', buyer: 'Hong Nguyen Agricultural', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,1900,0,0,0] },
+      { cargo: 'SBM', buyer: 'Golden Eagle', north: [0,0,0,0,0,0,0,0,0,0,0,0], south: [0,0,0,0,0,0,0,0,285,0,0,0] },
+      { cargo: 'SBM', buyer: 'Thinh That', north: [0,0,0,0,0,0,0,0,10279,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] },
+      { cargo: 'SBM', buyer: 'Thanh Do', north: [0,0,0,0,0,0,0,0,525,0,0,0], south: [0,0,0,0,0,0,0,0,0,0,0,0] }
     ]
   }
 };
@@ -2394,202 +2891,402 @@ function renderPlaceholder(id, title){
     `<div class="placeholder"><div class="tag">Coming soon</div><p>The <b>${title}</b> page will be added in the next step. For now, let's validate the engine on the Vietnam tab.</p></div>`;
 }
 
-// ── VN Supply tab (2026-09-25) ──────────────────────────────────────────
-// Shows ONLY the Dashboard sheet's "Cargo x Month — Arrived / On the way (MT)" pivot from
-// Mete's VN_Supply_Report.xlsx (Origin x Month / Pipeline status / Actual transit time are out
-// of scope — "sadece dashboardaki cargo x month'u ekleyecegiz"). All the matching logic (line-ups
-// vs arrival reports, buyer-name standardization, Delayed/Missing thresholds) lives inside that
-// Excel file; this tab only displays the finished numbers, and lets Mete re-import a refreshed
-// copy of the same sheet whenever the report updates.
-let vnSupplyUI = { cargo: 'ALL' };
+// ── VN Supply "Overview" tab (2026-09-28) ───────────────────────────────
+// Mirrors the Excel workbook's "Overview" sheet 1:1: a product/month/region chip selector drives
+// an Arrived-only monthly bar chart with an average reference line, a selected/previous/average
+// comparison box, an origin donut (top 4 + "Diger"), a top-5-buyer list, and a 9-product snapshot
+// table with sparklines. Re-importing the Excel file (via the button at the bottom of this tab)
+// re-reads the raw Dashboard / Arr Data / Lineup SUM sheets and rebuilds state.vnSupply from
+// scratch, so it always reflects Mete's latest workbook rather than a hand-maintained snapshot.
+let vnSupplyUI = { cargo: 'Corn', month: null, region: 'All' };
 
-function vnSupplyMonthLabel(ym){
-  const m = parseInt((ym || '').slice(5, 7), 10);
-  return MONTHS_FULL[m - 1] || (ym || '');
-}
-
-function vnSupplyCargoes(){
-  return (state.vnSupply && Array.isArray(state.vnSupply.cargoes)) ? state.vnSupply.cargoes : [];
-}
-
-function vnSupplyMonths(){
-  const m = state.vnSupply && state.vnSupply.months;
-  return (Array.isArray(m) && m.length === 12) ? m : defaultState.vnSupply.months;
-}
-
-function vnSupplySum(arr){
-  return (arr || []).reduce((a, b) => a + (b || 0), 0);
-}
-
-// cargoName === 'ALL' sums every cargo; otherwise the single named cargo's own two series.
-function vnSupplySeries(cargoName){
-  const list = vnSupplyCargoes();
-  if (cargoName && cargoName !== 'ALL'){
-    const row = list.find(c => c.name === cargoName);
-    return row ? { arrived: row.arrived.slice(), onway: row.onway.slice() } : { arrived: Array(12).fill(0), onway: Array(12).fill(0) };
-  }
-  const arrived = Array(12).fill(0), onway = Array(12).fill(0);
-  list.forEach(c => {
-    for (let i = 0; i < 12; i++){ arrived[i] += c.arrived[i] || 0; onway[i] += c.onway[i] || 0; }
-  });
-  return { arrived, onway };
+// ---- data accessors ------------------------------------------------------
+function vnSupplyData(){ return (state.vnSupply && Array.isArray(state.vnSupply.cargoes)) ? state.vnSupply : defaultState.vnSupply; }
+function vnSupplyCargoRow(name){ return vnSupplyData().cargoes.find(c => c.name === name); }
+function vnSupplyMonths(){ return vnSupplyData().months; }
+function vnSupplyCutoffMonthIdx(){
+  const vs = vnSupplyData();
+  return vs.months.indexOf((vs.asOf || '').slice(0, 7));
 }
 
 function fmtVnsMT(n){ return Math.round(n || 0).toLocaleString('en-US'); }
-function fmtVnsK(n){ return (Math.round((n || 0) / 100) / 10).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
+function fmtVnsK(n){ return (Math.round((n || 0) / 100) / 10).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + 'k'; }
 function formatDDMMYYYY(iso){
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
   return m ? `${m[3]}-${m[2]}-${m[1]}` : (iso || '—');
 }
 
-// Fixed axis ticks (2026-09-25, Mete): 0 / 200k / 400k / 800k / 1200k / 1500k / 1800k / 2000k —
-// deliberately uneven steps, not an auto-computed scale. Covers every single-cargo view (largest
-// is Corn at ~1.53M). Only the "All cargoes" view can run past 2,000k (peak month ~2.71M); rather
-// than clip those bars off the top, extra ticks are appended above 2,000k in 500k steps so nothing
-// is ever cut off, and the axis stays exactly the requested list whenever the data fits under it.
-const VNS_AXIS_TICKS_BASE = [0, 200000, 400000, 800000, 1200000, 1500000, 1800000, 2000000];
-function vnSupplyAxisTicks(maxV){
-  const ticks = VNS_AXIS_TICKS_BASE.slice();
-  while (ticks[ticks.length - 1] < maxV) ticks.push(ticks[ticks.length - 1] + 500000);
+// region: 'All' | 'North' | 'South'. Arrived-only (Dashboard/Excel's "Arrived" row), never on-the-way.
+function vnSupplyArrivedSeries(cargoName, region){
+  const row = vnSupplyCargoRow(cargoName);
+  if (!row) return Array(12).fill(0);
+  if (region === 'North') return row.arrivedNorth.slice();
+  if (region === 'South') return row.arrivedSouth.slice();
+  return row.arrivedNorth.map((v, i) => (v || 0) + (row.arrivedSouth[i] || 0));
+}
+
+// The report's cutoff month is only partially through (NOR cutoff falls mid-month), so its raw
+// Arrived figure understates real supply. For the *monthly average* baseline only, that one month
+// is topped up with the same Arrived+On-the-way logic the Dashboard sheet uses (Lineup SUM bookings
+// that haven't reached Arr Data yet, plus Arr Data's own not-yet-arrived rows already flagged
+// "Scheduled -> On the way" or carrying a not-yet-allocated balance). The Lineup SUM component has
+// no Region field, so — same as Dashboard — it's added unfiltered regardless of the Region toggle.
+function vnSupplyBoostedCutoffMonthVal(cargoName, region){
+  const row = vnSupplyCargoRow(cargoName);
+  if (!row) return 0;
+  const cutoffIdx = vnSupplyCutoffMonthIdx();
+  if (cutoffIdx < 0) return 0;
+  const arrived = vnSupplyArrivedSeries(cargoName, region)[cutoffIdx] || 0;
+  const lineup = row.sepLineup || 0;
+  const syes = region === 'North' ? row.sepSyesNorth : region === 'South' ? row.sepSyesSouth : (row.sepSyesNorth || 0) + (row.sepSyesSouth || 0);
+  const tbal = region === 'North' ? row.sepTbalNorth : region === 'South' ? row.sepTbalSouth : (row.sepTbalNorth || 0) + (row.sepTbalSouth || 0);
+  return arrived + lineup + (syes || 0) + (tbal || 0);
+}
+
+function vnSupplyMonthlyAvg(cargoName, region){
+  const cutoffIdx = vnSupplyCutoffMonthIdx();
+  if (cutoffIdx < 0) return 0;
+  const series = vnSupplyArrivedSeries(cargoName, region);
+  let sum = 0;
+  for (let i = 0; i < cutoffIdx; i++) sum += series[i] || 0;
+  sum += vnSupplyBoostedCutoffMonthVal(cargoName, region);
+  return sum / (cutoffIdx + 1);
+}
+
+function vnSupplyPeakTrough(cargoName, region){
+  const series = vnSupplyArrivedSeries(cargoName, region);
+  const cutoffIdx = vnSupplyCutoffMonthIdx();
+  const w = series.slice(0, cutoffIdx + 1);
+  if (!w.length || !w.some(v => v > 0)) return null;
+  let peakI = 0, troughI = 0;
+  w.forEach((v, i) => { if (v > w[peakI]) peakI = i; if (v < w[troughI]) troughI = i; });
+  return { peak: MONTHS_FULL[peakI], trough: MONTHS_FULL[troughI] };
+}
+
+const VNS_SPARK_CHARS = '▁▂▃▄▅▆▇█';
+function vnSupplySparkline(series, n){
+  const w = series.slice(0, Math.max(0, n));
+  if (!w.length || !w.some(v => v > 0)) return '';
+  const max = Math.max(1, ...w);
+  return w.map(v => VNS_SPARK_CHARS[Math.min(7, Math.max(0, Math.round((v || 0) / max * 7)))]).join('');
+}
+
+function vnSupplyNiceAxisTicks(maxV, targetCount){
+  targetCount = targetCount || 5;
+  if (maxV <= 0) return [0, 1];
+  const rawStep = maxV / targetCount;
+  const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const norm = rawStep / mag;
+  let niceNorm = norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10;
+  const step = niceNorm * mag;
+  const top = Math.ceil(maxV / step) * step;
+  const ticks = [];
+  for (let v = 0; v <= top + step * 0.001; v += step) ticks.push(Math.round(v));
   return ticks;
 }
 
-function vnSupplyChartSvg(series, months, width, height){
-  const { arrived, onway } = series;
-  const totals = arrived.map((a, i) => a + (onway[i] || 0));
-  const dataMax = Math.max(1, ...totals);
-  const ticks = vnSupplyAxisTicks(dataMax);
+// selected/previous/average KPI trio. "All" month = year-to-date-so-far: selected = sum of every
+// completed month (pure Arrived, same rule as everywhere else on this tab); previous is undefined
+// in that view; average becomes "expected by now" = the monthly average x number of months elapsed,
+// so the YTD total has something apples-to-apples to compare against.
+function vnSupplyKpiValues(){
+  const cargo = vnSupplyUI.cargo, region = vnSupplyUI.region, month = vnSupplyUI.month;
+  const series = vnSupplyArrivedSeries(cargo, region);
+  const cutoffIdx = vnSupplyCutoffMonthIdx();
+  const avg = vnSupplyMonthlyAvg(cargo, region);
+  const n = cutoffIdx + 1;
+  if (month === 'All'){
+    let ytd = 0;
+    for (let i = 0; i <= cutoffIdx; i++) ytd += series[i] || 0;
+    return { selected: ytd, prev: null, avg: avg * n, isYtd: true, n };
+  }
+  const idx = MONTHS_FULL.indexOf(month);
+  const selected = idx >= 0 ? (series[idx] || 0) : 0;
+  const prev = idx > 0 ? (series[idx - 1] || 0) : null;
+  return { selected, prev, avg, isYtd: false, n, idx };
+}
+
+function vnSupplyMonthValue(series, month, cutoffIdx){
+  if (month === 'All'){
+    let v = 0; for (let i = 0; i <= cutoffIdx; i++) v += series[i] || 0; return v;
+  }
+  const idx = MONTHS_FULL.indexOf(month);
+  return idx >= 0 ? (series[idx] || 0) : 0;
+}
+
+function vnSupplyRegionSeries(row, region){
+  return region === 'North' ? row.north : region === 'South' ? row.south : row.north.map((v, i) => (v || 0) + (row.south[i] || 0));
+}
+
+// Top 4 origins + "Diger" (everything else) for the selected cargo/month/region, Arrived-only.
+function vnSupplyOriginBreakdown(){
+  const cargo = vnSupplyUI.cargo, region = vnSupplyUI.region, month = vnSupplyUI.month;
+  const cutoffIdx = vnSupplyCutoffMonthIdx();
+  const vals = vnSupplyData().origins.filter(o => o.cargo === cargo).map(o => ({
+    name: o.origin, val: vnSupplyMonthValue(vnSupplyRegionSeries(o, region), month, cutoffIdx)
+  })).filter(x => x.val > 0);
+  vals.sort((a, b) => b.val - a.val);
+  const top = vals.slice(0, 4);
+  const others = vals.slice(4);
+  const otherVal = others.reduce((a, x) => a + x.val, 0);
+  const total = vals.reduce((a, x) => a + x.val, 0);
+  return { top, otherVal, otherNames: others, total };
+}
+
+function vnSupplyTopBuyers(){
+  const cargo = vnSupplyUI.cargo, region = vnSupplyUI.region, month = vnSupplyUI.month;
+  const cutoffIdx = vnSupplyCutoffMonthIdx();
+  const vals = vnSupplyData().buyers.filter(b => b.cargo === cargo).map(b => ({
+    name: b.buyer, val: vnSupplyMonthValue(vnSupplyRegionSeries(b, region), month, cutoffIdx)
+  })).filter(x => x.val > 0);
+  vals.sort((a, b) => b.val - a.val);
+  return vals.slice(0, 5);
+}
+
+// ---- SVG chart builders ---------------------------------------------------
+function vnSupplyMainChartSvg(width, height){
+  const cargo = vnSupplyUI.cargo, region = vnSupplyUI.region;
+  const series = vnSupplyArrivedSeries(cargo, region);
+  const avg = vnSupplyMonthlyAvg(cargo, region);
+  const dataMax = Math.max(1, ...series, avg);
+  const ticks = vnSupplyNiceAxisTicks(dataMax, 5);
   const maxV = ticks[ticks.length - 1];
-  const padL = 46, padR = 10, padT = 10, padB = 22;
+  const padL = 50, padR = 10, padT = 10, padB = 20;
   const w = width - padL - padR, h = height - padT - padB;
-  const n = months.length;
-  const gap = 8;
+  const n = 12, gap = 8;
   const bw = Math.max(6, (w - gap * (n - 1)) / n);
-  const curYm = new Date().toISOString().slice(0, 7);
   const yFor = v => padT + h - (v / maxV) * h;
+  const selIdx = vnSupplyUI.month === 'All' ? -1 : MONTHS_FULL.indexOf(vnSupplyUI.month);
 
   let bars = '', axisLabels = '';
   for (let i = 0; i < n; i++){
     const x = padL + i * (bw + gap);
-    const aH = h * (arrived[i] / maxV);
-    const oH = h * ((onway[i] || 0) / maxV);
-    const isCur = months[i] === curYm;
-    if (arrived[i] > 0){
-      bars += `<rect class="vns-bar-arrived${isCur ? ' vns-bar-cur' : ''}" x="${x.toFixed(1)}" y="${(padT + h - aH).toFixed(1)}" width="${bw.toFixed(1)}" height="${aH.toFixed(1)}" rx="2"><title>${vnSupplyMonthLabel(months[i])}: Arrived ${fmtVnsMT(arrived[i])} MT</title></rect>`;
-    }
-    if (onway[i] > 0){
-      bars += `<rect class="vns-bar-onway${isCur ? ' vns-bar-cur' : ''}" x="${x.toFixed(1)}" y="${(padT + h - aH - oH).toFixed(1)}" width="${bw.toFixed(1)}" height="${oH.toFixed(1)}" rx="2"><title>${vnSupplyMonthLabel(months[i])}: On the way ${fmtVnsMT(onway[i])} MT</title></rect>`;
-    }
-    axisLabels += `<text x="${(x + bw / 2).toFixed(1)}" y="${(height - 6).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--text-dim)">${vnSupplyMonthLabel(months[i])}</text>`;
+    const bh = h * ((series[i] || 0) / maxV);
+    const isSel = i === selIdx;
+    bars += `<rect class="vns-bar-arrived${isSel ? ' vns-bar-cur' : ''}" x="${x.toFixed(1)}" y="${(padT + h - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, bh).toFixed(1)}" rx="2"><title>${MONTHS_FULL[i]}: ${fmtVnsMT(series[i] || 0)} MT</title></rect>`;
+    axisLabels += `<text x="${(x + bw / 2).toFixed(1)}" y="${(height - 5).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--text-dim)">${MONTHS_FULL[i]}</text>`;
   }
-
   let gridLines = '', yLabels = '';
   ticks.forEach(t => {
     const y = yFor(t).toFixed(1);
     gridLines += `<line x1="${padL}" y1="${y}" x2="${width - padR}" y2="${y}" stroke="var(--border)" stroke-width="1"/>`;
-    yLabels += `<text x="${(padL - 6).toFixed(1)}" y="${(parseFloat(y) + 3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--text-dim)">${t === 0 ? '0' : fmtVnsK(t) + 'k'}</text>`;
+    yLabels += `<text x="${(padL - 6).toFixed(1)}" y="${(parseFloat(y) + 3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--text-dim)">${t === 0 ? '0' : fmtVnsK(t)}</text>`;
   });
+  const avgY = yFor(Math.min(avg, maxV)).toFixed(1);
+  const avgLine = `<line class="vns-avg-line" x1="${padL}" y1="${avgY}" x2="${width - padR}" y2="${avgY}"/>` +
+    `<text x="${width - padR}" y="${(parseFloat(avgY) - 4).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--accent)">avg ${fmtVnsMT(avg)}</text>`;
 
-  return `<svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">${gridLines}${bars}${axisLabels}${yLabels}</svg>`;
+  return `<svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">${gridLines}${bars}${avgLine}${axisLabels}${yLabels}</svg>`;
 }
 
-function vnSupplyCards(el){
-  const wrap = document.createElement('div');
-  wrap.className = 'news-tiles';
-  const sel = vnSupplyUI.cargo || 'ALL';
-  const selLabel = sel === 'ALL' ? 'All cargoes' : sel;
-  const cur = vnSupplySeries(sel);
-  const arrivedTotal = vnSupplySum(cur.arrived);
-  const onwayTotal = vnSupplySum(cur.onway);
-  const grand = arrivedTotal + onwayTotal;
-  const curIdx = vnSupplyMonths().indexOf(new Date().toISOString().slice(0, 7));
-  const curArrived = curIdx >= 0 ? cur.arrived[curIdx] : 0;
-  const curOnway = curIdx >= 0 ? cur.onway[curIdx] : 0;
-
-  const cards = [
-    { label: `Arrived — ${selLabel}`, val: fmtVnsMT(arrivedTotal), tone: 'pos', sub: `${grand ? Math.round(arrivedTotal / grand * 100) : 0}% of total` },
-    { label: `On the way — ${selLabel}`, val: fmtVnsMT(onwayTotal), tone: 'accent', sub: `${grand ? Math.round(onwayTotal / grand * 100) : 0}% of total` },
-    { label: `Total — ${selLabel}`, val: fmtVnsMT(grand), tone: '', sub: sel === 'ALL' ? `${vnSupplyCargoes().length} cargo types` : 'all 12 months' },
-    { label: 'This month', val: fmtVnsMT(curArrived + curOnway), tone: '', sub: curIdx >= 0 ? `${fmtVnsMT(curArrived)} arrived · ${fmtVnsMT(curOnway)} on the way` : 'n/a' }
-  ];
-  cards.forEach(c => {
-    const tile = document.createElement('div');
-    tile.className = 'news-tile' + (c.tone ? ' ' + c.tone : '');
-    tile.innerHTML = `<div class="news-tile-head"><span class="news-tile-name">${c.label}</span></div>` +
-      `<div class="news-tile-val">${c.val}</div>` +
-      `<div class="news-tile-sub">${c.sub}</div>`;
-    wrap.appendChild(tile);
+const VNS_DONUT_COLORS = ['#e0a83a', '#2f9e6f', '#4a90d9', '#c1554a', '#6b7c8d'];
+function vnSupplyDonutSvg(breakdown, size){
+  const slices = breakdown.top.map(t => ({ name: t.name, val: t.val }));
+  if (breakdown.otherVal > 0) slices.push({ name: 'Diğer', val: breakdown.otherVal });
+  const total = breakdown.total || 1;
+  const r = size / 2 - 12, cx = size / 2, cy = size / 2;
+  const circumference = 2 * Math.PI * r;
+  let offset = 0, circles = '';
+  slices.forEach((s, i) => {
+    const frac = s.val / total;
+    const len = Math.max(0, frac * circumference);
+    circles += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${VNS_DONUT_COLORS[i % VNS_DONUT_COLORS.length]}" stroke-width="22" ` +
+      `stroke-dasharray="${len.toFixed(2)} ${Math.max(0, circumference - len).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})">` +
+      `<title>${s.name}: ${fmtVnsMT(s.val)} MT (${Math.round(frac * 100)}%)</title></circle>`;
+    offset += len;
   });
-  el.appendChild(wrap);
+  return { svg: `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${circles}</svg>`, slices };
 }
 
-function vnSupplyChipRow(el){
+// ---- render: controls ------------------------------------------------------
+function vnSupplyChipRowGeneric(el, label, options, current, onPick){
+  const lbl = document.createElement('div');
+  lbl.className = 'vns-chiprow-label';
+  lbl.textContent = label;
+  el.appendChild(lbl);
   const wrap = document.createElement('div');
   wrap.className = 'vns-chips';
-  const names = ['ALL', ...vnSupplyCargoes().map(c => c.name)];
-  names.forEach(name => {
+  options.forEach(opt => {
     const chip = document.createElement('div');
-    chip.className = 'vns-chip' + (vnSupplyUI.cargo === name ? ' on' : '');
-    chip.textContent = name === 'ALL' ? 'All cargoes' : name;
-    chip.addEventListener('click', () => { vnSupplyUI.cargo = name; renderVnSupplyTab(); });
+    chip.className = 'vns-chip' + (current === opt ? ' on' : '');
+    chip.textContent = opt;
+    chip.addEventListener('click', () => onPick(opt));
     wrap.appendChild(chip);
   });
   el.appendChild(wrap);
 }
 
-function vnSupplyChart(el){
+function vnSupplyControls(el){
+  const vs = vnSupplyData();
+  const cargoNames = vs.cargoes.map(c => c.name);
+  const cutoffIdx = vnSupplyCutoffMonthIdx();
+  const monthOptions = MONTHS_FULL.slice(0, Math.max(0, cutoffIdx + 1)).concat(['All']);
+
+  vnSupplyChipRowGeneric(el, 'Product', cargoNames, vnSupplyUI.cargo, (v) => { vnSupplyUI.cargo = v; renderVnSupplyTab(); });
+  vnSupplyChipRowGeneric(el, 'Month', monthOptions, vnSupplyUI.month, (v) => { vnSupplyUI.month = v; renderVnSupplyTab(); });
+  vnSupplyChipRowGeneric(el, 'Region', ['All', 'North', 'South'], vnSupplyUI.region, (v) => { vnSupplyUI.region = v; renderVnSupplyTab(); });
+}
+
+// ---- render: comparison box -------------------------------------------------
+function vnSupplyComparisonBox(el){
+  const k = vnSupplyKpiValues();
   const wrap = document.createElement('div');
-  wrap.className = 'vns-chart-wrap';
-  const legend = document.createElement('div');
-  legend.className = 'vns-chart-legend';
-  legend.innerHTML = '<span><i style="background:var(--good)"></i>Arrived</span><span><i style="background:var(--accent)"></i>On the way</span>';
-  wrap.appendChild(legend);
+  wrap.className = 'news-tiles';
+
+  const deltaHtml = (curVal, refVal) => {
+    if (refVal === null || refVal === undefined || !refVal){
+      return `<div class="vns-tile-delta" style="color:var(--text-dim);">—</div>`;
+    }
+    const pct = (curVal - refVal) / refVal * 100;
+    const cls = pct >= 0 ? 'pos' : 'neg';
+    const sign = pct >= 0 ? '+' : '';
+    return `<div class="vns-tile-delta delta-inline ${cls}">${sign}${pct.toFixed(1)}%</div>`;
+  };
+
+  const tile1 = document.createElement('div');
+  tile1.className = 'news-tile';
+  tile1.innerHTML = `<div class="news-tile-head"><span class="news-tile-name">${k.isYtd ? 'YEAR TO DATE' : 'SELECTED MONTH'}</span></div>` +
+    `<div class="news-tile-val">${fmtVnsMT(k.selected)}</div><div class="news-tile-sub">${vnSupplyUI.cargo} · MT · ${vnSupplyUI.region}</div>`;
+  wrap.appendChild(tile1);
+
+  const tile2 = document.createElement('div');
+  tile2.className = 'news-tile';
+  tile2.innerHTML = `<div class="news-tile-head"><span class="news-tile-name">${k.isYtd ? '—' : 'PREVIOUS MONTH'}</span></div>` +
+    `<div class="news-tile-val">${k.prev === null ? '—' : fmtVnsMT(k.prev)}</div>` + deltaHtml(k.selected, k.prev);
+  wrap.appendChild(tile2);
+
+  const tile3 = document.createElement('div');
+  tile3.className = 'news-tile';
+  tile3.innerHTML = `<div class="news-tile-head"><span class="news-tile-name">${k.isYtd ? `EXPECTED (AVG × ${k.n})` : 'MONTHLY AVERAGE'}</span></div>` +
+    `<div class="news-tile-val">${fmtVnsMT(k.avg)}</div>` + deltaHtml(k.selected, k.avg);
+  wrap.appendChild(tile3);
+
+  el.appendChild(wrap);
+}
+
+// ---- render: main chart -----------------------------------------------------
+function vnSupplyMainChartSection(el){
+  const wrap = document.createElement('div');
+  wrap.className = 'vns-chart-card';
+  const avg = vnSupplyMonthlyAvg(vnSupplyUI.cargo, vnSupplyUI.region);
+  const title = document.createElement('div');
+  title.className = 'vns-chart-title';
+  title.innerHTML = `MONTHLY ARRIVED (MT) — <b>${vnSupplyUI.cargo}</b> · average line = <b>${fmtVnsMT(avg)} MT</b>`;
+  wrap.appendChild(title);
   const chartHost = document.createElement('div');
   const width = Math.max(320, Math.min(900, (el.clientWidth || 360) - 24));
-  const series = vnSupplySeries(vnSupplyUI.cargo);
-  chartHost.innerHTML = vnSupplyChartSvg(series, vnSupplyMonths(), width, 190);
+  chartHost.innerHTML = vnSupplyMainChartSvg(width, 190);
   wrap.appendChild(chartHost);
   el.appendChild(wrap);
 }
 
-function vnSupplyPivot(el){
+// ---- render: origin donut ----------------------------------------------------
+function vnSupplyOriginSection(el){
+  const wrap = document.createElement('div');
+  wrap.className = 'vns-chart-card';
+  const title = document.createElement('div');
+  title.className = 'vns-chart-title';
+  title.innerHTML = `ORIGIN BREAKDOWN — <b>${vnSupplyUI.cargo} · ${vnSupplyUI.month}</b> (Arrived)`;
+  wrap.appendChild(title);
+
+  const bd = vnSupplyOriginBreakdown();
+  if (!bd.total){
+    const empty = document.createElement('div');
+    empty.className = 'placeholder';
+    empty.style.padding = '18px';
+    empty.textContent = 'No arrivals for this selection yet.';
+    wrap.appendChild(empty);
+    el.appendChild(wrap);
+    return;
+  }
+  const { svg, slices } = vnSupplyDonutSvg(bd, 170);
+  const row = document.createElement('div');
+  row.className = 'vns-donut-row';
+  const chartHost = document.createElement('div');
+  chartHost.innerHTML = svg;
+  row.appendChild(chartHost);
+  const legend = document.createElement('div');
+  legend.className = 'vns-donut-legend';
+  let legendHtml = '';
+  slices.forEach((s, i) => {
+    const pct = bd.total ? Math.round(s.val / bd.total * 100) : 0;
+    legendHtml += `<span><i style="background:${VNS_DONUT_COLORS[i % VNS_DONUT_COLORS.length]}"></i>${s.name} <b style="margin-left:auto">${pct}%</b></span>`;
+  });
+  legend.innerHTML = legendHtml;
+  row.appendChild(legend);
+  wrap.appendChild(row);
+
+  if (bd.otherNames.length){
+    const note = document.createElement('div');
+    note.className = 'vns-diger-note';
+    note.textContent = 'Diğer içinde: ' + bd.otherNames.map(o => `${o.name}: ${fmtVnsMT(o.val)} mt`).join('   ');
+    wrap.appendChild(note);
+  }
+  el.appendChild(wrap);
+}
+
+// ---- render: top-5 buyers ----------------------------------------------------
+function vnSupplyTopBuyersSection(el){
+  const k = vnSupplyKpiValues();
+  el.appendChild(sectionTitle(`Top 5 Buyers — ${vnSupplyUI.cargo} · ${vnSupplyUI.month} (${vnSupplyUI.region})`));
+  const buyers = vnSupplyTopBuyers();
+  const wrap = document.createElement('div');
+  wrap.className = 'vns-chart-card';
+  if (!buyers.length){
+    wrap.innerHTML = '<div class="placeholder" style="padding:14px;">No arrivals for this selection yet.</div>';
+    el.appendChild(wrap);
+    return;
+  }
+  const maxVal = Math.max(...buyers.map(b => b.val));
+  buyers.forEach((b, i) => {
+    const pct = k.selected ? (b.val / k.selected * 100) : 0;
+    const barPct = maxVal ? (b.val / maxVal * 100) : 0;
+    const row = document.createElement('div');
+    row.className = 'vns-buyer-row';
+    row.innerHTML = `<div class="vns-buyer-rank">${i + 1}</div>` +
+      `<div>${b.name}</div>` +
+      `<div class="vns-buyer-bar-wrap"><div class="vns-buyer-bar" style="width:${barPct.toFixed(1)}%"></div><div class="vns-buyer-tons">${fmtVnsMT(b.val)} mt</div></div>` +
+      `<div class="vns-buyer-pct">${pct.toFixed(1)}%</div>`;
+    wrap.appendChild(row);
+  });
+  el.appendChild(wrap);
+}
+
+// ---- render: 9-product snapshot ------------------------------------------------
+function vnSupplySnapshotSection(el){
+  el.appendChild(sectionTitle(`All Products — Snapshot (Arrived, ${vnSupplyUI.month}, ${vnSupplyUI.region})`));
   const wrap = document.createElement('div');
   wrap.className = 'scrollx';
   const table = document.createElement('table');
-  table.className = 'grid-table vns-pivot';
-
-  const months = vnSupplyMonths();
+  table.className = 'grid-table vns-snap-table';
   const thead = document.createElement('tr');
-  thead.innerHTML = '<th class="rowlabel">Cargo</th>' + months.map(m => `<th>${vnSupplyMonthLabel(m)}</th>`).join('') + '<th>Total</th>';
+  thead.innerHTML = '<th class="rowlabel">Product</th><th>Selected month</th><th>Trend</th><th>Peak / Trough</th>';
   table.appendChild(thead);
 
-  const buildRow = (name, arrived, onway, isTotal) => {
+  const vs = vnSupplyData();
+  const cutoffIdx = vnSupplyCutoffMonthIdx();
+
+  vs.cargoes.forEach(c => {
+    const series = vnSupplyArrivedSeries(c.name, vnSupplyUI.region);
+    const val = vnSupplyMonthValue(series, vnSupplyUI.month, cutoffIdx);
+    const pt = vnSupplyPeakTrough(c.name, vnSupplyUI.region);
+    const spark = vnSupplySparkline(series, cutoffIdx + 1);
     const tr = document.createElement('tr');
-    if (isTotal) tr.className = 'vns-pivot-total-row';
-    let html = `<td class="rowlabel">${name}</td>`;
-    for (let i = 0; i < 12; i++){
-      const a = arrived[i] || 0, o = onway[i] || 0;
-      const aCell = a ? `<div class="vns-cell-arrived">${fmtVnsK(a)}k</div>` : '';
-      const oCell = o ? `<div class="vns-cell-onway">${fmtVnsK(o)}k</div>` : (a ? '' : '<div class="vns-cell-onway zero">–</div>');
-      html += `<td>${aCell}${oCell}</td>`;
-    }
-    const tot = vnSupplySum(arrived) + vnSupplySum(onway);
-    html += `<td style="font-family:var(--mono);">${fmtVnsMT(tot)}</td>`;
-    tr.innerHTML = html;
+    tr.innerHTML = `<td class="rowlabel">${c.name}</td>` +
+      `<td style="font-family:var(--mono); color:var(--accent);">${fmtVnsMT(val)}</td>` +
+      `<td class="vns-spark">${spark || '—'}</td>` +
+      `<td class="vns-peaktrough">${pt ? pt.peak + ' / ' + pt.trough : 'no arrivals yet'}</td>`;
     table.appendChild(tr);
-  };
-
-  vnSupplyCargoes().forEach(c => buildRow(c.name, c.arrived, c.onway, false));
-  const all = vnSupplySeries('ALL');
-  buildRow('ALL CARGOES', all.arrived, all.onway, true);
-
+  });
   wrap.appendChild(table);
   el.appendChild(wrap);
 
   const note = document.createElement('div');
   note.className = 'note';
   note.style.marginTop = '8px';
-  note.innerHTML = 'Values in <b>thousands of MT</b> (k). <span style="color:var(--good)">Green</span> = Arrived, <span style="color:var(--accent)">amber</span> = On the way. The "Total" column is full-precision MT across all 12 months.';
+  note.innerHTML = 'All figures are <b>Arrived</b> only (NOR on or before the report’s "as of" date). ' +
+    'The report’s own month is topped up with Lineup-SUM on-the-way tonnage for the Monthly Average baseline only, ' +
+    'since that one month is always partial — everything else on this tab stays Arrived-only.';
   el.appendChild(note);
 }
 
@@ -2600,7 +3297,7 @@ function vnSupplyImportSection(el){
   const btn = document.createElement('button');
   btn.className = 'hbtn';
   btn.style.cssText = 'padding:9px 16px;';
-  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:5px;"><path d="M20 16.9A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.9"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/></svg>Import Dashboard Excel';
+  btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px; margin-right:5px;"><path d="M20 16.9A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.9"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/></svg>Import Excel';
   wrap.appendChild(btn);
 
   const fileInput = document.createElement('input');
@@ -2630,80 +3327,141 @@ function excelSerialToISODate(v){
   return m ? m[1] : null;
 }
 
-// Parses the Dashboard sheet's "Cargo x Month — Arrived / On the way" table (Section A only).
-// Finds the "Cargo | Type | ..." header row rather than assuming a fixed row number, so a future
-// report with a few extra/missing rows above it (a new note, an extra threshold cell) still parses.
-function parseVnSupplyDashboard(wb){
-  const ws = wb.Sheets['Dashboard'];
-  if (!ws) throw new Error('This file has no "Dashboard" sheet.');
-  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+function vnSupplyFindHeaderRow(rows, requiredSubstrings, maxScan){
+  maxScan = maxScan || rows.length;
+  for (let i = 0; i < Math.min(rows.length, maxScan); i++){
+    const row = (rows[i] || []).map(v => String(v || '').trim().toLowerCase());
+    if (requiredSubstrings.every(h => row.some(cell => cell.includes(h)))) return i;
+  }
+  return -1;
+}
 
-  const findLabelValue = (re) => {
-    for (let r = 0; r < Math.min(rows.length, 10); r++){
-      const row = rows[r] || [];
-      for (let c = 0; c < row.length; c++){
-        if (re.test(String(row[c] || ''))) return row[c + 1];
+// Reads the raw Dashboard / Arr Data / Lineup SUM sheets (NOT the Excel "Overview" sheet, which is
+// just a single interactive snapshot) and re-aggregates everything client-side, mirroring the
+// Overview sheet's own formulas exactly: Arrived = NOR date <= "as of"; the cutoff month's average
+// baseline gets Lineup SUM + Arr Data's own not-yet-arrived rows layered on top; origin/buyer are
+// broken out per cargo and split North/South so the Region toggle works everywhere.
+function parseVnSupplyWorkbook(wb){
+  const wsDash = wb.Sheets['Dashboard'];
+  if (!wsDash) throw new Error('This file has no "Dashboard" sheet.');
+  const dashRows = XLSX.utils.sheet_to_json(wsDash, { header: 1, raw: true, defval: '' });
+  let asOf = null;
+  outer:
+  for (let r = 0; r < Math.min(dashRows.length, 10); r++){
+    const row = dashRows[r] || [];
+    for (let c = 0; c < row.length; c++){
+      if (/arrival reports as of/i.test(String(row[c] || ''))){ asOf = excelSerialToISODate(row[c + 1]); break outer; }
+    }
+  }
+  if (!asOf) throw new Error('Could not find "Arrival reports as of" on the Dashboard sheet.');
+  const cutoffMonth = asOf.slice(0, 7);
+  const reportYear = parseInt(asOf.slice(0, 4), 10);
+  const months = Array.from({ length: 12 }, (_, i) => `${reportYear}-${String(i + 1).padStart(2, '0')}`);
+
+  const wsAD = wb.Sheets['Arr Data'];
+  if (!wsAD) throw new Error('This file has no "Arr Data" sheet.');
+  const adRows = XLSX.utils.sheet_to_json(wsAD, { header: 1, raw: true, defval: '' });
+  const adHeader = (adRows[0] || []).map(v => String(v || ''));
+  const exact = (name) => adHeader.findIndex(v => v.trim().toLowerCase() === name);
+  const col = {
+    region: exact('region'), month: exact('month'), date: exact('date'),
+    cargo: exact('cargo'), origin: exact('origin'), buyer: exact('buyer'),
+    volume: adHeader.findIndex(v => /volume/i.test(v)),
+    syes: adHeader.findIndex(v => /scheduled/i.test(v) && /on the way/i.test(v)),
+    tbal: adHeader.findIndex(v => /on-the-way balance/i.test(v)),
+  };
+  const need = ['region', 'month', 'date', 'cargo', 'origin', 'buyer', 'volume', 'syes', 'tbal'];
+  const missing = need.filter(k => col[k] < 0);
+  if (missing.length) throw new Error(`Could not find these Arr Data columns: ${missing.join(', ')}.`);
+
+  const cargoMatrix = {}, originMap = {}, buyerMap = {}, sepBoost = {};
+  const cargoNamesSeen = new Set();
+
+  for (let r = 1; r < adRows.length; r++){
+    const row = adRows[r]; if (!row || !row.length) continue;
+    const dateIso = excelSerialToISODate(row[col.date]);
+    if (!dateIso) continue;
+    const region = String(row[col.region] || '').trim();
+    const monthTxt = String(row[col.month] || '').trim();
+    const cargo = String(row[col.cargo] || '').trim();
+    const origin = String(row[col.origin] || '').trim();
+    const buyer = String(row[col.buyer] || '').trim();
+    const vol = Number(row[col.volume]) || 0;
+    if (!cargo) continue;
+    cargoNamesSeen.add(cargo);
+    const rk = region === 'North' ? 'north' : 'south';
+
+    if (dateIso <= asOf){
+      const mi = months.indexOf(monthTxt);
+      if (mi < 0) continue;
+      if (!cargoMatrix[cargo]) cargoMatrix[cargo] = { north: Array(12).fill(0), south: Array(12).fill(0) };
+      cargoMatrix[cargo][rk][mi] += vol;
+      if (origin){
+        const ok = cargo + '|' + origin;
+        if (!originMap[ok]) originMap[ok] = { cargo, origin, north: Array(12).fill(0), south: Array(12).fill(0) };
+        originMap[ok][rk][mi] += vol;
+      }
+      if (buyer){
+        const bk = cargo + '|' + buyer;
+        if (!buyerMap[bk]) buyerMap[bk] = { cargo, buyer, north: Array(12).fill(0), south: Array(12).fill(0) };
+        buyerMap[bk][rk][mi] += vol;
+      }
+    } else if (monthTxt === cutoffMonth){
+      if (!sepBoost[cargo]) sepBoost[cargo] = { syesNorth: 0, syesSouth: 0, tbalNorth: 0, tbalSouth: 0 };
+      if (String(row[col.syes] || '').trim().toLowerCase() === 'yes') sepBoost[cargo][rk === 'north' ? 'syesNorth' : 'syesSouth'] += vol;
+      sepBoost[cargo][rk === 'north' ? 'tbalNorth' : 'tbalSouth'] += (Number(row[col.tbal]) || 0);
+    }
+  }
+
+  const sepLineup = {};
+  const wsLS = wb.Sheets['Lineup SUM'];
+  if (wsLS){
+    const lsRows = XLSX.utils.sheet_to_json(wsLS, { header: 1, raw: true, defval: '' });
+    const hdrIdx = vnSupplyFindHeaderRow(lsRows, ['cargo', 'tons', 'on-the-way period']);
+    if (hdrIdx >= 0){
+      const hdr = lsRows[hdrIdx].map(v => String(v || ''));
+      const lc = {
+        cargo: hdr.findIndex(v => v.trim().toLowerCase() === 'cargo'),
+        tons: hdr.findIndex(v => v.trim().toLowerCase() === 'tons'),
+        period: hdr.findIndex(v => v.trim().toLowerCase().includes('on-the-way period')),
+      };
+      if (lc.cargo >= 0 && lc.tons >= 0 && lc.period >= 0){
+        for (let r = hdrIdx + 1; r < lsRows.length; r++){
+          const row = lsRows[r]; if (!row || !row.length) continue;
+          const cargo = String(row[lc.cargo] || '').trim();
+          if (!cargo) continue;
+          const periodIso = excelSerialToISODate(row[lc.period]);
+          if (periodIso && periodIso.slice(0, 7) === cutoffMonth) sepLineup[cargo] = (sepLineup[cargo] || 0) + (Number(row[lc.tons]) || 0);
+        }
       }
     }
-    return null;
-  };
-  const asOf = excelSerialToISODate(findLabelValue(/arrival reports as of/i));
-  const completeTo = excelSerialToISODate(findLabelValue(/arrivals complete up to/i));
-
-  let headerIdx = -1;
-  for (let i = 0; i < rows.length; i++){
-    const r = rows[i] || [];
-    if (String(r[0]).trim().toLowerCase() === 'cargo' && String(r[1]).trim().toLowerCase() === 'type'){
-      headerIdx = i; break;
-    }
   }
-  if (headerIdx < 0) throw new Error('Could not find the "Cargo / Type" header row on the Dashboard sheet.');
 
-  const headerRow = rows[headerIdx];
-  const monthCols = [];
-  for (let c = 2; c < headerRow.length; c++){
-    const v = headerRow[c];
-    if (v === '' || v === undefined || /total/i.test(String(v))) break;
-    monthCols.push(c);
-  }
-  if (monthCols.length !== 12){
-    throw new Error(`Expected 12 month columns after Cargo/Type, found ${monthCols.length}.`);
-  }
-  const months = monthCols.map(c => {
-    const iso = excelSerialToISODate(headerRow[c]);
-    return iso ? iso.slice(0, 7) : String(headerRow[c]);
-  });
+  const preferredOrder = ['Corn', 'Wheat', 'SBM', 'Soybean', 'Canola Meal', 'PKE', 'Barley', 'DDGS', 'Sunflower Meal'];
+  const allCargoNames = Array.from(cargoNamesSeen);
+  const orderedNames = preferredOrder.filter(n => allCargoNames.includes(n))
+    .concat(allCargoNames.filter(n => !preferredOrder.includes(n)).sort());
 
-  const cargoes = [];
-  let cur = null, blanks = 0;
-  for (let i = headerIdx + 1; i < rows.length; i++){
-    const r = rows[i] || [];
-    const a = String(r[0] || '').trim();
-    const b = String(r[1] || '').trim();
-    if (!a && !b){ blanks++; if (blanks >= 2) break; continue; }
-    blanks = 0;
-    if (a) cur = a;
-    if (!cur) continue;
-    if (/^all cargoes$/i.test(cur)) continue; // grand-total row group — recomputed client-side
-    const getRow = () => {
-      let row = cargoes.find(x => x.name === cur);
-      if (!row){ row = { name: cur, arrived: Array(12).fill(0), onway: Array(12).fill(0) }; cargoes.push(row); }
-      return row;
+  const round1 = n => Math.round((n || 0) * 10) / 10;
+  const cargoes = orderedNames.map(name => {
+    const m = cargoMatrix[name] || { north: Array(12).fill(0), south: Array(12).fill(0) };
+    const b = sepBoost[name] || { syesNorth: 0, syesSouth: 0, tbalNorth: 0, tbalSouth: 0 };
+    return {
+      name,
+      arrivedNorth: m.north.map(round1), arrivedSouth: m.south.map(round1),
+      sepLineup: round1(sepLineup[name] || 0),
+      sepSyesNorth: round1(b.syesNorth), sepSyesSouth: round1(b.syesSouth),
+      sepTbalNorth: round1(b.tbalNorth), sepTbalSouth: round1(b.tbalSouth),
     };
-    if (/^arrived$/i.test(b)) getRow().arrived = monthCols.map(c => Number(r[c]) || 0);
-    else if (/^on the way$/i.test(b)) getRow().onway = monthCols.map(c => Number(r[c]) || 0);
-    // "Total" type rows are skipped — recomputed client-side as arrived + on-the-way
-  }
-  if (!cargoes.length) throw new Error('No cargo rows found under the Cargo/Type header.');
+  });
+  if (!cargoes.length) throw new Error('No cargo rows found in Arr Data.');
 
-  return {
-    asOf: asOf || (state.vnSupply && state.vnSupply.asOf) || null,
-    completeTo: completeTo || (state.vnSupply && state.vnSupply.completeTo) || null,
-    delayedDays: (state.vnSupply && state.vnSupply.delayedDays) ?? defaultState.vnSupply.delayedDays,
-    missingDays: (state.vnSupply && state.vnSupply.missingDays) ?? defaultState.vnSupply.missingDays,
-    months,
-    cargoes
-  };
+  const origins = Object.values(originMap).filter(o => o.north.some(v => v > 0) || o.south.some(v => v > 0))
+    .map(o => ({ cargo: o.cargo, origin: o.origin, north: o.north.map(round1), south: o.south.map(round1) }));
+  const buyers = Object.values(buyerMap).filter(b => b.north.some(v => v > 0) || b.south.some(v => v > 0))
+    .map(b => ({ cargo: b.cargo, buyer: b.buyer, north: b.north.map(round1), south: b.south.map(round1) }));
+
+  return { asOf, months, cargoes, origins, buyers };
 }
 
 function handleVnSupplyImport(e, statusEl){
@@ -2714,10 +3472,11 @@ function handleVnSupplyImport(e, statusEl){
     try{
       const data = new Uint8Array(ev.target.result);
       const wb = XLSX.read(data, { type: 'array' });
-      const parsed = parseVnSupplyDashboard(wb);
+      const parsed = parseVnSupplyWorkbook(wb);
       const cargoNames = parsed.cargoes.map(c => c.name).join(', ');
       if (!confirm(`Import ${parsed.cargoes.length} cargo rows (${cargoNames}) as of ${parsed.asOf}? This replaces the current VN Supply numbers.`)) return;
       state.vnSupply = parsed;
+      vnSupplyUI.month = null;
       scheduleSave();
       renderVnSupplyTab();
       if (statusEl){ statusEl.textContent = `Imported — as of ${parsed.asOf}`; statusEl.style.color = 'var(--good)'; }
@@ -2734,19 +3493,26 @@ function handleVnSupplyImport(e, statusEl){
 function renderVnSupplyTab(){
   const el = document.getElementById('vnsupply');
   el.innerHTML = '';
+  el.appendChild(sectionTitle('Overview'));
 
-  el.appendChild(sectionTitle('Cargo x Month'));
+  const vs = vnSupplyData();
+  if (vnSupplyUI.month === null){
+    const idx = vnSupplyCutoffMonthIdx();
+    vnSupplyUI.month = idx >= 0 ? MONTHS_FULL[idx] : 'Jan';
+  }
+  if (!vs.cargoes.some(c => c.name === vnSupplyUI.cargo)) vnSupplyUI.cargo = vs.cargoes[0] ? vs.cargoes[0].name : 'Corn';
 
   const meta = document.createElement('div');
   meta.className = 'vns-meta';
-  const vs = state.vnSupply || defaultState.vnSupply;
   meta.innerHTML = `<span>Supply report as of <b>${formatDDMMYYYY(vs.asOf)}</b></span>`;
   el.appendChild(meta);
 
-  vnSupplyChipRow(el);
-  vnSupplyCards(el);
-  vnSupplyChart(el);
-  vnSupplyPivot(el);
+  vnSupplyControls(el);
+  vnSupplyComparisonBox(el);
+  vnSupplyMainChartSection(el);
+  vnSupplyOriginSection(el);
+  vnSupplyTopBuyersSection(el);
+  vnSupplySnapshotSection(el);
   vnSupplyImportSection(el);
 }
 
