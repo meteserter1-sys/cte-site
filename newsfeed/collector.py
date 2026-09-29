@@ -35,6 +35,12 @@ Environment variables
   NEWS_MORNING_HOUR_VN      hour (0-23, Vietnam time, UTC+7) the daily Morning Report is generated
                             in (default 7). Any run whose Vietnam-time hour matches this generates
                             it once per calendar date — see maybe_send_morning_report().
+  NEWS_STALE_HOURS          a wire (Google News) story whose real publish date, read from the
+                            article page itself, is this many hours older than what Google's RSS
+                            pubDate claimed is treated as a resurfaced OLD story, not breaking news
+                            (default 24) — see verify_freshness().
+  NEWS_VERIFY_MAX           cap on how many wire stories get their real publish date checked per
+                            run (default 40) — bounds the extra fetch time/cost per run.
 
 Usage
   python collector.py                # normal run (needs both env vars)
@@ -91,6 +97,19 @@ GOOGLE_NEWS_QUERIES = [
     ('site:noticiasagricolas.com.br soja OR milho OR trigo',                            'pt-BR', 'BR', 'BR:pt-419'),
     # ── WORLD: war, politics, trade policy ──
     ('"Black Sea" grain OR "grain corridor" OR "grain exports" Ukraine Russia',         'en-US', 'US', 'US:en'),
+    # 2026-09-23, Mete caught this live: Reuters' "US wheat slips as traders monitor Black Sea export
+    # prospects" (Zelenskiy-Trump UN meeting, bilateral energy-ceasefire talk) never reached CTE.
+    # Root cause, verified against the actual headline text: the query above requires "Black Sea" next
+    # to the literal word "grain" (or the exact phrases "grain corridor"/"grain exports") — this
+    # headline says "Black Sea export", not "Black Sea grain" or "grain exports", so it fell through
+    # every branch. A plain market-recap wire piece ("wheat slips/rises as traders watch Black Sea
+    # export prospects") is exactly the kind of routine-sounding headline that misses "grain"-anchored
+    # phrasing. Added a second, broader Black Sea query below that doesn't require the word "grain" at
+    # all — "Black Sea" plus any of export/shipping/ceasefire/truce covers the market-recap phrasing
+    # the first query's stricter wording was built for the "grain corridor" story specifically and
+    # missed.
+    ('"Black Sea" export OR "Black Sea" shipping OR "Black Sea" wheat OR "Black Sea" ceasefire OR "Black Sea" truce',
+                                                                                         'en-US', 'US', 'US:en'),
     # 2026-09-22, Mete caught this live: Russia's Sept-22 resolution zeroing out grain export duties
     # through end-2026 was first reported by Bloomberg ~Sept 2 ("Russia Pauses Grain Export Duty
     # through the end of 2026") — CTE never carried it; none of the queries above target "duty/tax"
@@ -296,6 +315,132 @@ def collect() -> dict[str, dict]:
     for v in stories.values():
         v.pop('_publishers', None)
     return {k: v for k, v in stories.items() if v['ms'] >= cutoff}
+
+
+# ── Freshness verification (Google News timestamp correction) ─────────────────────────────
+# 2026-09-29, Mete's complaint: Google News RSS's own pubDate reflects when GOOGLE (re-)indexed
+# or crawled a story, not when the article was actually first published — a genuinely days- or
+# weeks-old piece can resurface in a fresh search hit with a pubDate of "just now", and nothing
+# here could tell the difference: entry_time_ms() trusted that field completely, so the story
+# sailed through the 3-day cutoff above as brand new. Worse, the classifier never sees `ms` at
+# all (classify_with_claude() only ever sends it the headline + snippet — see below), so a
+# headline that merely READS as dramatic could still be scored breaking=true / high impact and
+# fire a push alert for something the desk already knew about days ago ("beni her defasinda cok
+# uzuyor, eski haberleri yeni gibi cektigi icin"). This only targets wire (Google News) stories —
+# the direct publisher/X-bridge feeds in SITE_FEEDS are live streams, not a re-indexed search
+# snapshot, and were not the reported failure mode.
+#
+# Fix: for wire stories that currently LOOK fresh (within VERIFY_FRESH_HOURS — no point spending
+# a fetch confirming something already reported as old), pull a bounded prefix of the article's
+# own HTML and read its real publish date straight from the page (JSON-LD datePublished, OG
+# article:published_time, <meta name="date">-style tags, <time datetime>) — the same metadata
+# every publisher embeds for SEO and that Google's own indexer reads. If that real date is more
+# than NEWS_STALE_HOURS older than what the RSS entry claimed, the story's `ms` is corrected to
+# the real timestamp and the story is flagged `stale`. sanitise() then treats `stale` exactly
+# like `duplicate`: impact capped to 20, breaking forced false — so a resurfaced old story falls
+# out at classify_all()'s existing NEWS_MIN_STORE gate the same way a retelling of already-known
+# news already does, and never reaches Firestore or a push alert.
+#
+# Fails open on every error (timeout, no match, non-200, anything) — a verification miss must
+# never block the run or downgrade a genuinely fresh story; worst case it is scored exactly as if
+# this check didn't exist. Capped at NEWS_VERIFY_MAX fetches per run so one run never spends its
+# whole 10-minute GitHub Actions budget here.
+NEWS_STALE_HOURS = int(os.environ.get('NEWS_STALE_HOURS', '24'))
+NEWS_VERIFY_MAX = int(os.environ.get('NEWS_VERIFY_MAX', '40'))
+VERIFY_FRESH_HOURS = 12        # only stories the RSS itself claims are this recent are worth checking
+VERIFY_MAX_BYTES = 200_000     # publish-date metadata lives in <head>; stop well before the full page
+
+_DATE_PATTERNS = [
+    re.compile(r'"datePublished"\s*:\s*"([^"]+)"', re.IGNORECASE),
+    re.compile(r'<meta[^>]+property=["\']article:published_time["\'][^>]+content=["\']([^"\']+)["\']', re.IGNORECASE),
+    re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']article:published_time["\']', re.IGNORECASE),
+    re.compile(r'<meta[^>]+name=["\'](?:date|publishdate|publish-date|parsely-pub-date|sailthru\.date)["\']'
+               r'[^>]+content=["\']([^"\']+)["\']', re.IGNORECASE),
+    re.compile(r'<meta[^>]+itemprop=["\']datePublished["\'][^>]+content=["\']([^"\']+)["\']', re.IGNORECASE),
+    re.compile(r'<time[^>]+datetime=["\']([^"\']+)["\']', re.IGNORECASE),
+]
+
+
+def _parse_iso_ms(raw: str) -> int | None:
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return int(dt.timestamp() * 1000)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        return int(parsedate_to_datetime(raw).timestamp() * 1000)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def fetch_true_published_ms(url: str) -> int | None:
+    """Best-effort real publish date scraped from the article's own HTML metadata. None on any
+    failure — the caller must treat that as 'unknown', never as 'confirmed fresh'."""
+    if not url:
+        return None
+    r = None
+    try:
+        r = requests.get(url, headers={'User-Agent': UA}, timeout=8, stream=True, allow_redirects=True)
+        r.raise_for_status()
+        size = 0
+        chunks = []
+        for chunk in r.iter_content(chunk_size=8192):
+            if not chunk:
+                break
+            chunks.append(chunk)
+            size += len(chunk)
+            if size >= VERIFY_MAX_BYTES:
+                break
+        text = b''.join(chunks).decode('utf-8', errors='ignore')
+    except Exception:  # noqa: BLE001
+        return None
+    finally:
+        if r is not None:
+            try:
+                r.close()
+            except Exception:  # noqa: BLE001
+                pass
+    for pat in _DATE_PATTERNS:
+        m = pat.search(text)
+        if m:
+            ms = _parse_iso_ms(m.group(1))
+            if ms:
+                return ms
+    return None
+
+
+def verify_freshness(stories: dict[str, dict]):
+    """Mutates `stories` in place: corrects `ms` and sets `stale=True` on wire stories whose real
+    publish date (read from the article page) turns out to be well older than what Google News'
+    RSS pubDate claimed. See the block comment above for why this exists. Never raises — any
+    failure just leaves that story exactly as collect() produced it."""
+    now_ms = int(time.time() * 1000)
+    fresh_cut = now_ms - VERIFY_FRESH_HOURS * 3600 * 1000
+    candidates = [s for s in stories.values() if s.get('feed') == 'wire' and s['ms'] >= fresh_cut]
+    candidates.sort(key=lambda s: -s['ms'])   # the freshest-claiming ones are the highest false-alarm risk
+    candidates = candidates[:NEWS_VERIFY_MAX]
+    if not candidates:
+        return
+    checked = corrected = 0
+    for s in candidates:
+        try:
+            true_ms = fetch_true_published_ms(s.get('url', ''))
+        except Exception:  # noqa: BLE001
+            true_ms = None
+        checked += 1
+        if true_ms is None:
+            continue
+        if s['ms'] - true_ms >= NEWS_STALE_HOURS * 3600 * 1000:
+            s['ms'] = true_ms
+            s['stale'] = True
+            corrected += 1
+    print(f'  freshness check: {checked} wire stories verified against their real publish date, '
+          f'{corrected} were actually old (corrected, will be capped like a duplicate)')
 
 
 # ---------------------------------------------------------------------------
@@ -536,13 +681,18 @@ def sanitise(ans: dict, story: dict) -> dict | None:
     breaking = breaking is True or str(breaking).lower() == 'true'
     duplicate = ans.get('duplicate')
     duplicate = duplicate is True or str(duplicate).lower() == 'true'
+    # 2026-09-29: verify_freshness() flags a wire story whose real publish date (read from the
+    # article page) turned out to be well older than Google News' own RSS pubDate claimed. The
+    # classifier never sees `ms` at all — it scored breaking/impact from the headline text alone —
+    # so a resurfaced old story gets the exact same treatment as a `duplicate` below.
+    stale = bool(story.get('stale'))
     impact = clamp(ans.get('impact'))
-    if duplicate:
-        # 2026-09-16: a retelling of an already-covered event (see known_events_hint()) is not new
-        # information — cap it below NEWS_MIN_STORE (30) so it's dropped at the existing "tight wire"
-        # gate in classify_all() and never reaches Firestore, same as any other routine story. Enforced
-        # here in code rather than trusted to the model's own impact number, which can still run high
-        # for a dramatic-sounding duplicate headline.
+    if duplicate or stale:
+        # 2026-09-16 (duplicate) / 2026-09-29 (stale): neither is new information to the desk — cap
+        # it below NEWS_MIN_STORE (30) so it's dropped at the existing "tight wire" gate in
+        # classify_all() and never reaches Firestore, same as any other routine story. Enforced here
+        # in code rather than trusted to the model's own impact number, which can still run high for
+        # a dramatic-sounding duplicate/stale headline.
         impact = min(impact, 20)
         breaking = False
     return {
@@ -557,6 +707,7 @@ def sanitise(ans: dict, story: dict) -> dict | None:
         'eventType': et,
         'summary': str(ans.get('summary', '') or '')[:300],
         'duplicate': duplicate,
+        'stale': stale,
         # trend = how many publishers carry this EVENT. Starts at the number of outlets Google
         # returned for this exact headline; clustering (below) adds differently-worded reports.
         'trend': int(story.get('sourceCount', 1)),
@@ -1244,6 +1395,8 @@ def main():
     print('collecting…')
     stories = collect()
     print(f'  {len(stories)} unique stories in the last 3 days')
+
+    verify_freshness(stories)
 
     cache = load_cache()
     seen_cache, events = cache['seen'], cache['events']
