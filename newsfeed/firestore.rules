@@ -44,7 +44,23 @@ service cloud.firestore {
         && request.resource.data.category in ['POLITICS', 'AGRI', 'REPORTS']
         && request.resource.data.impact is number
         && request.resource.data.impact >= 0 && request.resource.data.impact <= 100;
-      allow update, delete: if false;
+      // 2026-10-02, Mete: "Edit classification" on a news card (index.html, openNewsEdit) — a signed-in
+      // user may correct what the classifier decided on ANY story, but only these fields: direction,
+      // impact, category, country, source, plus the edited/editedMs markers. Headline, url, time,
+      // product, trend and everything else stay exactly as the collector wrote them, and nothing can
+      // be deleted from the page. collector.py never rewrites an existing story's own fields (it only
+      // merges `trend`/`sources` when another publisher picks the story up), so a correction sticks.
+      allow update: if isAuthed()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['direction', 'impact', 'category', 'country', 'source', 'edited', 'editedMs'])
+        && request.resource.data.edited == true
+        && request.resource.data.direction in ['BULLISH', 'BEARISH', 'NEUTRAL']
+        && request.resource.data.impact is number
+        && request.resource.data.impact >= 0 && request.resource.data.impact <= 100
+        && request.resource.data.category is string
+        && request.resource.data.country is string
+        && request.resource.data.source is string;
+      allow delete: if false;
     }
     match /news_meta/{id} {
       allow read: if isAuthed();
