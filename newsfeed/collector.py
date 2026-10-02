@@ -1093,7 +1093,8 @@ def push_alerts(db, heads: list[dict]) -> int:
     dead: set[str] = set()
     for h in sorted(alerts, key=lambda d: -d['impact'])[:5]:          # never spam more than 5 per run
         arrow = '▲' if h['direction'] == 'BULLISH' else '▼' if h['direction'] == 'BEARISH' else '•'
-        title = f"{'BREAKING · ' if h.get('breaking') else ''}{h['product']} {arrow} {h['impact']}"
+        # 2026-10-02, Mete: impact is shown on a 0-10 scale everywhere (55 -> 5.5); stored value stays 0-100.
+        title = f"{'BREAKING · ' if h.get('breaking') else ''}{h['product']} {arrow} {h['impact'] / 10:g}"
         body = (h.get('summary') or h['headline'])[:180]
         msg = messaging.MulticastMessage(
             tokens=tokens,
@@ -1334,7 +1335,8 @@ def push_morning_report(db, report: dict):
         return
     if not tokens:
         return
-    parts = [f"{p} {report['products'][p]['net']:+d}" for p in PRODUCTS
+    # net impact shown on the 0-10 display scale (2026-10-02): +230 -> +23
+    parts = [f"{p} {report['products'][p]['net'] / 10:+g}" for p in PRODUCTS
               if report['products'].get(p, {}).get('n')]
     body = ('Overnight: ' + ', '.join(parts)) if parts else 'No qualifying overnight events.'
     title = '☀️ Morning Report — CTE'
