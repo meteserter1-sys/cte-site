@@ -266,6 +266,9 @@
   .vns-buyer-tons{ font-family:var(--mono); font-size:11px; color:var(--text); position:relative; z-index:1; padding-left:6px; line-height:16px; }
   .vns-buyer-pct{ font-family:var(--mono); font-size:12px; color:var(--text-dim); text-align:right; }
   .vns-snap-table td, .vns-snap-table th{ white-space:nowrap; }
+  .vns-split{ display:flex; justify-content:space-between; gap:10px; font-size:11px; color:var(--text-dim); margin-top:3px; }
+  .vns-split:first-of-type{ margin-top:7px; padding-top:6px; border-top:1px solid var(--border); }
+  .vns-split b{ font-weight:700; }
   .vns-snap-table .rowlabel{ text-align:left; }
   .vns-spark{ font-size:13px; letter-spacing:1px; color:var(--accent); font-family:var(--mono); line-height:1; }
   .vns-peaktrough{ font-size:10.5px; color:var(--text-dim); }
@@ -568,25 +571,36 @@ const MONTHS_FULL = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct'
 // Dec flat-copies Nov. Update these as the season rolls — see the Inputs tab.
 const defaultState = {
   fob: {
-    ASBM:     [-5,-5,-5,-5,-5,-5, -5, -5, -2, 3, 1, 1],
-    BRZSBMP:  [2,2,2,2,2,2,   2, 2, 3, 5, 5, 5],
-    UPRCORN:  [80,80,80,80,80,80, 80, 80, 86, 88, 92, 92],
-    BBNCCORN: [110,110,110,110,110,110, 110, 110, 122, 117, 132, 132],
-    WHEAT:    [225,225,225,225,225,225, 225, 225, 227, 229, 229, 229],
-    ARGCORN:  [90,90,90,90,90,90, 90, 90, 98, 98, 105, 105],
-    BRACORN:  [118,118,118,118,118,118, 118, 118, 120, 112, 115, 115]
+    // 2026-09-30 update (Mete's screenshot): Sep-Mar re-based on the new FOB sheet. FOB PMX corn
+    // columns there were named "FULL PMX"/"PMX(UPR+BB/NC)" (identical every month — Argentina,
+    // blending Upriver + Bahia Blanca/Necochea) vs "STS PMX" (Brazil, ship-to-ship loading) rather
+    // than "PMX ARG/BRA CORN" — mapped ARGCORN←FULL PMX, BRACORN←STS PMX by loading-method naming,
+    // consistent with STS PMX > FULL PMX every month, same direction as the BRACORN > ARGCORN
+    // relationship in the prior data. Flag to Mete: confirm this mapping is right. Apr-Aug (idx 3-7)
+    // left untouched — no new data given for those months.
+    ASBM:     [15,15,8, -5,-5,-5,-5,-5, 25,25,25,20],
+    BRZSBMP:  [14,3,-5, 2,2,2,2,2, 17,17,18,17],
+    UPRCORN:  [70,80,45, 80,80,80,80,80, 43,43,48,63],
+    BBNCCORN: [105,110,105, 110,110,110,110,110, 65,65,73,90],
+    WHEAT:    [255,255,255, 225,225,225,225,225, 257,257,255,255],
+    ARGCORN:  [83,91,67, 90,90,90,90,90, 51,51,57,73],
+    BRACORN:  [95,100,105, 118,118,118,118,118, 75,75,79,88]
   },
   freight: {
-    '5M2C': [56.7,56.7,56.7,56.7,56.7,56.7, 56.7, 56.2, 54.8, 54.4, 54.1, 54.1],
-    '7CARG': [53,53,53,53,53,53, 53, 52.5, 51.2, 50.9, 50.5, 50.5],
-    '5CARG': [54.2,54.2,54.2,54.2,54.2,54.2, 54.2, 53.7, 53, 51.7, 51.5, 51.5],
-    '7CBRA': [43.5,43.5,43.5,43.5,43.5,43.5, 43.5, 43, 41.8, 41.5, 41.2, 41.2],
-    '5CBRA': [44.7,44.7,44.7,44.7,44.7,44.7, 44.7, 44.2, 43.6, 42.4, 41.8, 41.8]
+    '5M2C': [62.40,62.40,62.40, 56.7,56.7,56.7,56.7,56.2, 60.30,62.00,63.40,62.70],
+    '7CARG': [58.30,58.30,58.30, 53,53,53,53,52.5, 56.20,57.90,59.30,58.60],
+    '5CARG': [57.40,57.40,57.40, 54.2,54.2,54.2,54.2,53.7, 56.70,57.40,58.70,59.30],
+    '7CBRA': [48.20,48.20,48.20, 43.5,43.5,43.5,43.5,43, 46.20,47.90,49.10,48.50],
+    '5CBRA': [47.80,47.80,47.80, 44.7,44.7,44.7,44.7,44.2, 47.10,47.80,49.00,49.60]
   },
   cornSale:  [224,224,224,224,224,224, 224,224,224,224,224,224],
   wheatSale: [265,265,265,265,265,265, 265,265,265,265,265,265],
-  futuresSBM:  [315,315,315,315,315,315, 315, 315, 312, 309.5, 313, 313],
-  futuresCorn: [436.5,436.5,436.5,436.5,436.5,436.5, 436.5, 436.5, 436.5, 458.25, 458, 458],
+  // Futures: image gave named CBOT contracts (SBM: SMV/Z/F/H/K = Oct/Dec/Jan/Mar/May; Corn: CZ/H/K =
+  // Dec/Mar/May), not one value per calendar month. Rolled each shipment month to the next listed
+  // contract on/after it (Sep,Oct→V; Nov,Dec→Z; Jan→F; Feb,Mar→H for SBM — Sep,Oct,Nov,Dec→Z; Jan,
+  // Feb,Mar→H for Corn). Flag to Mete: confirm this roll convention matches how he reads the sheet.
+  futuresSBM:  [359.00,358.90,358.90, 315,315,315,315,315, 361.40,361.40,359.00,359.00],
+  futuresCorn: [535.75,535.75,535.75, 436.5,436.5,436.5,436.5,436.5, 521.75,521.75,521.75,521.75],
   cfrMarket:     [null,null,null,null,null,null, null, 53, 53, null,null,null],
   cornCfrMarket: [null,null,null,null,null,null, null, 226, 226, null,null,null],
   cornIndication: [224,224,224,224,224,224, 224,224,224,224,224,224],
@@ -2058,8 +2072,8 @@ function renderComboTable(el, opts){
     combos.map(c => `<th>${labels ? labels[c] : c}</th>`).join('') +
     '<th>Replcmt.</th><th>CFR Mkt.</th><th>Indic.</th><th>vs Replcmt.</th>' +
     (localPriceFn ? '<th>Local Price</th>' : '') +
-    (balArr ? '<th>Bal. to Sell</th>' : '') +
-    (avgArr ? '<th>Ave. Sold Price</th>' : '');
+    (balArr ? '<th>Current Balance</th>' : '') +
+    (avgArr ? '<th>Ave. Booked Price</th>' : '');
   table.appendChild(thead);
 
   visible.forEach(i => {
@@ -2152,7 +2166,7 @@ function renderComboTable(el, opts){
 // pushed aside (150ms slide instead of an instant snap) so the reorder reads as smooth, not jumpy —
 // the "smooth değil" half of the same report.
 const MONTH_DRAG_THRESHOLD_PX = 6;
-function attachMonthDrag(chip, wrap, onTap){
+function attachMonthDrag(chip, wrap, onTap, onReorder){
   let startX = 0, startY = 0, dragging = false, pointerId = null;
 
   // elementsFromPoint() is a pure geometry query — independent of pointer capture/event targeting —
@@ -2226,6 +2240,9 @@ function attachMonthDrag(chip, wrap, onTap){
       state.monthOrder = Array.from(wrap.querySelectorAll('.month-chip')).map(c => parseInt(c.dataset.month, 10));
       scheduleSave();
       renderAll();
+      // 2026-10-02: History's archived-snapshot view shares the same month order (see
+      // renderArchiveMonthFilter) — it isn't part of renderAll(), so it passes its own re-render.
+      if (onReorder) onReorder();
     } else {
       onTap();
     }
@@ -2635,11 +2652,17 @@ function renderArchiveMonthFilter(container){
   wrap.className = 'month-filter';
   const visible = new Set(historyVisibleMonths);
 
-  MONTHS_FULL.forEach((m, i) => {
+  // 2026-10-02, Mete: same press-hold + drag reorder as the Input/Vietnam/Malaysia/Indonesia month
+  // chips (attachMonthDrag), sharing the one state.monthOrder — so the order he set anywhere is the
+  // order here too, and reordering here carries over to the live tabs. Which months are ON stays
+  // local to this archived view (historyVisibleMonths), exactly as before.
+  const rerender = () => renderArchiveDetail(document.getElementById('historyDetail'));
+  monthOrderArr().forEach(i => {
     const chip = document.createElement('div');
     chip.className = 'month-chip' + (visible.has(i) ? ' on' : '');
-    chip.textContent = m;
-    chip.addEventListener('click', () => {
+    chip.textContent = MONTHS_FULL[i];
+    chip.dataset.month = i;
+    attachMonthDrag(chip, wrap, () => {
       const set = new Set(historyVisibleMonths);
       if (set.has(i)){
         if (set.size > 1) set.delete(i);
@@ -2647,17 +2670,30 @@ function renderArchiveMonthFilter(container){
         set.add(i);
       }
       historyVisibleMonths = Array.from(set);
-      renderArchiveDetail(document.getElementById('historyDetail'));
-    });
+      rerender();
+    }, rerender);
     wrap.appendChild(chip);
   });
+
+  const reset = document.createElement('div');
+  reset.className = 'month-reset';
+  reset.textContent = '↺ order';
+  reset.title = 'Reset month order back to Jan → Dec';
+  reset.addEventListener('click', () => {
+    state.monthOrder = null;
+    scheduleSave();
+    renderAll();
+    rerender();
+  });
+  wrap.appendChild(reset);
 
   container.appendChild(wrap);
 }
 
 function buildReadOnlyTable(rows, getVal, monthsList, getPrevVal){
-  const months = (monthsList || historyVisibleMonths || Array.from({ length: 12 }, (_, i) => i))
-    .slice().sort((a, b) => a - b);
+  // Columns follow the shared drag-reordered month sequence (2026-10-02), same as the live tabs.
+  const monthSet = new Set(monthsList || historyVisibleMonths || Array.from({ length: 12 }, (_, i) => i));
+  const months = monthOrderArr().filter(i => monthSet.has(i));
   const wrap = document.createElement('div');
   wrap.className = 'scrollx';
   const table = document.createElement('table');
@@ -2792,8 +2828,8 @@ function renderArchiveDetail(container){
   container.appendChild(sectionTitle('Vietnam — Market / Balance'));
   container.appendChild(buildReadOnlyTable(
     [['CFR Mkt.','cfrMarket'],['Indic.','indication'],['Corn CFR Mkt.','cornCfrMarket'],['Corn Indic.','cornIndication'],
-     ['Bal. to Sell (SBM)','balToSellSBM'],['Ave. Sold (SBM)','avgSoldPriceSBM'],
-     ['Bal. to Sell (Corn)','balToSellCorn'],['Ave. Sold (Corn)','avgSoldPriceCorn']],
+     ['Current Balance (SBM)','balToSellSBM'],['Ave. Booked (SBM)','avgSoldPriceSBM'],
+     ['Current Balance (Corn)','balToSellCorn'],['Ave. Booked (Corn)','avgSoldPriceCorn']],
     (k, i) => S[k] ? S[k][i] : null,
     null,
     (k, i) => (P && P[k]) ? P[k][i] : null
@@ -2802,8 +2838,8 @@ function renderArchiveDetail(container){
   container.appendChild(sectionTitle('Malaysia — Market / Balance'));
   container.appendChild(buildReadOnlyTable(
     [['CFR Mkt.','cfrMarket'],['Indic.','indication'],['Corn CFR Mkt.','cornCfrMarket'],['Corn Indic.','cornIndication'],
-     ['Bal. to Sell (SBM)','balToSellSBM'],['Ave. Sold (SBM)','avgSoldPriceSBM'],
-     ['Bal. to Sell (Corn)','balToSellCorn'],['Ave. Sold (Corn)','avgSoldPriceCorn']],
+     ['Current Balance (SBM)','balToSellSBM'],['Ave. Booked (SBM)','avgSoldPriceSBM'],
+     ['Current Balance (Corn)','balToSellCorn'],['Ave. Booked (Corn)','avgSoldPriceCorn']],
     (k, i) => (S.malaysia && S.malaysia[k]) ? S.malaysia[k][i] : null,
     null,
     (k, i) => (P && P.malaysia && P.malaysia[k]) ? P.malaysia[k][i] : null
@@ -2811,7 +2847,7 @@ function renderArchiveDetail(container){
 
   container.appendChild(sectionTitle('Indonesia — Market / Balance'));
   container.appendChild(buildReadOnlyTable(
-    [['CFR Mkt.','cfrMarket'],['Indic.','indication'],['Bal. to Sell (SBM)','balToSellSBM'],['Ave. Sold (SBM)','avgSoldPriceSBM']],
+    [['CFR Mkt.','cfrMarket'],['Indic.','indication'],['Current Balance (SBM)','balToSellSBM'],['Ave. Booked (SBM)','avgSoldPriceSBM']],
     (k, i) => (S.indonesia && S.indonesia[k]) ? S.indonesia[k][i] : null,
     null,
     (k, i) => (P && P.indonesia && P.indonesia[k]) ? P.indonesia[k][i] : null
@@ -2932,15 +2968,50 @@ function vnSupplyArrivedSeries(cargoName, region){
 // "Scheduled -> On the way" or carrying a not-yet-allocated balance). The Lineup SUM component has
 // no Region field, so — same as Dashboard — it's added unfiltered regardless of the Region toggle.
 function vnSupplyBoostedCutoffMonthVal(cargoName, region){
-  const row = vnSupplyCargoRow(cargoName);
-  if (!row) return 0;
   const cutoffIdx = vnSupplyCutoffMonthIdx();
   if (cutoffIdx < 0) return 0;
-  const arrived = vnSupplyArrivedSeries(cargoName, region)[cutoffIdx] || 0;
-  const lineup = row.sepLineup || 0;
+  return (vnSupplyArrivedSeries(cargoName, region)[cutoffIdx] || 0) + (vnSupplyOnTheWaySeries(cargoName, region)[cutoffIdx] || 0);
+}
+
+// On-the-way tonnage per month (2026-10-02, Mete) — the Dashboard sheet's "On the way" row, for
+// EVERY month rather than just the report's own month, so Oct/Nov/Dec bookings show up too:
+//   Lineup SUM tons whose "On-the-way Period" falls in that month            (otwLineup, no Region)
+// + Arr Data rows dated after "as of" flagged "Scheduled -> On the way" = Yes (otwNorth/otwSouth)
+// + Arr Data's not-yet-allocated "On-the-way balance" for those later rows   (otwNorth/otwSouth)
+// The Lineup SUM part has no Region field, so — same as Dashboard and the old average boost — it is
+// added unfiltered whatever the Region toggle says. State saved before this change (or the built-in
+// seed) only has the single-month sep* fields; those are mapped onto the cutoff month so nothing
+// changes until the next Excel import fills the full 12-month arrays.
+function vnSupplyOnTheWaySeries(cargoName, region){
+  const row = vnSupplyCargoRow(cargoName);
+  const out = Array(12).fill(0);
+  if (!row) return out;
+  if (Array.isArray(row.otwLineup)){
+    for (let i = 0; i < 12; i++){
+      const n = (row.otwNorth && row.otwNorth[i]) || 0, so = (row.otwSouth && row.otwSouth[i]) || 0;
+      out[i] = (row.otwLineup[i] || 0) + (region === 'North' ? n : region === 'South' ? so : n + so);
+    }
+    return out;
+  }
+  const cutoffIdx = vnSupplyCutoffMonthIdx();
+  if (cutoffIdx < 0) return out;
   const syes = region === 'North' ? row.sepSyesNorth : region === 'South' ? row.sepSyesSouth : (row.sepSyesNorth || 0) + (row.sepSyesSouth || 0);
   const tbal = region === 'North' ? row.sepTbalNorth : region === 'South' ? row.sepTbalSouth : (row.sepTbalNorth || 0) + (row.sepTbalSouth || 0);
-  return arrived + lineup + (syes || 0) + (tbal || 0);
+  out[cutoffIdx] = (row.sepLineup || 0) + (syes || 0) + (tbal || 0);
+  return out;
+}
+function vnSupplyTotalSeries(cargoName, region){
+  const a = vnSupplyArrivedSeries(cargoName, region), o = vnSupplyOnTheWaySeries(cargoName, region);
+  return a.map((v, i) => (v || 0) + (o[i] || 0));
+}
+// Last month index worth offering in the Month selector: the report's own month, or later if any
+// cargo already has on-the-way tonnage booked for a later month.
+function vnSupplyLastMonthIdx(){
+  let last = vnSupplyCutoffMonthIdx();
+  vnSupplyData().cargoes.forEach(c => {
+    vnSupplyOnTheWaySeries(c.name, 'All').forEach((v, i) => { if (v > 0 && i > last) last = i; });
+  });
+  return last;
 }
 
 function vnSupplyMonthlyAvg(cargoName, region){
@@ -2989,21 +3060,26 @@ function vnSupplyNiceAxisTicks(maxV, targetCount){
 // completed month (pure Arrived, same rule as everywhere else on this tab); previous is undefined
 // in that view; average becomes "expected by now" = the monthly average x number of months elapsed,
 // so the YTD total has something apples-to-apples to compare against.
+// 2026-10-02, Mete: `selected`/`prev` are now Arrived + On the way (the Dashboard "Total" row), with
+// the two parts handed back separately (`arrived`/`onTheWay`) so the tile can show the split under
+// the total — and so a future month (Oct/Nov/Dec) that has only on-the-way tonnage isn't a blank 0.
 function vnSupplyKpiValues(){
   const cargo = vnSupplyUI.cargo, region = vnSupplyUI.region, month = vnSupplyUI.month;
-  const series = vnSupplyArrivedSeries(cargo, region);
+  const arr = vnSupplyArrivedSeries(cargo, region);
+  const otw = vnSupplyOnTheWaySeries(cargo, region);
   const cutoffIdx = vnSupplyCutoffMonthIdx();
   const avg = vnSupplyMonthlyAvg(cargo, region);
   const n = cutoffIdx + 1;
   if (month === 'All'){
-    let ytd = 0;
-    for (let i = 0; i <= cutoffIdx; i++) ytd += series[i] || 0;
-    return { selected: ytd, prev: null, avg: avg * n, isYtd: true, n };
+    let a = 0, o = 0;
+    for (let i = 0; i <= cutoffIdx; i++){ a += arr[i] || 0; o += otw[i] || 0; }
+    return { selected: a + o, arrived: a, onTheWay: o, prev: null, avg: avg * n, isYtd: true, n };
   }
   const idx = MONTHS_FULL.indexOf(month);
-  const selected = idx >= 0 ? (series[idx] || 0) : 0;
-  const prev = idx > 0 ? (series[idx - 1] || 0) : null;
-  return { selected, prev, avg, isYtd: false, n, idx };
+  const arrived = idx >= 0 ? (arr[idx] || 0) : 0;
+  const onTheWay = idx >= 0 ? (otw[idx] || 0) : 0;
+  const prev = idx > 0 ? (arr[idx - 1] || 0) + (otw[idx - 1] || 0) : null;
+  return { selected: arrived + onTheWay, arrived, onTheWay, prev, avg, isYtd: false, n, idx };
 }
 
 function vnSupplyMonthValue(series, month, cutoffIdx){
@@ -3047,8 +3123,9 @@ function vnSupplyTopBuyers(){
 function vnSupplyMainChartSvg(width, height){
   const cargo = vnSupplyUI.cargo, region = vnSupplyUI.region;
   const series = vnSupplyArrivedSeries(cargo, region);
+  const otw = vnSupplyOnTheWaySeries(cargo, region);
   const avg = vnSupplyMonthlyAvg(cargo, region);
-  const dataMax = Math.max(1, ...series, avg);
+  const dataMax = Math.max(1, ...series.map((v, i) => (v || 0) + (otw[i] || 0)), avg);
   const ticks = vnSupplyNiceAxisTicks(dataMax, 5);
   const maxV = ticks[ticks.length - 1];
   const padL = 50, padR = 10, padT = 10, padB = 20;
@@ -3062,8 +3139,12 @@ function vnSupplyMainChartSvg(width, height){
   for (let i = 0; i < n; i++){
     const x = padL + i * (bw + gap);
     const bh = h * ((series[i] || 0) / maxV);
+    const oh = h * ((otw[i] || 0) / maxV);
     const isSel = i === selIdx;
-    bars += `<rect class="vns-bar-arrived${isSel ? ' vns-bar-cur' : ''}" x="${x.toFixed(1)}" y="${(padT + h - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, bh).toFixed(1)}" rx="2"><title>${MONTHS_FULL[i]}: ${fmtVnsMT(series[i] || 0)} MT</title></rect>`;
+    const tip = `${MONTHS_FULL[i]}: ${fmtVnsMT((series[i] || 0) + (otw[i] || 0))} MT — arrived ${fmtVnsMT(series[i] || 0)}, on the way ${fmtVnsMT(otw[i] || 0)}`;
+    // Stacked: arrived at the bottom, on-the-way on top of it (2026-10-02).
+    bars += `<rect class="vns-bar-arrived${isSel ? ' vns-bar-cur' : ''}" x="${x.toFixed(1)}" y="${(padT + h - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0, bh).toFixed(1)}" rx="2"><title>${tip}</title></rect>`;
+    if (oh > 0) bars += `<rect class="vns-bar-onway${isSel ? ' vns-bar-cur' : ''}" x="${x.toFixed(1)}" y="${(padT + h - bh - oh).toFixed(1)}" width="${bw.toFixed(1)}" height="${oh.toFixed(1)}" rx="2"><title>${tip}</title></rect>`;
     axisLabels += `<text x="${(x + bw / 2).toFixed(1)}" y="${(height - 5).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--text-dim)">${MONTHS_FULL[i]}</text>`;
   }
   let gridLines = '', yLabels = '';
@@ -3119,8 +3200,7 @@ function vnSupplyChipRowGeneric(el, label, options, current, onPick){
 function vnSupplyControls(el){
   const vs = vnSupplyData();
   const cargoNames = vs.cargoes.map(c => c.name);
-  const cutoffIdx = vnSupplyCutoffMonthIdx();
-  const monthOptions = MONTHS_FULL.slice(0, Math.max(0, cutoffIdx + 1)).concat(['All']);
+  const monthOptions = MONTHS_FULL.slice(0, Math.max(0, vnSupplyLastMonthIdx() + 1)).concat(['All']);
 
   vnSupplyChipRowGeneric(el, 'Product', cargoNames, vnSupplyUI.cargo, (v) => { vnSupplyUI.cargo = v; renderVnSupplyTab(); });
   vnSupplyChipRowGeneric(el, 'Month', monthOptions, vnSupplyUI.month, (v) => { vnSupplyUI.month = v; renderVnSupplyTab(); });
@@ -3146,7 +3226,9 @@ function vnSupplyComparisonBox(el){
   const tile1 = document.createElement('div');
   tile1.className = 'news-tile';
   tile1.innerHTML = `<div class="news-tile-head"><span class="news-tile-name">${k.isYtd ? 'YEAR TO DATE' : 'SELECTED MONTH'}</span></div>` +
-    `<div class="news-tile-val">${fmtVnsMT(k.selected)}</div><div class="news-tile-sub">${vnSupplyUI.cargo} · MT · ${vnSupplyUI.region}</div>`;
+    `<div class="news-tile-val">${fmtVnsMT(k.selected)}</div><div class="news-tile-sub">${vnSupplyUI.cargo} · MT · ${vnSupplyUI.region}</div>` +
+    `<div class="vns-split"><span>Arrived</span><b class="vns-cell-arrived">${fmtVnsMT(k.arrived)}</b></div>` +
+    `<div class="vns-split"><span>On the way</span><b class="vns-cell-onway${k.onTheWay ? '' : ' zero'}">${fmtVnsMT(k.onTheWay)}</b></div>`;
   wrap.appendChild(tile1);
 
   const tile2 = document.createElement('div');
@@ -3171,8 +3253,12 @@ function vnSupplyMainChartSection(el){
   const avg = vnSupplyMonthlyAvg(vnSupplyUI.cargo, vnSupplyUI.region);
   const title = document.createElement('div');
   title.className = 'vns-chart-title';
-  title.innerHTML = `MONTHLY ARRIVED (MT) — <b>${vnSupplyUI.cargo}</b> · average line = <b>${fmtVnsMT(avg)} MT</b>`;
+  title.innerHTML = `MONTHLY ARRIVED + ON THE WAY (MT) — <b>${vnSupplyUI.cargo}</b> · average line = <b>${fmtVnsMT(avg)} MT</b>`;
   wrap.appendChild(title);
+  const legend = document.createElement('div');
+  legend.className = 'vns-chart-legend';
+  legend.innerHTML = '<span><i style="background:var(--good)"></i>Arrived</span><span><i style="background:var(--accent)"></i>On the way</span>';
+  wrap.appendChild(legend);
   const chartHost = document.createElement('div');
   const width = Math.max(320, Math.min(900, (el.clientWidth || 360) - 24));
   chartHost.innerHTML = vnSupplyMainChartSvg(width, 190);
@@ -3194,7 +3280,10 @@ function vnSupplyOriginSection(el){
     const empty = document.createElement('div');
     empty.className = 'placeholder';
     empty.style.padding = '18px';
-    empty.textContent = 'No arrivals for this selection yet.';
+    const kk = vnSupplyKpiValues();
+    empty.textContent = kk.onTheWay > 0
+      ? `No arrivals for this selection yet — ${fmtVnsMT(kk.onTheWay)} MT is on the way. Origin split is shown once cargo has arrived.`
+      : 'No arrivals for this selection yet.';
     wrap.appendChild(empty);
     el.appendChild(wrap);
     return;
@@ -3228,18 +3317,20 @@ function vnSupplyOriginSection(el){
 // ---- render: top-5 buyers ----------------------------------------------------
 function vnSupplyTopBuyersSection(el){
   const k = vnSupplyKpiValues();
-  el.appendChild(sectionTitle(`Top 5 Buyers — ${vnSupplyUI.cargo} · ${vnSupplyUI.month} (${vnSupplyUI.region})`));
+  el.appendChild(sectionTitle(`Top 5 Buyers — ${vnSupplyUI.cargo} · ${vnSupplyUI.month} (${vnSupplyUI.region}, Arrived)`));
   const buyers = vnSupplyTopBuyers();
   const wrap = document.createElement('div');
   wrap.className = 'vns-chart-card';
   if (!buyers.length){
-    wrap.innerHTML = '<div class="placeholder" style="padding:14px;">No arrivals for this selection yet.</div>';
+    wrap.innerHTML = `<div class="placeholder" style="padding:14px;">${k.onTheWay > 0
+      ? `No arrivals for this selection yet — ${fmtVnsMT(k.onTheWay)} MT is on the way. Buyers are shown once cargo has arrived.`
+      : 'No arrivals for this selection yet.'}</div>`;
     el.appendChild(wrap);
     return;
   }
   const maxVal = Math.max(...buyers.map(b => b.val));
   buyers.forEach((b, i) => {
-    const pct = k.selected ? (b.val / k.selected * 100) : 0;
+    const pct = k.arrived ? (b.val / k.arrived * 100) : 0;   // buyers are Arrived-only, so share is of Arrived
     const barPct = maxVal ? (b.val / maxVal * 100) : 0;
     const row = document.createElement('div');
     row.className = 'vns-buyer-row';
@@ -3254,13 +3345,13 @@ function vnSupplyTopBuyersSection(el){
 
 // ---- render: 9-product snapshot ------------------------------------------------
 function vnSupplySnapshotSection(el){
-  el.appendChild(sectionTitle(`All Products — Snapshot (Arrived, ${vnSupplyUI.month}, ${vnSupplyUI.region})`));
+  el.appendChild(sectionTitle(`All Products — Snapshot (${vnSupplyUI.month}, ${vnSupplyUI.region})`));
   const wrap = document.createElement('div');
   wrap.className = 'scrollx';
   const table = document.createElement('table');
   table.className = 'grid-table vns-snap-table';
   const thead = document.createElement('tr');
-  thead.innerHTML = '<th class="rowlabel">Product</th><th>Selected month</th><th>Trend</th><th>Peak / Trough</th>';
+  thead.innerHTML = `<th class="rowlabel">Product</th><th>${vnSupplyUI.month === 'All' ? 'Year to date' : 'Selected month'}</th><th>Arrived</th><th>On the way</th><th>Trend</th><th>Peak / Trough</th>`;
   table.appendChild(thead);
 
   const vs = vnSupplyData();
@@ -3269,11 +3360,14 @@ function vnSupplySnapshotSection(el){
   vs.cargoes.forEach(c => {
     const series = vnSupplyArrivedSeries(c.name, vnSupplyUI.region);
     const val = vnSupplyMonthValue(series, vnSupplyUI.month, cutoffIdx);
+    const otwVal = vnSupplyMonthValue(vnSupplyOnTheWaySeries(c.name, vnSupplyUI.region), vnSupplyUI.month, cutoffIdx);
     const pt = vnSupplyPeakTrough(c.name, vnSupplyUI.region);
     const spark = vnSupplySparkline(series, cutoffIdx + 1);
     const tr = document.createElement('tr');
     tr.innerHTML = `<td class="rowlabel">${c.name}</td>` +
-      `<td style="font-family:var(--mono); color:var(--accent);">${fmtVnsMT(val)}</td>` +
+      `<td style="font-family:var(--mono); font-weight:700;">${fmtVnsMT(val + otwVal)}</td>` +
+      `<td class="vns-cell-arrived">${fmtVnsMT(val)}</td>` +
+      `<td class="vns-cell-onway${otwVal ? '' : ' zero'}">${fmtVnsMT(otwVal)}</td>` +
       `<td class="vns-spark">${spark || '—'}</td>` +
       `<td class="vns-peaktrough">${pt ? pt.peak + ' / ' + pt.trough : 'no arrivals yet'}</td>`;
     table.appendChild(tr);
@@ -3284,9 +3378,12 @@ function vnSupplySnapshotSection(el){
   const note = document.createElement('div');
   note.className = 'note';
   note.style.marginTop = '8px';
-  note.innerHTML = 'All figures are <b>Arrived</b> only (NOR on or before the report’s "as of" date). ' +
-    'The report’s own month is topped up with Lineup-SUM on-the-way tonnage for the Monthly Average baseline only, ' +
-    'since that one month is always partial — everything else on this tab stays Arrived-only.';
+  note.innerHTML = '<b>Arrived</b> = NOR on or before the report’s "as of" date. <b>On the way</b> = line-up bookings not yet arrived ' +
+    '(Lineup SUM) plus arrival-report rows dated after "as of" — the same rule as the Excel Dashboard’s "On the way" row. ' +
+    'Line-up tonnage has no North/South split, so it is included in full whichever Region is selected. ' +
+    'Origin breakdown, Top 5 Buyers, Trend and Peak / Trough are Arrived-only.' +
+    (vnSupplyData().cargoes.some(c => Array.isArray(c.otwLineup)) ? '' :
+      ' <b>On-the-way for later months appears after the next Excel import</b> — the numbers currently loaded were imported before this breakdown existed.');
   el.appendChild(note);
 }
 
@@ -3375,6 +3472,9 @@ function parseVnSupplyWorkbook(wb){
   if (missing.length) throw new Error(`Could not find these Arr Data columns: ${missing.join(', ')}.`);
 
   const cargoMatrix = {}, originMap = {}, buyerMap = {}, sepBoost = {};
+  // 2026-10-02: on-the-way per month for ALL months (not just the cutoff month) — see vnSupplyOnTheWaySeries().
+  const otwArr = {};   // cargo -> { north:[12], south:[12] }  (Arr Data rows dated after "as of")
+  const otwLineup = {}; // cargo -> [12]                        (Lineup SUM, no Region)
   const cargoNamesSeen = new Set();
 
   for (let r = 1; r < adRows.length; r++){
@@ -3406,10 +3506,19 @@ function parseVnSupplyWorkbook(wb){
         if (!buyerMap[bk]) buyerMap[bk] = { cargo, buyer, north: Array(12).fill(0), south: Array(12).fill(0) };
         buyerMap[bk][rk][mi] += vol;
       }
-    } else if (monthTxt === cutoffMonth){
-      if (!sepBoost[cargo]) sepBoost[cargo] = { syesNorth: 0, syesSouth: 0, tbalNorth: 0, tbalSouth: 0 };
-      if (String(row[col.syes] || '').trim().toLowerCase() === 'yes') sepBoost[cargo][rk === 'north' ? 'syesNorth' : 'syesSouth'] += vol;
-      sepBoost[cargo][rk === 'north' ? 'tbalNorth' : 'tbalSouth'] += (Number(row[col.tbal]) || 0);
+    } else {
+      const isYes = String(row[col.syes] || '').trim().toLowerCase() === 'yes';
+      const tbalVal = Number(row[col.tbal]) || 0;
+      const mi = months.indexOf(monthTxt);
+      if (mi >= 0){
+        if (!otwArr[cargo]) otwArr[cargo] = { north: Array(12).fill(0), south: Array(12).fill(0) };
+        otwArr[cargo][rk][mi] += (isYes ? vol : 0) + tbalVal;
+      }
+      if (monthTxt === cutoffMonth){
+        if (!sepBoost[cargo]) sepBoost[cargo] = { syesNorth: 0, syesSouth: 0, tbalNorth: 0, tbalSouth: 0 };
+        if (isYes) sepBoost[cargo][rk === 'north' ? 'syesNorth' : 'syesSouth'] += vol;
+        sepBoost[cargo][rk === 'north' ? 'tbalNorth' : 'tbalSouth'] += tbalVal;
+      }
     }
   }
 
@@ -3431,7 +3540,15 @@ function parseVnSupplyWorkbook(wb){
           const cargo = String(row[lc.cargo] || '').trim();
           if (!cargo) continue;
           const periodIso = excelSerialToISODate(row[lc.period]);
-          if (periodIso && periodIso.slice(0, 7) === cutoffMonth) sepLineup[cargo] = (sepLineup[cargo] || 0) + (Number(row[lc.tons]) || 0);
+          if (!periodIso) continue;
+          const tons = Number(row[lc.tons]) || 0;
+          if (periodIso.slice(0, 7) === cutoffMonth) sepLineup[cargo] = (sepLineup[cargo] || 0) + tons;
+          const pmi = months.indexOf(periodIso.slice(0, 7));
+          if (pmi >= 0){
+            if (!otwLineup[cargo]) otwLineup[cargo] = Array(12).fill(0);
+            otwLineup[cargo][pmi] += tons;
+            cargoNamesSeen.add(cargo);
+          }
         }
       }
     }
@@ -3452,6 +3569,9 @@ function parseVnSupplyWorkbook(wb){
       sepLineup: round1(sepLineup[name] || 0),
       sepSyesNorth: round1(b.syesNorth), sepSyesSouth: round1(b.syesSouth),
       sepTbalNorth: round1(b.tbalNorth), sepTbalSouth: round1(b.tbalSouth),
+      otwLineup: (otwLineup[name] || Array(12).fill(0)).map(round1),
+      otwNorth: (otwArr[name] ? otwArr[name].north : Array(12).fill(0)).map(round1),
+      otwSouth: (otwArr[name] ? otwArr[name].south : Array(12).fill(0)).map(round1),
     };
   });
   if (!cargoes.length) throw new Error('No cargo rows found in Arr Data.');
@@ -4216,7 +4336,7 @@ function renderMorningReportCard(){
   }).join('');
   const top = (r.top || []).slice(0, 4).map(t =>
     `<a class="news-morning-top-item" href="${t.url || '#'}" target="_blank" rel="noopener">` +
-    `${t.breaking ? '🔴 ' : ''}${t.product} ${t.direction === 'BULLISH' ? '▲' : t.direction === 'BEARISH' ? '▼' : '•'} ${t.impact} · ${t.headline}</a>`
+    `${t.breaking ? '🔴 ' : ''}${t.product} ${t.direction === 'BULLISH' ? '▲' : t.direction === 'BEARISH' ? '▼' : '•'} ${newsFmtImpact(t.impact)} · ${t.headline}</a>`
   ).join('');
   card.innerHTML = `<div class="news-morning-head"><span>☀️ Morning Report · ${r.dateVN} (VN)</span>` +
     `<button class="hbtn news-morning-close" title="Dismiss until tomorrow">✕</button></div>` +
@@ -4255,7 +4375,13 @@ function newsFmt(ms, opts){
 function newsFmtTime(ms){
   return newsFmt(ms, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).replace(',', '');
 }
-function newsFmtSigned(v){ const r = Math.round(v); return (r > 0 ? '+' : '') + r.toLocaleString('en-US'); }
+// 2026-10-02, Mete: impact is SHOWN on a 0-10 scale (55 -> 5.5, net +230 -> +23). Everything stored
+// and computed stays 0-100 (Firestore docs, collector.py, thresholds, decay/net maths) so the data
+// collected since 2026-09-11 stays comparable — only these two formatters divide by 10. Whole
+// numbers print without a trailing ".0" (6, +23); otherwise one decimal (5.5, +23.5).
+function newsFmtTenth(t){ return (t / 10).toLocaleString('en-US', { minimumFractionDigits: t % 10 ? 1 : 0, maximumFractionDigits: 1 }); }
+function newsFmtImpact(v){ return newsFmtTenth(Math.round(Number(v) || 0)); }
+function newsFmtSigned(v){ const r = Math.round(v) || 0; return (r > 0 ? '+' : '') + newsFmtTenth(r); }
 // Futures/CFD-style price formatting for the merged chart's right-hand axis and hover tooltip
 // (2026-09-14) — 2 decimals regardless of magnitude keeps WHEAT (~600) and SBM (~350) readable
 // without a per-product format table.
@@ -4416,7 +4542,8 @@ function newsChartSvg(pts, priceBars, xMin, xMax, width, height, markers){
   const padL = 44, padR = hasPrice ? 50 : 12, padT = 10, padB = 24;
   const w = width - padL - padR, h = height - padT - padB;
   if (pts.length < 2 && !hasPrice){
-    return { html: `<div class="note">Not enough qualifying events yet to draw the net-impact line (needs impact ≥ ${NEWS_MIN_IMPACT} and confidence ≥ ${NEWS_MIN_CONF}).</div>`, meta: null };
+    if (!markers) return { html: '<div class="note">No price data for this range yet.</div>', meta: null };
+    return { html: `<div class="note">Not enough qualifying events yet to draw the net-impact line (needs impact ≥ ${newsFmtImpact(NEWS_MIN_IMPACT)} and confidence ≥ ${NEWS_MIN_CONF}).</div>`, meta: null };
   }
   const mk = Array.isArray(markers) ? markers : [];
   // Marker values feed into the y-range too (2026-09-23) — on a coarse grid (long ranges resample
@@ -4478,7 +4605,7 @@ function newsChartSvg(pts, priceBars, xMin, xMax, width, height, markers){
     const cx = X(m.ms).toFixed(1), cy = Y(m.net).toFixed(1);
     const cls = m.direction === 'BULLISH' ? 'news-marker-bull' : m.direction === 'BEARISH' ? 'news-marker-bear' : 'news-marker-neu';
     const arrow = m.direction === 'BULLISH' ? '▲' : m.direction === 'BEARISH' ? '▼' : '•';
-    const tipText = escapeHtml(`${newsFmtTime(m.ms)} · ${arrow} ${m.impact} · ${m.headline || ''}`);
+    const tipText = escapeHtml(`${newsFmtTime(m.ms)} · ${arrow} ${newsFmtImpact(m.impact)} · ${m.headline || ''}`);
     const dot = `<circle cx="${cx}" cy="${cy}" r="4" class="news-marker ${cls}"><title>${tipText}</title></circle>`;
     return m.url ? `<a href="${escapeAttr(m.url)}" target="_blank" rel="noopener" class="news-marker-link">${dot}</a>` : dot;
   }).join('');
@@ -4634,7 +4761,7 @@ function renderNewsSummary(){
   wrap.className = 'news-tiles';
   for (const p of NEWS_PRODUCTS.filter(p => p !== 'ALL')){
     const { now, count } = newsSeries(p);
-    const tone = now.n === 0 ? 'flat' : now.net > 0 ? 'pos' : now.net < 0 ? 'neg' : 'flat';
+    const tone = (p === 'FREIGHT' || now.n === 0) ? 'flat' : now.net > 0 ? 'pos' : now.net < 0 ? 'neg' : 'flat';
     const tile = document.createElement('div');
     tile.className = 'news-tile ' + tone + (newsUI.chartProduct === p ? ' sel' : '');
     const q = PRICE_PRODUCTS.includes(p) ? newsLatestPrice(p) : null;
@@ -4642,10 +4769,15 @@ function renderNewsSummary(){
     const priceHtml = q
       ? `<span class="news-tile-price${q.unreliable ? ' unreliable' : ''}" title="${priceTitle}">${q.unreliable ? '≈' : ''}${newsFmtPrice(q.price)}${p === 'FREIGHT' ? ' <span class="news-tile-proxy">Brent</span>' : ''}${q.pct != null ? ` <span class="chg ${q.pct > 0 ? 'pos' : q.pct < 0 ? 'neg' : ''}">${q.pct > 0 ? '▲' : q.pct < 0 ? '▼' : '·'}${Math.abs(q.pct).toFixed(1)}%</span>` : ''}</span>`
       : '';
+    // 2026-10-02, Mete: (a) the "bal ±%" figure is gone from every tile; (b) FREIGHT no longer has
+    // news at all (dropped 2026-09-22), so its tile is just the name + Brent price — no impact
+    // number and no "no qualifying event" line.
+    const isFreight = p === 'FREIGHT';
     tile.innerHTML = `<div class="news-tile-head"><span class="news-tile-name">${p}</span>${priceHtml}</div>` +
+      (isFreight ? '' :
       `<div class="news-tile-val">${now.n ? newsFmtSigned(now.net) : '—'}</div>` +
-      `<div class="news-tile-sub">${now.n ? `${now.bull}▲ ${now.bear}▼ · ${now.n} in ${NEWS_DECAY_ZERO_H}h · bal ${now.balance > 0 ? '+' : ''}${now.balance}%` : `no qualifying event in ${NEWS_DECAY_ZERO_H}h`}</div>`;
-    tile.title = `${count} qualifying ${p} events in the last ${NEWS_HISTORY_DAYS} days — click to chart`;
+      `<div class="news-tile-sub">${now.n ? `${now.bull}▲ ${now.bear}▼ · ${now.n} in ${NEWS_DECAY_ZERO_H}h` : `no qualifying event in ${NEWS_DECAY_ZERO_H}h`}</div>`);
+    tile.title = isFreight ? 'Brent crude price — click to chart' : `${count} qualifying ${p} events in the last ${NEWS_HISTORY_DAYS} days — click to chart`;
     tile.addEventListener('click', () => { newsUI.chartProduct = p; renderNewsBody(); });
     wrap.appendChild(tile);
   }
@@ -4679,9 +4811,12 @@ function renderNewsChart(){
   // sparse in it, and always lines up with however much price history is available.
   const xMax = Date.now();
   const xMin = xMax - rangeDef.days * 24 * 3600 * 1000;
-  const shownPts = newsSmoothSeries(newsUI.chartProduct, xMin, xMax);
+  // 2026-10-02, Mete: FREIGHT is a price-only chart now (Brent) — freight news was retired on
+  // 2026-09-22, so no net-impact line, no headline dots and no impact figures for it.
+  const priceOnly = newsUI.chartProduct === 'FREIGHT';
+  const shownPts = priceOnly ? [] : newsSmoothSeries(newsUI.chartProduct, xMin, xMax);
   // Per-headline dots for the visible window (2026-09-23, Mete's request) — see newsMarkersFor().
-  const shownMarkers = newsMarkersFor(newsUI.chartProduct, xMin, xMax);
+  const shownMarkers = priceOnly ? [] : newsMarkersFor(newsUI.chartProduct, xMin, xMax);
   const rangeNote = '';
   // Real price history from Firestore prices/{product} (collector.py's sync_prices()) — every
   // remaining product has one now that MACRO (which used a separate TradingView DXY/VIX widget
@@ -4697,7 +4832,9 @@ function renderNewsChart(){
   const hasPriceLine = priceBars.length >= 2;
   const head = document.createElement('div');
   head.className = 'news-chart-head';
-  head.innerHTML = `<span class="news-chart-title">${newsUI.chartProduct} · net impact${hasPriceLine ? ' + price' : ''}</span>` +
+  head.innerHTML = priceOnly
+    ? `<span class="news-chart-title">FREIGHT · ${PRICE_LABELS.FREIGHT || 'Brent price'}</span>`
+    : `<span class="news-chart-title">${newsUI.chartProduct} · net impact${hasPriceLine ? ' + price' : ''}</span>` +
     `<span class="news-chart-latest ${now.net > 0 ? 'pos' : now.net < 0 ? 'neg' : ''}">${now.n ? newsFmtSigned(now.net) : '—'}</span>` +
     `<span class="news-chart-sub">${now.bull} bullish / ${now.bear} bearish · ${now.n} events · ${count} in ${NEWS_HISTORY_DAYS}d${rangeNote}</span>` +
     // Color-coded legend (2026-09-14, Mete's request — the two lines weren't labeled anywhere) so
@@ -4713,7 +4850,7 @@ function renderNewsChart(){
   svgWrap.className = 'news-svg-wrap';
   const width = Math.max(320, Math.min(900, (document.getElementById('newstab')?.clientWidth || 360) - 24));
   const height = 150;
-  const { html, meta } = newsChartSvg(shownPts, priceBars, xMin, xMax, width, height, shownMarkers);
+  const { html, meta } = newsChartSvg(shownPts, priceBars, xMin, xMax, width, height, priceOnly ? null : shownMarkers);
   svgWrap.innerHTML = html;
   box.appendChild(svgWrap);
 
@@ -4749,7 +4886,7 @@ function renderNewsChart(){
       guide.style.left = leftPct + '%';
       guide.hidden = false;
       const lines = [`<div class="news-hover-date">${newsFmtTime(ms)}</div>`];
-      if (nearestNet) lines.push(`<div>net impact: <b class="${nearestNet.net > 0 ? 'pos' : nearestNet.net < 0 ? 'neg' : ''}">${newsFmtSigned(nearestNet.net)}</b></div>`);
+      if (nearestNet && !priceOnly) lines.push(`<div>net impact: <b class="${nearestNet.net > 0 ? 'pos' : nearestNet.net < 0 ? 'neg' : ''}">${newsFmtSigned(nearestNet.net)}</b></div>`);
       if (nearestPrice) lines.push(`<div>price: <b>${newsFmtPrice(nearestPrice.c)}</b></div>`);
       tip.innerHTML = lines.join('');
       tip.style.left = Math.min(Math.max(leftPct, 10), 90) + '%';
@@ -4788,7 +4925,7 @@ function renderNewsTicker(){
     const a = document.createElement('a');
     a.className = 'news-ticker-item ' + (s.direction === 'BULLISH' ? 'bull' : s.direction === 'BEARISH' ? 'bear' : 'neu');
     a.href = s.url || '#'; a.target = '_blank'; a.rel = 'noopener';
-    a.textContent = `${newsFmtTime(s.ms)} · ${s.product} ${s.direction === 'BULLISH' ? '▲' : s.direction === 'BEARISH' ? '▼' : '•'} ${s.impact} · ${s.headline}`;
+    a.textContent = `${newsFmtTime(s.ms)} · ${s.product} ${s.direction === 'BULLISH' ? '▲' : s.direction === 'BEARISH' ? '▼' : '•'} ${newsFmtImpact(s.impact)} · ${s.headline}`;
     return a;
   });
   mk().forEach(a => inner.appendChild(a));
@@ -4884,8 +5021,8 @@ function renderNewsControls(){
   }
   const min = document.createElement('span');
   min.className = 'month-chip' + (newsUI.minImpactOn ? ' on' : '');
-  min.textContent = `${NEWS_MIN_IMPACT}+`;
-  min.title = `Only events with impact ≥ ${NEWS_MIN_IMPACT}`;
+  min.textContent = `${newsFmtImpact(NEWS_MIN_IMPACT)}+`;
+  min.title = `Only events with impact ≥ ${newsFmtImpact(NEWS_MIN_IMPACT)}`;
   min.addEventListener('click', () => { newsUI.minImpactOn = !newsUI.minImpactOn; renderNewsBody(); });
   bar.appendChild(min);
   const search = document.createElement('input');
@@ -5053,7 +5190,7 @@ function renderTraderNewsPreview(draft){
       <div class="trader-preview-row"><label>Product</label><select id="tpProduct">${productOptions}</select></div>
       <div class="trader-preview-row" id="tpSkipNote" style="display:${draft.product === 'SKIP' ? 'block' : 'none'};"><span></span><span class="trader-preview-skip">Looks irrelevant — "Add" is disabled. Pick a product by hand if you want to add it anyway.</span></div>
       <div class="trader-preview-row"><label>Direction</label><select id="tpDirection">${directionOptions}</select></div>
-      <div class="trader-preview-row"><label>Impact</label><input type="number" id="tpImpact" min="0" max="100" value="${draft.impact}"></div>
+      <div class="trader-preview-row"><label>Impact</label><input type="number" id="tpImpact" min="0" max="10" step="0.5" value="${(Number(draft.impact) || 0) / 10}"></div>
       <div class="trader-preview-row"><label>Category</label><select id="tpCategory">${categoryOptions}</select></div>
       <div class="trader-preview-row"><label>Breaking</label><input type="checkbox" id="tpBreaking" style="width:auto;justify-self:start;" ${draft.breaking ? 'checked' : ''}></div>
       <div class="trader-preview-row"><label>Summary</label><textarea id="tpSummary">${escapeHtml(draft.summary || '')}</textarea></div>
@@ -5082,7 +5219,8 @@ function renderTraderNewsPreview(draft){
         headline: document.getElementById('tpHeadline').value.trim() || draft.headline,
         product: productSel.value,
         direction: document.getElementById('tpDirection').value,
-        impact: Math.max(0, Math.min(100, Number(document.getElementById('tpImpact').value) || 0)),
+        // entered on the 0-10 display scale, stored 0-100 like every collector-written doc
+        impact: Math.max(0, Math.min(100, Math.round((Number(document.getElementById('tpImpact').value) || 0) * 10))),
         category: document.getElementById('tpCategory').value,
         breaking: document.getElementById('tpBreaking').checked,
         summary: document.getElementById('tpSummary').value.trim(),
@@ -5140,8 +5278,8 @@ function renderNewsRow(s){
   time.textContent = newsFmtTime(s.ms).replace(' ', '\n');
   const imp = document.createElement('div');
   imp.className = 'news-imp ' + dirClass;
-  imp.textContent = s.impact;
-  imp.title = `impact ${s.impact} · confidence ${s.confidence}`;
+  imp.textContent = newsFmtImpact(s.impact);
+  imp.title = `impact ${newsFmtImpact(s.impact)} · confidence ${s.confidence}`;
   const trend = Math.max(1, Number(s.trend || s.sourceCount || 1));
   if (trend > 1){
     const tr = document.createElement('div');
@@ -5266,7 +5404,7 @@ function newsMaybeAlert(s){
   newsPlayDing();
   try{
     const arrow = s.direction === 'BULLISH' ? '▲' : s.direction === 'BEARISH' ? '▼' : '•';
-    const n = new Notification(`${s.breaking ? '🔴 BREAKING · ' : ''}${s.product} ${arrow} ${s.impact}`, {
+    const n = new Notification(`${s.breaking ? '🔴 BREAKING · ' : ''}${s.product} ${arrow} ${newsFmtImpact(s.impact)}`, {
       body: s.headline, tag: s.id || (s.product + '_' + s.ms),
     });
     n.onclick = () => { window.focus(); if (s.url) window.open(s.url, '_blank'); };
@@ -5324,12 +5462,13 @@ function renderArchiveNews(container, news){
   const wrap = document.createElement('div');
   wrap.className = 'news-tiles';
   for (const [p, v] of Object.entries(news.products)){
+    if (p === 'FREIGHT' && !v.n) continue;   // freight news retired 2026-09-22 — no empty tile for it
     const tone = !v.n ? 'flat' : v.net > 0 ? 'pos' : v.net < 0 ? 'neg' : 'flat';
     const tile = document.createElement('div');
     tile.className = 'news-tile ' + tone;
     tile.style.cursor = 'default';
     tile.innerHTML = `<div class="news-tile-name">${p}</div><div class="news-tile-val">${v.n ? newsFmtSigned(v.net) : '—'}</div>` +
-      `<div class="news-tile-sub">${v.n ? `${v.bull}▲ ${v.bear}▼ · ${v.n} events · bal ${v.balance > 0 ? '+' : ''}${v.balance}%` : 'no qualifying event'}</div>`;
+      `<div class="news-tile-sub">${v.n ? `${v.bull}▲ ${v.bear}▼ · ${v.n} events` : 'no qualifying event'}</div>`;
     wrap.appendChild(tile);
   }
   container.appendChild(wrap);
@@ -5340,7 +5479,7 @@ function renderArchiveNews(container, news){
       const row = document.createElement('div');
       row.className = 'news-archive-row';
       const dir = t.direction === 'BULLISH' ? 'bull' : t.direction === 'BEARISH' ? 'bear' : 'neu';
-      row.innerHTML = `<span class="news-imp ${dir}">${t.impact}</span><span class="news-archive-head">${escapeHtml(t.headline)}</span>` +
+      row.innerHTML = `<span class="news-imp ${dir}">${newsFmtImpact(t.impact)}</span><span class="news-archive-head">${escapeHtml(t.headline)}</span>` +
         `<span class="news-tag prod">${t.product}</span>${t.breaking ? '<span class="news-tag breaking">BREAKING</span>' : ''}${t.trend > 1 ? `<span class="news-tag dim">×${t.trend}</span>` : ''}`;
       list.appendChild(row);
     }
