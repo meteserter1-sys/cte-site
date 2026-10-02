@@ -212,6 +212,41 @@ def clean(s: str | None) -> str:
     return re.sub(r'\s+', ' ', s).strip()
 
 
+# 2026-10-02, Mete (liquid-glass theme): each news card shows a small thumbnail. When the feed itself
+# already carries a picture for the item we just keep its URL — the reader's browser loads it straight
+# from the publisher, so this costs nothing: no extra request from this collector, no Claude call, no
+# storage. Google News RSS items carry no picture at all (the page falls back to a per-product photo);
+# publisher feeds and the X/xcancel bridges often do. https only, so the page never mixes content.
+_IMG_TAG_RE = re.compile(r'<img[^>]+src=["\'](https://[^"\'>\s]+)["\']', re.I)
+_IMG_EXT_RE = re.compile(r'\.(?:jpe?g|png|webp|gif)(?:[?#]|$)', re.I)
+
+
+def entry_image(entry) -> str:
+    """Best-effort image URL already present in a feed entry; '' when it has none."""
+    def ok(u) -> str:
+        u = str(u or '').strip()
+        return u if u.startswith('https://') and len(u) <= 600 else ''
+    try:
+        for m in entry.get('media_thumbnail') or []:
+            if isinstance(m, dict) and ok(m.get('url')):
+                return ok(m.get('url'))
+        for m in entry.get('media_content') or []:
+            if not isinstance(m, dict) or not ok(m.get('url')):
+                continue
+            kind = f"{m.get('medium', '')} {m.get('type', '')}".lower()
+            if 'image' in kind or (not kind.strip() and _IMG_EXT_RE.search(m['url'])):
+                return ok(m['url'])
+        for l in (entry.get('links') or []) + (entry.get('enclosures') or []):
+            if isinstance(l, dict) and str(l.get('type', '')).lower().startswith('image/') and ok(l.get('href')):
+                return ok(l.get('href'))
+        m = _IMG_TAG_RE.search(str(entry.get('summary') or ''))
+        if m:
+            return ok(html.unescape(m.group(1)))
+    except Exception:  # noqa: BLE001 — a thumbnail is never worth failing a run over
+        pass
+    return ''
+
+
 def normalise_title(t: str) -> str:
     t = t.lower()
     t = re.sub(r'\s+-\s+[^-]{2,40}$', '', t)      # strip trailing " - Publisher" Google adds
@@ -268,6 +303,8 @@ def collect() -> dict[str, dict]:
                 st['_publishers'].add(source.lower())
                 st['sourceCount'] += 1
             st['ms'] = min(st['ms'], entry_time_ms(entry))  # first publication wins
+            if not st.get('imageUrl'):
+                st['imageUrl'] = entry_image(entry)
             return
         stories[sid] = {
             'id': sid,
@@ -278,6 +315,7 @@ def collect() -> dict[str, dict]:
             'source': source,
             'sourceCount': 1,
             'ms': entry_time_ms(entry),
+            'imageUrl': entry_image(entry),
             '_publishers': {source.lower()},
         }
 
@@ -697,6 +735,7 @@ def sanitise(ans: dict, story: dict) -> dict | None:
         breaking = False
     return {
         **{k: story[k] for k in ('id', 'feed', 'headline', 'url', 'source', 'sourceCount', 'ms')},
+        'imageUrl': str(story.get('imageUrl') or ''),   # '' → the page shows the product / politics photo
         'product': prod,
         'direction': direction,
         'impact': impact,
