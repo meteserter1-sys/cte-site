@@ -23,6 +23,8 @@ Environment variables
   CLAUDE_MODEL              default "claude-sonnet-5"
   NEWS_MAX_NEW              cap on new stories classified per run (default 80)
   NEWS_MIN_STORE            drop stories scored below this impact (default 30, "tight wire")
+  NEWS_IMAGE_BUDGET_S       wall-clock seconds one run may spend fetching article pictures (og:image)
+                            for the stories it is about to write (default 60; 0 switches it off)
   NEWS_RETENTION_DAYS       delete events older than this (default 150; 2026-09-15, was 30 — Mete is
                             running CTE as an internal 3-month trial (mid-Sept 2026 → ~Jan 2027) and
                             wants an impact-vs-price-change correlation report at the end of it, which
@@ -245,6 +247,144 @@ def entry_image(entry) -> str:
     except Exception:  # noqa: BLE001 — a thumbnail is never worth failing a run over
         pass
     return ''
+
+
+# 2026-10-05, Mete: "no story ever shows its own picture". Cause: almost every story arrives through
+# Google News RSS, whose items carry no image at all (and whose link is a news.google.com redirect,
+# not the article). So for the few stories that survive classification and are about to be written,
+# the article page itself is asked for its social-card picture (og:image / twitter:image).
+#   - only docs with no imageUrl yet, highest impact first;
+#   - a hard wall-clock budget for the whole step (NEWS_IMAGE_BUDGET_S, default 60 s — Mete's number):
+#     whatever is not done by then simply keeps '' and the page shows the product / politics photo;
+#   - fails open on everything: a thumbnail is never worth failing or slowing a run over.
+# Costs no money: no Claude call, nothing stored but a URL — the reader's browser loads the picture
+# from the publisher.
+NEWS_IMAGE_BUDGET_S = float(os.environ.get('NEWS_IMAGE_BUDGET_S', '60'))
+BROWSER_UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
+              'Chrome/126.0 Safari/537.36')
+_OG_IMAGE_RES = [
+    re.compile(r'<meta[^>]+(?:property|name)=["\'](?:og:image(?::secure_url)?|twitter:image(?::src)?)["\'][^>]+content=["\']([^"\'>]+)["\']', re.I),
+    re.compile(r'<meta[^>]+content=["\']([^"\'>]+)["\'][^>]+(?:property|name)=["\'](?:og:image(?::secure_url)?|twitter:image(?::src)?)["\']', re.I),
+]
+_GN_ID_RE = re.compile(r'news\.google\.com/(?:rss/)?(?:articles|read)/([A-Za-z0-9_\-]+)')
+
+
+def _http_text(url: str, timeout: float, max_bytes: int = 300_000, method: str = 'GET', data=None, headers=None) -> tuple[str, str]:
+    """(text, final_url) — ('', '') on any failure."""
+    r = None
+    try:
+        h = {'User-Agent': BROWSER_UA, 'Accept-Language': 'en-US,en;q=0.8'}
+        h.update(headers or {})
+        r = requests.request(method, url, headers=h, data=data, timeout=timeout, stream=True, allow_redirects=True)
+        if r.status_code != 200:
+            return '', ''
+        chunks, size = [], 0
+        for chunk in r.iter_content(chunk_size=16384):
+            if not chunk:
+                break
+            chunks.append(chunk)
+            size += len(chunk)
+            if size >= max_bytes:
+                break
+        return b''.join(chunks).decode('utf-8', errors='ignore'), str(r.url)
+    except Exception:  # noqa: BLE001
+        return '', ''
+    finally:
+        if r is not None:
+            try:
+                r.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def resolve_gnews_url(url: str, timeout: float = 6) -> str:
+    """The publisher's own URL behind a news.google.com article link; '' when it cannot be resolved.
+    Old-style ids simply contain the URL (base64); current ones need Google's own decode call, which
+    wants the signature + timestamp printed in the article stub page."""
+    m = _GN_ID_RE.search(url or '')
+    if not m:
+        return ''
+    gid = m.group(1)
+    try:
+        import base64
+        raw = base64.urlsafe_b64decode(gid + '=' * (-len(gid) % 4))
+        hit = re.search(rb'https?://[\x21-\x7e]+', raw)
+        if hit:
+            return hit.group(0).decode('ascii', errors='ignore')
+    except Exception:  # noqa: BLE001
+        pass
+    page, _ = _http_text(f'https://news.google.com/rss/articles/{gid}', timeout)
+    sg = re.search(r'data-n-a-sg="([^"]+)"', page)
+    ts = re.search(r'data-n-a-ts="([^"]+)"', page)
+    if not sg or not ts:
+        return ''
+    inner = ('["garturlreq",[["X","X",["X","X"],null,null,1,1,"US:en",null,1,null,null,null,null,null,0,1],'
+             f'"X","X",1,[1,1,1],1,1,null,0,0,null,0],"{gid}",{ts.group(1)},"{sg.group(1)}"]')
+    body = 'f.req=' + quote_plus(json.dumps([[['Fbv4je', inner]]]))
+    text, _ = _http_text('https://news.google.com/_/DotsSplashUi/data/batchexecute', timeout, method='POST', data=body,
+                         headers={'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'})
+    try:
+        outer = json.loads(text.split('\n\n', 1)[1])
+        for row in outer:
+            if isinstance(row, list) and len(row) > 2 and row[1] == 'Fbv4je' and row[2]:
+                got = json.loads(row[2])[1]
+                if isinstance(got, str) and got.startswith('http'):
+                    return got
+    except Exception:  # noqa: BLE001
+        pass
+    return ''
+
+
+def article_image(url: str, timeout: float = 6) -> str:
+    """og:image / twitter:image of an article page ('' when none). https only, like entry_image()."""
+    if not url:
+        return ''
+    if 'news.google.com/' in url:
+        url = resolve_gnews_url(url, timeout)
+        if not url:
+            return ''
+    page, final = _http_text(url, timeout)
+    if not page:
+        return ''
+    for rx in _OG_IMAGE_RES:
+        m = rx.search(page)
+        if not m:
+            continue
+        img = html.unescape(m.group(1)).strip()
+        if img.startswith('//'):
+            img = 'https:' + img
+        elif img.startswith('/') and final:
+            from urllib.parse import urljoin
+            img = urljoin(final, img)
+        if img.startswith('http://'):
+            img = 'https://' + img[7:]
+        if img.startswith('https://') and len(img) <= 600 and 'news.google.com' not in img and 'gstatic.com' not in img:
+            return img
+    return ''
+
+
+def fill_images(docs: list[dict], budget_s: float | None = None) -> None:
+    """Give every doc that has no picture its article's og:image, inside one overall time budget."""
+    budget = NEWS_IMAGE_BUDGET_S if budget_s is None else budget_s
+    todo = [d for d in docs if not d.get('imageUrl') and d.get('url') and not d.get('manual')]
+    if not todo or budget <= 0:
+        return
+    t0 = time.time()
+    got = tried = 0
+    for d in sorted(todo, key=lambda d: -int(d.get('impact', 0))):
+        left = budget - (time.time() - t0)
+        if left < 2:
+            break
+        tried += 1
+        try:
+            img = article_image(d['url'], timeout=min(6.0, max(2.0, left / 2)))
+        except Exception:  # noqa: BLE001
+            img = ''
+        if img:
+            d['imageUrl'] = img
+            got += 1
+    print(f'  images: {got} found / {tried} tried / {len(todo)} without a feed picture '
+          f'({time.time() - t0:.0f}s of {budget:.0f}s budget)')
 
 
 def normalise_title(t: str) -> str:
@@ -593,6 +733,11 @@ same order as the input, nothing else. Fields:
   "eventType"  : one of "WEATHER","SUPPLY DEMAND","TRADE FLOW","POLICY","GEOPOLITICS","LOGISTICS","PRICE","DISEASE","ENERGY","FX","OTHER"
   "summary"    : ONE English sentence (max 28 words) stating what happened AND why it matters
                  for the importer's cost, whatever language the headline is in.
+  "headline_en": "" when the headline is already in English. Otherwise the headline itself translated
+                 into natural English as a news headline (not a summary, nothing added or dropped):
+                 keep names, places, numbers and units exactly, max 160 characters. The desk reads
+                 English only — every Russian, Ukrainian, Vietnamese, Spanish, Portuguese, Chinese,
+                 Indonesian etc. headline must come back translated here.
   "duplicate"  : true if this headline reports the SAME underlying fact or data point as one of the
                  ALREADY-COVERED EVENTS listed at the end of this prompt (when that list is present) —
                  another outlet's retelling, a translation, or a slightly different number/angle on a
@@ -634,6 +779,7 @@ CLASSIFY_TOOL = {
                         'breaking': {'type': 'boolean'},
                         'eventType': {'type': 'string', 'enum': list(EVENT_TYPES)},
                         'summary': {'type': 'string'},
+                        'headline_en': {'type': 'string', 'description': 'English translation of a non-English headline, else ""'},
                         'duplicate': {'type': 'boolean'},
                     },
                     'required': ['i', 'product', 'direction', 'impact', 'confidence',
@@ -689,6 +835,7 @@ def classify_mock(batch: list[dict]) -> list[dict]:
             'breaking': (h >> 22) % 10 == 0,
             'eventType': EVENT_TYPES[(h >> 20) % len(EVENT_TYPES)],
             'summary': f'[mock] {s["headline"][:80]}',
+            'headline_en': '',
             'duplicate': False,
         })
     return out
@@ -733,8 +880,15 @@ def sanitise(ans: dict, story: dict) -> dict | None:
         # a dramatic-sounding duplicate/stale headline.
         impact = min(impact, 20)
         breaking = False
+    # 2026-10-05, Mete: every headline on the site (cards, breaking ticker, push alerts) must be in
+    # English. The classifier returns "headline_en" for a non-English headline in the SAME call that
+    # scores it (no extra request); the original wording is kept in headlineOrig. The story id was
+    # hashed from the original title before this point, so dedup / seen-cache are unaffected.
+    head_en = clean(str(ans.get('headline_en', '') or ''))[:200]
+    translated = bool(head_en) and normalise_title(head_en) != normalise_title(story['headline'])
     return {
         **{k: story[k] for k in ('id', 'feed', 'headline', 'url', 'source', 'sourceCount', 'ms')},
+        **({'headline': head_en, 'headlineOrig': story['headline']} if translated else {}),
         'imageUrl': str(story.get('imageUrl') or ''),   # '' → the page shows the product / politics photo
         'product': prod,
         'direction': direction,
@@ -1483,6 +1637,9 @@ def main():
     heads, updates = cluster(docs, events)
     print(f'  {len(heads)} events after clustering ({len(docs) - len(heads)} reports folded in, '
           f'{len(updates)} earlier events gained coverage)')
+
+    if not args.mock:
+        fill_images(heads)
 
     if args.out:
         with open(args.out, 'w', encoding='utf-8') as f:
