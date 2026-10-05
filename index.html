@@ -4,9 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Commodity Trading Engine (CTE)</title>
-<link rel="icon" type="image/png" sizes="64x64" href="assets/favicon.png">
-<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
-<link rel="manifest" href="manifest.json">
+<link rel="icon" href="favicon.ico?v=4" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png?v=4">
+<link rel="icon" type="image/png" sizes="64x64" href="assets/favicon.png?v=4">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png?v=4">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=4">
+<link rel="manifest" href="manifest.json?v=4">
 <meta name="theme-color" content="#f3ede4">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -123,8 +127,7 @@
   /* ---------- top bar ---------- */
   .top{ display:flex; align-items:center; gap:14px; margin-bottom:14px; flex-wrap:wrap; }
   .brand{ display:flex; align-items:center; justify-content:center; gap:11px; padding:7px 22px 7px 8px; }
-  .brand-mark{ width:38px; height:38px; border-radius:50%; display:grid; place-items:center; color:#fff; font-weight:700; font-size:12px; letter-spacing:.06em;
-    background:radial-gradient(circle at 30% 25%, var(--orange-2), var(--orange) 60%, #c74a00); box-shadow:0 6px 16px -4px rgba(242,96,12,.6), inset 0 1px 0 rgba(255,255,255,.5); }
+  .brand-mark{ width:38px; height:38px; display:block; flex:none; object-fit:contain; filter:drop-shadow(0 5px 9px rgba(242,96,12,.45)); }
   .brand b{ font-weight:700; font-size:15px; letter-spacing:-.01em; white-space:nowrap; }
   .tabs{ flex:1; min-width:0; display:flex; gap:4px; padding:6px; overflow-x:auto; scrollbar-width:none; }
   .tabs::-webkit-scrollbar{ display:none; }
@@ -470,6 +473,65 @@
     main > section:not(#newstab){ padding:14px 12px; border-radius:26px; }
     .brand b{ font-size:13.5px; } .tab{ padding:9px 14px; font-size:12.5px; }
   }
+
+  /* ===== 2026-10-05 (Mete): compact cards, chart zoom, mobile fixes ===== */
+  .news-row{ padding:10px 11px; border-radius:20px; }
+  .news-card-top{ gap:10px; }
+  .news-thumb{ width:68px; height:68px; border-radius:14px; }
+  .news-headline{ font-size:14px; line-height:1.26; }
+  .news-summary{ margin-top:4px; font-size:12.5px; line-height:1.38; -webkit-line-clamp:4; }
+  .news-badges{ margin-top:8px; }
+  .news-card-foot{ margin-top:8px; padding-top:7px; }
+  .news-vote{ width:27px; height:27px; }
+  .news-lane-list{ gap:8px; }
+  .news-plot{ touch-action:pan-y; }
+  .news-plot.zoomed{ cursor:grab; } .news-plot.panning{ cursor:grabbing; }
+  .news-zoom{ display:flex; gap:4px; margin-left:4px; }
+  .news-zoom button{ all:unset; cursor:pointer; box-sizing:border-box; width:26px; height:26px; border-radius:50%; display:grid; place-items:center; font-size:15px; font-weight:700; line-height:1; color:var(--ink-2);
+    background:rgba(255,255,255,.7); border:1px solid var(--edge); box-shadow:inset 0 1px 0 #fff, 0 4px 10px -6px rgba(40,26,12,.5); }
+  .news-zoom button:hover{ color:var(--orange); }
+  .news-zoom button.reset{ width:auto; padding:0 10px; border-radius:999px; font-size:10.5px; letter-spacing:.02em; }
+  .ro-compact th, .ro-compact td{ padding:3px 5px; }
+  .ro-compact td{ font-size:12px; }
+  .ro-compact td.rowlabel{ font-size:11.5px; font-weight:600; color:var(--ink-2); }
+  .ro-compact td:not(.rowlabel){ color:var(--ink-2); font-variant-numeric:tabular-nums; }
+  .ro-wrap{ padding-top:6px; padding-bottom:6px; }
+  .vns-select{ display:none; }
+  @media (max-width:640px){
+    .news-legend{ width:100%; padding-top:6px; } .news-zoom{ margin-left:auto; }
+    .news-chart-head .seg{ flex-wrap:nowrap; width:100%; box-sizing:border-box; }
+    .news-chart-head .seg > .opt{ flex:1 1 0; min-width:0; text-align:center; padding:7px 2px; font-size:12px; }
+    .news-events{ padding:10px 14px; }
+    .news-events-list{ grid-template-columns:minmax(0, 1fr); }
+    .news-event{ gap:8px; } .news-event-when{ min-width:0; flex:none; } .news-event-name{ min-width:0; overflow-wrap:anywhere; } .news-event-rel{ flex:none; white-space:nowrap; }
+    .news-thumb{ width:62px; height:62px; }
+    .news-badges{ gap:4px; }
+    .news-badges:not(.has-breaking){ flex-wrap:nowrap; }
+    .news-badges .orb{ width:25px; height:25px; font-size:11.5px; } .news-badges .orb svg{ width:17px; height:17px; }
+    .news-badges .orb.score{ width:auto; min-width:25px; padding:0 6px; }
+    .news-badges .tagp{ height:25px; padding:0 7px; font-size:9.5px; flex:0 0 auto; }
+    .news-badges .tagp.src{ line-height:23px; flex:0 1 auto; min-width:26px; }
+    .news-badges .flame{ width:25px; height:30px; } .news-badges .flame b{ top:5px; font-size:10px; }
+    .vns-chips.has-select{ display:none; }
+    .vns-select{ display:block; width:100%; box-sizing:border-box; margin:0 0 4px; padding:11px 38px 11px 16px; font-size:14px; font-weight:600; color:var(--ink); border-radius:999px; border:1px solid var(--edge);
+      background:rgba(255,255,255,.62) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23f2600c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 15px center / 12px 8px;
+      -webkit-appearance:none; appearance:none; box-shadow:inset 0 1px 2px rgba(40,26,12,.08); }
+  }
+
+  /* ===== 2026-10-05 (2), Mete: speed. The expensive part of a glass UI is backdrop blur over LARGE
+     areas — the browser re-blurs everything behind the surface on every scrolled frame. Small,
+     fixed-size pieces (top bar, tiles, clocks, chart card, pills) keep their blur; the page-tall
+     surfaces (each tab's sheet, the three news lanes) and the per-cell sticky month labels use a
+     denser tint instead, which looks almost the same over the photo and costs nothing to scroll. */
+  main > section:not(#newstab){ -webkit-backdrop-filter:none; backdrop-filter:none; background:rgba(250,246,240,.80); }
+  .news-lane-box{ -webkit-backdrop-filter:none; backdrop-filter:none; background:rgba(250,246,240,.60); }
+  .results-table th.rowlabel, .results-table td.rowlabel{ -webkit-backdrop-filter:none; backdrop-filter:none; background:rgb(250,247,242); }
+  body[data-tab="inputtab"] main > section:not(#newstab), body[data-tab="historytab"] main > section:not(#newstab){ background:rgba(250,246,240,.86); }
+  .news-thumb{ contain:strict; }
+  .news-more{ all:unset; cursor:pointer; flex:none; text-align:center; padding:10px; border-radius:16px; font-size:12px; font-weight:700; color:var(--ink-2); background:rgba(255,255,255,.5); border:1px dashed var(--edge); }
+  .news-more:hover{ color:var(--orange); }
+  /* desktop only: combination tables use the full width of their box, columns sharing it evenly */
+  @media (min-width:901px){ .results-table{ width:100%; } .results-table th:not(.rowlabel){ white-space:normal; line-height:1.2; vertical-align:bottom; } }
   @media (prefers-reduced-motion:reduce){ *{ transition:none !important; animation:none !important; } }
 </style>
 </head>
@@ -489,7 +551,7 @@
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="flameGrad" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#e02d1b"/><stop offset=".55" stop-color="#f2600c"/><stop offset="1" stop-color="#ffd23f"/></linearGradient></defs></svg>
 <div class="sheet">
   <div class="top">
-    <div class="glass pill brand"><div class="brand-mark">CTE</div><b>Commodity Trading Engine</b></div>
+    <div class="glass pill brand"><img class="brand-mark" src="assets/logo-96.png?v=4" alt="CTE" width="38" height="38"><b>Commodity Trading Engine</b></div>
     <div class="glass pill tabs" data-liq="tabs">
       <div class="tab active" data-tab="newstab">News</div>
       <div class="tab" data-tab="vnsupply">VN Supply</div>
@@ -522,7 +584,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, orderBy, getDocs, limit, deleteDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, query, orderBy, getDocs, limit, deleteDoc, where } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-functions.js";
 
 const firebaseConfig = {
@@ -1831,12 +1893,14 @@ function renderGlobalInputs(){
     (rowKey, i) => state.freight[rowKey][i],
     (rowKey, i, v) => state.freight[rowKey][i] = v
   ));
-  el.appendChild(buildReadonlyRow('→ 5M2W (from 5M2C)', i => getVNFreight('5M2W', i)));
-  el.appendChild(buildReadonlyRow('→ 4M3C (from 5M2C)', i => getVNFreight('4M3C', i)));
-  el.appendChild(buildReadonlyRow('→ 3M4C (from 4M3C)', i => getVNFreight('3M4C', i)));
-  el.appendChild(buildReadonlyRow('→ 4M1C (from 5C ARG)', i => getVNFreight('4M1C', i)));
-  el.appendChild(buildReadonlyRow('→ 3M2C (from 5C ARG)', i => getVNFreight('3M2C', i)));
-  el.appendChild(buildReadonlyRow('→ 2M3C (from 5C ARG)', i => getVNFreight('2M3C', i)));
+  el.appendChild(buildReadonlyTable([
+    ['→ 5M2W (from 5M2C)', i => getVNFreight('5M2W', i)],
+    ['→ 4M3C (from 5M2C)', i => getVNFreight('4M3C', i)],
+    ['→ 3M4C (from 4M3C)', i => getVNFreight('3M4C', i)],
+    ['→ 4M1C (from 5C ARG)', i => getVNFreight('4M1C', i)],
+    ['→ 3M2C (from 5C ARG)', i => getVNFreight('3M2C', i)],
+    ['→ 2M3C (from 5C ARG)', i => getVNFreight('2M3C', i)],
+  ]));
 
   // 3. Malaysia Freight
   el.appendChild(sectionTitle('Malaysia Freight'));
@@ -1845,10 +1909,12 @@ function renderGlobalInputs(){
     (rowKey, i) => state.malaysia.freight[rowKey][i],
     (rowKey, i, v) => state.malaysia.freight[rowKey][i] = v
   ));
-  el.appendChild(buildReadonlyRow('→ 3M4C (from 4M3C)', i => getMYFreight('3M4C', i)));
-  el.appendChild(buildReadonlyRow('→ 4M1C (from 5C ARG)', i => getMYFreight('4M1C', i)));
-  el.appendChild(buildReadonlyRow('→ 3M2C (from 5C ARG)', i => getMYFreight('3M2C', i)));
-  el.appendChild(buildReadonlyRow('→ 2M3C (from 5C ARG)', i => getMYFreight('2M3C', i)));
+  el.appendChild(buildReadonlyTable([
+    ['→ 3M4C (from 4M3C)', i => getMYFreight('3M4C', i)],
+    ['→ 4M1C (from 5C ARG)', i => getMYFreight('4M1C', i)],
+    ['→ 3M2C (from 5C ARG)', i => getMYFreight('3M2C', i)],
+    ['→ 2M3C (from 5C ARG)', i => getMYFreight('2M3C', i)],
+  ]));
 
   // 4. Indonesia Freight
   el.appendChild(sectionTitle('Indonesia Freight'));
@@ -1857,11 +1923,13 @@ function renderGlobalInputs(){
     (rowKey, i) => state.indonesia.freight[rowKey][i],
     (rowKey, i, v) => state.indonesia.freight[rowKey][i] = v
   ));
-  el.appendChild(buildReadonlyRow('→ 5M2W (from 5M2C)', i => getIDFreight('5M2W', i)));
-  el.appendChild(buildReadonlyRow('→ 4M1W (from 5C ARG)', i => getIDFreight('4M1W', i)));
-  el.appendChild(buildReadonlyRow('→ 4M1C (from 5C ARG)', i => getIDFreight('4M1C', i)));
-  el.appendChild(buildReadonlyRow('→ 3M2C (from 5C ARG)', i => getIDFreight('3M2C', i)));
-  el.appendChild(buildReadonlyRow('→ 2M3C (from 5C ARG)', i => getIDFreight('2M3C', i)));
+  el.appendChild(buildReadonlyTable([
+    ['→ 5M2W (from 5M2C)', i => getIDFreight('5M2W', i)],
+    ['→ 4M1W (from 5C ARG)', i => getIDFreight('4M1W', i)],
+    ['→ 4M1C (from 5C ARG)', i => getIDFreight('4M1C', i)],
+    ['→ 3M2C (from 5C ARG)', i => getIDFreight('3M2C', i)],
+    ['→ 2M3C (from 5C ARG)', i => getIDFreight('2M3C', i)],
+  ]));
 
   // (Section 5 used to be FFA here — removed entirely 2026-09-24, see the comment above
   // renderGlobalInputs() for why. Section numbering below kept as-is rather than renumbered, so a
@@ -2091,6 +2159,24 @@ function buildReadonlyRow(label, getVal){
   });
   tr.innerHTML = html;
   table.appendChild(tr);
+  wrap.appendChild(table);
+  return wrap;
+}
+
+// 2026-10-05 (Mete): the freight rates the page derives by itself (no manual entry) used to be one
+// glass box EACH, every one with its own month header. They now share a single compact box per
+// country — one header, tight rows — so the Input page is a good deal shorter.
+function buildReadonlyTable(rows){
+  const months = visibleMonthIndices();
+  const wrap = document.createElement('div');
+  wrap.className = 'scrollx ro-wrap';
+  const table = document.createElement('table');
+  table.className = 'grid-table ro-compact';
+  let html = '<tr><th class="rowlabel"></th>' + months.map(i => `<th>${MONTHS_FULL[i]}</th>`).join('') + '</tr>';
+  rows.forEach(([label, getVal]) => {
+    html += `<tr><td class="rowlabel">${label}</td>` + months.map(i => `<td>${getVal(i).toFixed(1)}</td>`).join('') + '</tr>';
+  });
+  table.innerHTML = html;
   wrap.appendChild(table);
   return wrap;
 }
@@ -3165,12 +3251,25 @@ function vnSupplyRegionSeries(row, region){
   return region === 'North' ? row.north : region === 'South' ? row.south : row.north.map((v, i) => (v || 0) + (row.south[i] || 0));
 }
 
-// Top 4 origins + "Diger" (everything else) for the selected cargo/month/region, Arrived-only.
+// Top 4 origins + "Diger" (everything else) for the selected cargo/month/region.
+// 2026-10-05 (Mete): Arrived + On the way as ONE total per origin, so Oct/Nov/Dec — where nothing
+// has arrived yet — show where the booked cargo is coming from. The on-the-way part mirrors
+// vnSupplyOnTheWaySeries(): line-up tonnage (no Region in the line-up, so it is added whatever the
+// Region toggle says) + arrival-report rows with a future NOR (North / South). Origins saved before
+// this change have no otw* arrays and simply contribute their Arrived figure until the next import.
+function vnSupplyOriginSeries(o, region){
+  const arr = vnSupplyRegionSeries(o, region);
+  if (!Array.isArray(o.otwLineup)) return arr;
+  return arr.map((v, i) => {
+    const n = (o.otwNorth && o.otwNorth[i]) || 0, so = (o.otwSouth && o.otwSouth[i]) || 0;
+    return (v || 0) + (o.otwLineup[i] || 0) + (region === 'North' ? n : region === 'South' ? so : n + so);
+  });
+}
 function vnSupplyOriginBreakdown(){
   const cargo = vnSupplyUI.cargo, region = vnSupplyUI.region, month = vnSupplyUI.month;
   const cutoffIdx = vnSupplyCutoffMonthIdx();
   const vals = vnSupplyData().origins.filter(o => o.cargo === cargo).map(o => ({
-    name: o.origin, val: vnSupplyMonthValue(vnSupplyRegionSeries(o, region), month, cutoffIdx)
+    name: o.origin, val: vnSupplyMonthValue(vnSupplyOriginSeries(o, region), month, cutoffIdx)
   })).filter(x => x.val > 0);
   vals.sort((a, b) => b.val - a.val);
   const top = vals.slice(0, 4);
@@ -3251,13 +3350,24 @@ function vnSupplyDonutSvg(breakdown, size){
 }
 
 // ---- render: controls ------------------------------------------------------
-function vnSupplyChipRowGeneric(el, label, options, current, onPick){
+function vnSupplyChipRowGeneric(el, label, options, current, onPick, mobileSelect){
   const lbl = document.createElement('div');
   lbl.className = 'vns-chiprow-label';
   lbl.textContent = label;
   el.appendChild(lbl);
+  if (mobileSelect){
+    // 2026-10-05 (Mete): on a phone the product and month chips filled most of the screen — there
+    // they become one dropdown each (single choice). The chips stay exactly as they were on desktop;
+    // the stylesheet shows one or the other at 640px.
+    const sel = document.createElement('select');
+    sel.className = 'vns-select';
+    sel.setAttribute('aria-label', label);
+    options.forEach(opt => { const o = document.createElement('option'); o.value = opt; o.textContent = opt; if (current === opt) o.selected = true; sel.appendChild(o); });
+    sel.addEventListener('change', () => onPick(sel.value));
+    el.appendChild(sel);
+  }
   const wrap = document.createElement('div');
-  wrap.className = 'vns-chips seg';
+  wrap.className = 'vns-chips seg' + (mobileSelect ? ' has-select' : '');
   wrap.dataset.liq = 'vns-' + label.toLowerCase();        // liquid drop slides between options (see liquidAll)
   options.forEach(opt => {
     const chip = document.createElement('div');
@@ -3274,9 +3384,9 @@ function vnSupplyControls(el){
   const cargoNames = vs.cargoes.map(c => c.name);
   const monthOptions = MONTHS_FULL.slice(0, Math.max(0, vnSupplyLastMonthIdx() + 1)).concat(['All']);
 
-  vnSupplyChipRowGeneric(el, 'Product', cargoNames, vnSupplyUI.cargo, (v) => { vnSupplyUI.cargo = v; renderVnSupplyTab(); });
-  vnSupplyChipRowGeneric(el, 'Month', monthOptions, vnSupplyUI.month, (v) => { vnSupplyUI.month = v; renderVnSupplyTab(); });
-  vnSupplyChipRowGeneric(el, 'Region', ['All', 'North', 'South'], vnSupplyUI.region, (v) => { vnSupplyUI.region = v; renderVnSupplyTab(); });
+  vnSupplyChipRowGeneric(el, 'Product', cargoNames, vnSupplyUI.cargo, (v) => { vnSupplyUI.cargo = v; renderVnSupplyTab(); }, true);
+  vnSupplyChipRowGeneric(el, 'Month', monthOptions, vnSupplyUI.month, (v) => { vnSupplyUI.month = v; renderVnSupplyTab(); }, true);
+  vnSupplyChipRowGeneric(el, 'Region', ['All', 'South', 'North'], vnSupplyUI.region, (v) => { vnSupplyUI.region = v; renderVnSupplyTab(); });
 }
 
 // ---- render: comparison box -------------------------------------------------
@@ -3344,7 +3454,7 @@ function vnSupplyOriginSection(el){
   wrap.className = 'vns-chart-card';
   const title = document.createElement('div');
   title.className = 'vns-chart-title';
-  title.innerHTML = `ORIGIN BREAKDOWN — <b>${vnSupplyUI.cargo} · ${vnSupplyUI.month}</b> (Arrived)`;
+  title.innerHTML = `ORIGIN BREAKDOWN — <b>${vnSupplyUI.cargo} · ${vnSupplyUI.month}</b> (Arrived + On the way)`;
   wrap.appendChild(title);
 
   const bd = vnSupplyOriginBreakdown();
@@ -3354,8 +3464,8 @@ function vnSupplyOriginSection(el){
     empty.style.padding = '18px';
     const kk = vnSupplyKpiValues();
     empty.textContent = kk.onTheWay > 0
-      ? `No arrivals for this selection yet — ${fmtVnsMT(kk.onTheWay)} MT is on the way. Origin split is shown once cargo has arrived.`
-      : 'No arrivals for this selection yet.';
+      ? `${fmtVnsMT(kk.onTheWay)} MT is on the way for this selection — re-import the latest supply Excel to see its origin split.`
+      : 'No arrivals or bookings for this selection yet.';
     wrap.appendChild(empty);
     el.appendChild(wrap);
     return;
@@ -3447,16 +3557,6 @@ function vnSupplySnapshotSection(el){
   wrap.appendChild(table);
   el.appendChild(wrap);
 
-  const note = document.createElement('div');
-  note.className = 'note';
-  note.style.marginTop = '8px';
-  note.innerHTML = '<b>Arrived</b> = NOR on or before the report’s "as of" date. <b>On the way</b> = line-up bookings not yet arrived ' +
-    '(Lineup SUM) plus arrival-report rows dated after "as of" — the same rule as the Excel Dashboard’s "On the way" row. ' +
-    'Line-up tonnage has no North/South split, so it is included in full whichever Region is selected. ' +
-    'Origin breakdown, Top 5 Buyers, Trend and Peak / Trough are Arrived-only.' +
-    (vnSupplyData().cargoes.some(c => Array.isArray(c.otwLineup)) ? '' :
-      ' <b>On-the-way for later months appears after the next Excel import</b> — the numbers currently loaded were imported before this breakdown existed.');
-  el.appendChild(note);
 }
 
 function vnSupplyImportSection(el){
@@ -3544,6 +3644,13 @@ function parseVnSupplyWorkbook(wb){
   if (missing.length) throw new Error(`Could not find these Arr Data columns: ${missing.join(', ')}.`);
 
   const cargoMatrix = {}, originMap = {}, buyerMap = {}, sepBoost = {};
+  // 2026-10-05: on-the-way per origin too (Origin breakdown shows Arrived + On the way as one total)
+  const originRec = (cargo, origin) => {
+    const ok = cargo + '|' + origin;
+    if (!originMap[ok]) originMap[ok] = { cargo, origin, north: Array(12).fill(0), south: Array(12).fill(0),
+      otwLineup: Array(12).fill(0), otwNorth: Array(12).fill(0), otwSouth: Array(12).fill(0) };
+    return originMap[ok];
+  };
   // 2026-10-02: on-the-way per month for ALL months (not just the cutoff month) — see vnSupplyOnTheWaySeries().
   const otwArr = {};   // cargo -> { north:[12], south:[12] }  (Arr Data rows dated after "as of")
   const otwLineup = {}; // cargo -> [12]                        (Lineup SUM, no Region)
@@ -3568,11 +3675,7 @@ function parseVnSupplyWorkbook(wb){
       if (mi < 0) continue;
       if (!cargoMatrix[cargo]) cargoMatrix[cargo] = { north: Array(12).fill(0), south: Array(12).fill(0) };
       cargoMatrix[cargo][rk][mi] += vol;
-      if (origin){
-        const ok = cargo + '|' + origin;
-        if (!originMap[ok]) originMap[ok] = { cargo, origin, north: Array(12).fill(0), south: Array(12).fill(0) };
-        originMap[ok][rk][mi] += vol;
-      }
+      if (origin) originRec(cargo, origin)[rk][mi] += vol;
       if (buyer){
         const bk = cargo + '|' + buyer;
         if (!buyerMap[bk]) buyerMap[bk] = { cargo, buyer, north: Array(12).fill(0), south: Array(12).fill(0) };
@@ -3585,6 +3688,7 @@ function parseVnSupplyWorkbook(wb){
       if (mi >= 0){
         if (!otwArr[cargo]) otwArr[cargo] = { north: Array(12).fill(0), south: Array(12).fill(0) };
         otwArr[cargo][rk][mi] += (isYes ? vol : 0) + tbalVal;
+        if (origin) originRec(cargo, origin)[rk === 'north' ? 'otwNorth' : 'otwSouth'][mi] += (isYes ? vol : 0) + tbalVal;
       }
       if (monthTxt === cutoffMonth){
         if (!sepBoost[cargo]) sepBoost[cargo] = { syesNorth: 0, syesSouth: 0, tbalNorth: 0, tbalSouth: 0 };
@@ -3605,6 +3709,7 @@ function parseVnSupplyWorkbook(wb){
         cargo: hdr.findIndex(v => v.trim().toLowerCase() === 'cargo'),
         tons: hdr.findIndex(v => v.trim().toLowerCase() === 'tons'),
         period: hdr.findIndex(v => v.trim().toLowerCase().includes('on-the-way period')),
+        origin: hdr.findIndex(v => v.trim().toLowerCase() === 'origin'),
       };
       if (lc.cargo >= 0 && lc.tons >= 0 && lc.period >= 0){
         for (let r = hdrIdx + 1; r < lsRows.length; r++){
@@ -3620,6 +3725,8 @@ function parseVnSupplyWorkbook(wb){
             if (!otwLineup[cargo]) otwLineup[cargo] = Array(12).fill(0);
             otwLineup[cargo][pmi] += tons;
             cargoNamesSeen.add(cargo);
+            const lsOrigin = lc.origin >= 0 ? String(row[lc.origin] || '').trim() : '';
+            originRec(cargo, lsOrigin || '(Unknown)').otwLineup[pmi] += tons;
           }
         }
       }
@@ -3648,8 +3755,10 @@ function parseVnSupplyWorkbook(wb){
   });
   if (!cargoes.length) throw new Error('No cargo rows found in Arr Data.');
 
-  const origins = Object.values(originMap).filter(o => o.north.some(v => v > 0) || o.south.some(v => v > 0))
-    .map(o => ({ cargo: o.cargo, origin: o.origin, north: o.north.map(round1), south: o.south.map(round1) }));
+  const anyPos = a => a.some(v => v > 0);
+  const origins = Object.values(originMap).filter(o => anyPos(o.north) || anyPos(o.south) || anyPos(o.otwLineup) || anyPos(o.otwNorth) || anyPos(o.otwSouth))
+    .map(o => ({ cargo: o.cargo, origin: o.origin, north: o.north.map(round1), south: o.south.map(round1),
+      otwLineup: o.otwLineup.map(round1), otwNorth: o.otwNorth.map(round1), otwSouth: o.otwSouth.map(round1) }));
   const buyers = Object.values(buyerMap).filter(b => b.north.some(v => v > 0) || b.south.some(v => v > 0))
     .map(b => ({ cargo: b.cargo, buyer: b.buyer, north: b.north.map(round1), south: b.south.map(round1) }));
 
@@ -3950,12 +4059,111 @@ const NEWS_WINDOW_MS = 24 * 3600 * 1000; // only for buildNewsSnapshot()'s "top 
 // stay in lockstep with the `NEWS_RETENTION_DAYS` GitHub Actions variable collector.py prunes to
 // (default also bumped to 30 there); showing more history here than Firestore actually retains
 // would just mean the extra days silently return nothing.
-const NEWS_HISTORY_DAYS = 30;
+const NEWS_HISTORY_DAYS = 150;     // 2026-10-05 (Mete): was 30 — impact history on the chart now goes back 150 days
 // The live query below has to actually return enough documents to cover NEWS_HISTORY_DAYS, or the
 // client-side `x.ms >= since` filter further down has nothing to filter — measured real volume
 // (2026-09-14) was ~54 stored docs/day, so 30 days ≈ 1,620 docs; ×120/day gives comfortable
 // headroom for busier weeks (WASDE, harvest season) without the query ever silently truncating.
-const NEWS_QUERY_LIMIT = NEWS_HISTORY_DAYS * 120;
+const NEWS_QUERY_LIMIT = NEWS_HISTORY_DAYS * 120;   // (no longer used by the live query — see the news cache below)
+
+// ── News cache (2026-10-05, Mete) ────────────────────────────────────────────────────────────────
+// Firestore bills one read per document a query returns. The page used to listen to the newest
+// 3,600 stories as ONE query, so every page load / reload / reconnect re-read the whole archive —
+// ~20k reads on a normal day for one user, 87k on a busy one (free quota: 50k/day), and growing
+// with every day of news. With ten users that cannot work. Now:
+//   • LIVE  — a listener on only the last NEWS_LIVE_HOURS hours (everything that can still change:
+//             new stories, coverage the collector folds into a recent event).
+//   • OLDER — kept in this browser's IndexedDB. A device downloads the archive ONCE; on later visits
+//             it asks only for what aged out of the live window since its last visit, plus stories
+//             written (classifiedAt) or hand-edited (editedMs) since then — the first of those two
+//             catches a story the collector files late under an older publication time. The archive
+//             itself is never re-read. Repeated every NEWS_RESYNC_H hours while a tab stays open.
+// Each device keeps its own copy; clearing site data just makes the next visit download it again.
+const NEWS_LIVE_HOURS = 30;          // the collector only touches events younger than 24 h (DEDUP_HOURS)
+const NEWS_RESYNC_H = 6;
+const NEWS_CACHE_DB = 'cte-news-cache', NEWS_CACHE_STORE = 'docs', NEWS_CACHE_META = 'cteNewsCacheMeta.v1';
+let newsOldDocs = new Map();       // id -> doc, stories older than the live window (from IndexedDB)
+let newsLiveDocs = [];             // what the live listener currently holds
+let newsLiveCut = 0;               // ms boundary between the two, fixed when the page subscribes
+function newsCacheOpen(){
+  return new Promise((resolve, reject) => {
+    if (!('indexedDB' in window)) return reject(new Error('no indexedDB'));
+    const rq = indexedDB.open(NEWS_CACHE_DB, 1);
+    rq.onupgradeneeded = () => { rq.result.createObjectStore(NEWS_CACHE_STORE, { keyPath: 'id' }); };
+    rq.onsuccess = () => resolve(rq.result);
+    rq.onerror = () => reject(rq.error);
+  });
+}
+async function newsCacheAll(){
+  const dbx = await newsCacheOpen();
+  return new Promise((resolve, reject) => {
+    const rq = dbx.transaction(NEWS_CACHE_STORE, 'readonly').objectStore(NEWS_CACHE_STORE).getAll();
+    rq.onsuccess = () => { dbx.close(); resolve(rq.result || []); };
+    rq.onerror = () => { dbx.close(); reject(rq.error); };
+  });
+}
+async function newsCacheWrite(put, removeIds){
+  if (!put.length && !removeIds.length) return;
+  const dbx = await newsCacheOpen();
+  return new Promise((resolve, reject) => {
+    const tx = dbx.transaction(NEWS_CACHE_STORE, 'readwrite'), st = tx.objectStore(NEWS_CACHE_STORE);
+    put.forEach(d => st.put(d));
+    removeIds.forEach(id => st.delete(id));
+    tx.oncomplete = () => { dbx.close(); resolve(); };
+    tx.onerror = tx.onabort = () => { dbx.close(); reject(tx.error); };
+  });
+}
+function newsCacheMeta(){ try { return JSON.parse(localStorage.getItem(NEWS_CACHE_META) || 'null'); } catch (_e){ return null; } }
+function newsMergeDocs(){
+  const live = new Set(newsLiveDocs.map(d => d.id));
+  const old = [];
+  newsOldDocs.forEach(d => { if (!live.has(d.id) && d.ms < newsLiveCut) old.push(d); });
+  old.sort((a, b) => b.ms - a.ms);
+  newsDocs = newsLiveDocs.concat(old);              // newest first, like the single query used to deliver
+}
+// Bring the device's archive up to date. Returns true when anything changed. Never throws: if the
+// cache cannot be used at all (private mode, quota) the archive is simply read straight from Firestore.
+async function newsSyncArchive(since){
+  const day = 24 * 3600 * 1000;
+  let meta = newsCacheMeta(), usable = true, changed = false;
+  try {
+    const all = await newsCacheAll();
+    const drop = [];
+    all.forEach(d => { if (d && typeof d.ms === 'number' && d.ms >= since) newsOldDocs.set(d.id, d); else if (d) drop.push(d.id); });
+    if (!all.length) meta = null;                       // storage was cleared but the marker survived
+    if (drop.length) newsCacheWrite([], drop).catch(() => {});
+    changed = newsOldDocs.size > 0;
+  } catch (_e){ usable = false; meta = null; }
+  const fetched = [];
+  const pull = async (constraints) => {
+    const snap = await getDocs(query(NEWS_COLLECTION, ...constraints));
+    snap.forEach(d => { const x = d.data(); if (x && typeof x.ms === 'number' && x.id){ fetched.push(x); } });
+  };
+  try {
+    if (!meta || typeof meta.to !== 'number' || meta.to > newsLiveCut + day){
+      await pull([where('ms', '>=', since), where('ms', '<', newsLiveCut), orderBy('ms', 'desc')]);      // first visit on this device
+      meta = { from: since, to: newsLiveCut, edit: Date.now() };
+    } else {
+      if (meta.to < newsLiveCut) await pull([where('ms', '>=', meta.to), where('ms', '<', newsLiveCut), orderBy('ms', 'desc')]);   // aged out of the live window since last visit
+      if (meta.from > since + day) await pull([where('ms', '>=', since), where('ms', '<', meta.from), orderBy('ms', 'desc')]);     // the history window was widened
+      const editFrom = meta.edit || 0, t = Date.now();
+      await pull([where('editedMs', '>', editFrom)]);                                                                             // hand-edited since last visit
+      await pull([where('classifiedAt', '>', editFrom)]);                                                                         // written since last visit (incl. late, older-dated stories)
+      meta = { from: Math.min(meta.from, since), to: Math.max(meta.to, newsLiveCut), edit: t - 60000 };
+    }
+  } catch (e){
+    console.error('news archive sync failed', e);
+    return changed;
+  }
+  const keep = fetched.filter(x => x.ms >= since && x.ms < newsLiveCut);
+  keep.forEach(x => newsOldDocs.set(x.id, x));
+  if (keep.length) changed = true;
+  if (usable){
+    try { await newsCacheWrite(keep, []); localStorage.setItem(NEWS_CACHE_META, JSON.stringify(meta)); }
+    catch (e){ console.warn('news cache not saved', e); }
+  }
+  return changed;
+}
 // Must track collector.py's NEWS_ALERT_IMPACT default (see that file's header) — used here only to
 // decide when to ding/desktop-notify for a live tab, a client-side mirror of the server's own
 // push-alert threshold, not a second source of truth for it.
@@ -4061,14 +4269,20 @@ function subscribeNews(){
   let resolveLoaded;
   newsLoaded = new Promise(r => { resolveLoaded = r; });
   const since = Date.now() - NEWS_HISTORY_DAYS * 24 * 3600 * 1000;
-  const q = query(NEWS_COLLECTION, orderBy('ms', 'desc'), limit(NEWS_QUERY_LIMIT));
+  newsLiveCut = Date.now() - NEWS_LIVE_HOURS * 3600 * 1000;
+  // older stories: this device's own copy, topped up in the background (see the news cache above)
+  const syncArchive = () => newsSyncArchive(Date.now() - NEWS_HISTORY_DAYS * 24 * 3600 * 1000).then((changed) => { if (changed){ newsMergeDocs(); renderNewsBody(); } });
+  syncArchive();
+  setInterval(syncArchive, NEWS_RESYNC_H * 3600 * 1000);
+  const q = query(NEWS_COLLECTION, where('ms', '>=', newsLiveCut), orderBy('ms', 'desc'));
   let newsFirstSnapshot = true;     // don't ding/notify for the entire history on first load
   newsUnsub = onSnapshot(q, (snap) => {
-    newsDocs = [];
+    newsLiveDocs = [];
     snap.forEach(d => {
       const x = d.data();
-      if (x && typeof x.ms === 'number' && x.ms >= since) newsDocs.push(x);
+      if (x && typeof x.ms === 'number' && x.ms >= since) newsLiveDocs.push(x);
     });
+    newsMergeDocs();
     if (!newsFirstSnapshot){
       for (const change of snap.docChanges()){
         if (change.type !== 'added') continue;
@@ -4088,7 +4302,8 @@ function subscribeNews(){
   for (const product of PRICE_PRODUCTS){
     onSnapshot(doc(db, 'prices', product), (snap) => {
       newsPrices[product] = snap.exists() ? snap.data() : undefined;
-      if (newsUI.chartProduct === product) renderNewsBody();
+      if (!newsTabShowing()){ newsDirty = true; return; }
+      refreshNewsHero();                                  // a price tick only touches the tiles + chart
     }, () => { /* missing prices/{product} doc or unreadable rules — chart just falls back to no price line */ });
   }
   onSnapshot(NEWS_META_REF, (snap) => {
@@ -4104,7 +4319,8 @@ function subscribeNews(){
   onSnapshot(NEWS_FEEDBACK, (snap) => {
     newsVotes = {};
     snap.forEach(d => { const v = d.data(); if (v && v.vote) newsVotes[d.id] = v.vote; });
-    renderNewsBody();
+    if (!newsTabShowing()){ newsDirty = true; return; }
+    refreshNewsLaneLists(true);                           // a vote only touches the cards
   }, () => {});
   subscribeMorningReport();
   return newsLoaded;
@@ -4468,8 +4684,8 @@ function newsFmtPrice(v){
 
 // ── Clocks + CBOT session state ──────────────────────────────────────────────
 const NEWS_CLOCKS = [
-  ['VIETNAM', 'Asia/Ho_Chi_Minh'], ['ISTANBUL', 'Europe/Istanbul'],
-  ['CHICAGO', 'America/Chicago'], ['BUENOS AIRES', 'America/Argentina/Buenos_Aires'],
+  ['SINGAPORE', 'Asia/Singapore'], ['VIETNAM · JAKARTA', 'Asia/Ho_Chi_Minh'],     // 2026-10-05 (Mete); Vietnam and Jakarta share UTC+7
+  ['ISTANBUL', 'Europe/Istanbul'], ['CHICAGO', 'America/Chicago'],
 ];
 // CME grain holidays (full closes). Update each December.
 const CBOT_HOLIDAYS = ['2026-01-01', '2026-01-19', '2026-02-16', '2026-04-03', '2026-05-25', '2026-06-19',
@@ -4688,9 +4904,15 @@ function refreshNewsLanes(){
   liquidAll(bar);
 }
 
+// While another tab is open the News DOM is not rebuilt at all — the data is kept current and the
+// tab is drawn fresh when it is opened (renderNewsTab() always ends in renderNewsBody()).
+let newsDirty = false;
+function newsTabShowing(){ const t = document.getElementById('newstab'); return !!(t && t.classList.contains('active')); }
 function renderNewsBody(){
   const body = document.getElementById('newsBody');
   if (!body) return;
+  if (!newsTabShowing()){ newsDirty = true; return; }
+  newsDirty = false;
   if (!newsDocs.length){
     body.innerHTML = '<div class="note">No events yet.</div>';
     return;
@@ -4864,8 +5086,23 @@ function renderNewsChart(){
   box.className = 'glass news-chart';
   const { now, count } = newsSeries(product);
   const rangeDef = NEWS_CHART_RANGES.find(r => r.key === newsUI.chartRange) || NEWS_CHART_RANGES[2];
-  const xMax = Date.now();
-  const xMin = xMax - rangeDef.days * 24 * 3600 * 1000;
+  // 2026-10-05 (Mete): zoom + pan. The selected range is the outer limit; newsUI.chartZoom narrows
+  // the visible window inside it (wheel / pinch / + − buttons, drag to pan, double-click or "reset"
+  // to go back). Everything below just draws [xMin, xMax], so both panes, the axis labels and the
+  // crosshair follow by themselves. A window that touches "now" stays pinned to it as time moves.
+  const baseMax = Date.now();
+  const baseMin = baseMax - rangeDef.days * 24 * 3600 * 1000;
+  const zoomKey = product + '|' + rangeDef.key;
+  const minSpan = rangeDef.key === '1D' ? 30 * 60 * 1000 : Math.max(4 * 24 * 3600 * 1000, (baseMax - baseMin) / 60);
+  let xMin = baseMin, xMax = baseMax;
+  if (newsUI.chartZoom && newsUI.chartZoom.key !== zoomKey) newsUI.chartZoom = null;
+  if (newsUI.chartZoom){
+    const zs = newsUI.chartZoom;
+    const span = Math.min(baseMax - baseMin, Math.max(minSpan, zs.max - zs.min));
+    xMax = zs.pinned ? baseMax : Math.min(baseMax, Math.max(baseMin + span, zs.max));
+    xMin = xMax - span;
+  }
+  const zoomed = !!newsUI.chartZoom;
   const priceOnly = product === 'FREIGHT';
   const pts = priceOnly ? [] : newsSmoothSeries(product, xMin, xMax);
   const markers = priceOnly ? [] : newsMarkersFor(product, xMin, xMax);
@@ -4877,6 +5114,13 @@ function renderNewsChart(){
   const hasPrice = bars.length >= 2, hasNet = pts.length >= 2;
 
   // ---- header
+  const zoomBar = () => {
+    const zb = document.createElement('div');
+    zb.className = 'news-zoom';
+    zb.innerHTML = '<button type="button" data-z="in" title="Zoom in" aria-label="Zoom in">+</button><button type="button" data-z="out" title="Zoom out" aria-label="Zoom out">−</button>' +
+      (zoomed ? '<button type="button" class="reset" data-z="reset" title="Back to the full range">reset</button>' : '');
+    return zb;
+  };
   const q = newsLatestPrice(product);
   const head = document.createElement('div');
   head.className = 'news-chart-head';
@@ -4885,7 +5129,7 @@ function renderNewsChart(){
   let big = '—';
   if (hasPrice){
     const last = bars[bars.length - 1].c, first = bars[0].c, chg = first ? (last - first) / first * 100 : 0;
-    big = `${newsFmtPrice(q ? q.price : last)}<small class="${chg >= 0 ? 'up' : 'down'}">${chg >= 0 ? '▲' : '▼'} ${Math.abs(chg).toFixed(1)}%</small><small style="color:var(--ink-3)">${rangeDef.label.toLowerCase()}</small>`;
+    big = `${newsFmtPrice(q ? q.price : last)}<small class="${chg >= 0 ? 'up' : 'down'}">${chg >= 0 ? '▲' : '▼'} ${Math.abs(chg).toFixed(1)}%</small><small style="color:var(--ink-3)">${zoomed ? 'in view' : rangeDef.label.toLowerCase()}</small>`;
   } else if (!priceOnly && now.n){
     big = `<span class="${now.net > 0 ? 'up' : now.net < 0 ? 'down' : ''}">${newsFmtSigned(now.net)}</span><small style="color:var(--ink-3)">net impact</small>`;
   }
@@ -4896,13 +5140,16 @@ function renderNewsChart(){
   const legend = document.createElement('div');
   legend.className = 'news-legend';
   legend.innerHTML = `<span><i style="background:var(--orange)"></i>Price</span>` + (priceOnly ? '' : `<span><i style="background:linear-gradient(90deg,var(--bull) 50%,var(--bear) 50%)"></i>Net impact</span>`);
+  legend.appendChild(zoomBar());          // + / − (and reset while zoomed) sit with the legend, clear of the lines
   head.appendChild(legend);
   head.appendChild(renderNewsRangeBar());
   box.appendChild(head);
 
   const plot = document.createElement('div');
-  plot.className = 'news-plot';
+  plot.className = 'news-plot' + (zoomed ? ' zoomed' : '');
   box.appendChild(plot);
+  box._zoom = { key: zoomKey, baseMin, baseMax, xMin, xMax, minSpan, W: 0, padL: 0, padR: 0 };
+  newsZoomAttach(box);
   if (!hasPrice && !hasNet){
     plot.innerHTML = `<div class="note">${priceOnly ? 'No price data for this range yet.' : `Not enough qualifying events yet to draw this range (needs impact ≥ ${newsFmtImpact(NEWS_MIN_IMPACT)} and confidence ≥ ${NEWS_MIN_CONF}), and no price data.`}</div>`;
     return box;
@@ -4951,7 +5198,8 @@ function renderNewsChart(){
       `<g clip-path="url(#newsNetDown)"><path d="${nl}" fill="none" stroke="#e0463c" stroke-width="2" stroke-linecap="round"/></g>` +
       `<line x1="${padL}" x2="${W - padR}" y1="${zero}" y2="${zero}" stroke="rgba(42,36,32,.22)" stroke-dasharray="2 4"/>`;
   }
-  const tf = rangeDef.days <= 1 ? { hour: '2-digit', minute: '2-digit', hour12: false } : rangeDef.days <= 31 ? { day: '2-digit', month: 'short' } : { month: 'short', year: '2-digit' };
+  const spanDays = (xMax - xMin) / 86400000;
+  const tf = spanDays <= 1.05 ? { hour: '2-digit', minute: '2-digit', hour12: false } : spanDays <= 3 ? { day: '2-digit', month: 'short', hour: '2-digit', hour12: false } : spanDays <= 120 ? { day: '2-digit', month: 'short' } : { month: 'short', year: '2-digit' };
   for (let i = 0; i < 5; i++){
     const t = xMin + (xMax - xMin) * i / 4;
     svg += `<text class="news-axis" x="${X(t).toFixed(1)}" y="${Ht - 6}" text-anchor="${i === 0 ? 'start' : i === 4 ? 'end' : 'middle'}">${newsFmt(t, tf)}</text>`;
@@ -4967,6 +5215,7 @@ function renderNewsChart(){
     }).join('');
   }
   plot.innerHTML = `<svg viewBox="0 0 ${W} ${Ht}" role="img" aria-label="${product} price${showNet ? ' and net impact' : ''}">${svg}</svg><div class="news-tip"></div>`;
+  Object.assign(box._zoom, { W, padL, padR });
 
   // ---- crosshair + tooltip: nearest price bar and nearest net-impact sample to the pointer
   const svgEl = plot.querySelector('svg'), tip = plot.querySelector('.news-tip'), cross = svgEl.querySelector('.news-cross');
@@ -4995,6 +5244,115 @@ function renderNewsChart(){
   });
   svgEl.addEventListener('pointerleave', () => { cross.setAttribute('opacity', 0); tip.style.opacity = 0; });
   return box;
+}
+
+// ── Chart zoom / pan (2026-10-05, Mete) ─────────────────────────────────────────────────────────
+// Listeners live on the chart box, which stays in the page for the whole gesture; a zoom step only
+// swaps the plot (svg + tooltip + buttons) and the big number in the header for freshly drawn ones.
+//   wheel / pinch → zoom around the pointer        + / − buttons → zoom around the middle
+//   drag (when zoomed) → pan                       double-click or "reset" → full range again
+// One finger on a phone still scrolls the page vertically (touch-action:pan-y on the plot).
+function newsZoomSet(box, min, max){
+  const g = box._zoom; if (!g) return;
+  const full = g.baseMax - g.baseMin;
+  const span = Math.max(g.minSpan, Math.min(full, max - min));
+  if (span >= full * 0.995){ newsUI.chartZoom = null; }
+  else {
+    const mid = (min + max) / 2;
+    let a = mid - span / 2, b = mid + span / 2;
+    if (a < g.baseMin){ a = g.baseMin; b = a + span; }
+    if (b > g.baseMax){ b = g.baseMax; a = b - span; }
+    newsUI.chartZoom = { key: g.key, min: a, max: b, pinned: b >= g.baseMax - 1000 };
+  }
+  if (box._zraf) return;
+  box._zraf = requestAnimationFrame(() => {
+    box._zraf = 0;
+    const fresh = renderNewsChart();
+    const oldPlot = box.querySelector('.news-plot'), newPlot = fresh.querySelector('.news-plot');
+    const oldHead = box.querySelector('.news-chart-head > div'), newHead = fresh.querySelector('.news-chart-head > div');
+    if (!oldPlot || !newPlot) return;
+    const panning = oldPlot.classList.contains('panning');
+    oldPlot.className = newPlot.className + (panning ? ' panning' : '');
+    oldPlot.replaceChildren(...newPlot.childNodes);
+    if (oldHead && newHead) oldHead.innerHTML = newHead.innerHTML;
+    const oldZ = box.querySelector('.news-zoom'), newZ = fresh.querySelector('.news-zoom');
+    if (oldZ && newZ) oldZ.replaceWith(newZ);
+    box._zoom = fresh._zoom;
+  });
+}
+function newsZoomAttach(box){
+  const pts = new Map();
+  let drag = null, pinch = null;
+  const geo = () => {
+    const svg = box.querySelector('.news-plot svg'), g = box._zoom;
+    if (!svg || !g || !g.W) return null;
+    const r = svg.getBoundingClientRect();
+    if (!r.width) return null;
+    const k = r.width / g.W;                                    // css px per viewBox unit
+    return { g, left: r.left + g.padL * k, width: (g.W - g.padL - g.padR) * k };
+  };
+  const fracAt = (q, clientX) => Math.min(1, Math.max(0, (clientX - q.left) / q.width));
+  const zoomAround = (f, factor) => {
+    const g = box._zoom; if (!g) return;
+    const cur = g.xMax - g.xMin, t = g.xMin + f * cur, span = cur * factor;
+    newsZoomSet(box, t - f * span, t + (1 - f) * span);
+  };
+  box.addEventListener('wheel', (e) => {
+    if (!e.target.closest || !e.target.closest('.news-plot')) return;
+    const q = geo(); if (!q) return;
+    e.preventDefault();
+    zoomAround(fracAt(q, e.clientX), Math.exp(Math.max(-1, Math.min(1, e.deltaY / 100)) * 0.22));
+  }, { passive: false });
+  box.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('.news-zoom button'); if (!b) return;
+    e.preventDefault();
+    if (b.dataset.z === 'reset'){ const g = box._zoom; if (g) newsZoomSet(box, g.baseMin, g.baseMax); }
+    else zoomAround(0.5, b.dataset.z === 'in' ? 0.6 : 1 / 0.6);
+  });
+  box.addEventListener('dblclick', (e) => {
+    if (!e.target.closest('.news-plot') || e.target.closest('.news-zoom')) return;
+    const g = box._zoom; if (g && newsUI.chartZoom) newsZoomSet(box, g.baseMin, g.baseMax);
+  });
+  box.addEventListener('pointerdown', (e) => {
+    if (!e.target.closest || !e.target.closest('.news-plot') || e.target.closest('.news-zoom') || e.target.closest('a')) return;
+    const q = geo(); if (!q) return;
+    if (e.isPrimary){ pts.clear(); pinch = null; drag = null; }      // a stale pointer must never turn one finger into a pinch
+    pts.set(e.pointerId, e.clientX);
+    if (pts.size === 2){
+      const xs = [...pts.values()];
+      pinch = { d: Math.max(12, Math.abs(xs[0] - xs[1])), min: q.g.xMin, max: q.g.xMax, f: fracAt(q, (xs[0] + xs[1]) / 2) };
+      drag = null;
+      pts.forEach((_, id) => { try { box.setPointerCapture(id); } catch (_e) {} });
+    } else if (pts.size === 1 && newsUI.chartZoom){
+      drag = { x: e.clientX, min: q.g.xMin, max: q.g.xMax, width: q.width, moved: false };
+    }
+  });
+  box.addEventListener('pointermove', (e) => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, e.clientX);
+    if (pinch && pts.size >= 2){
+      const xs = [...pts.values()], d = Math.max(12, Math.abs(xs[0] - xs[1]));
+      const span = (pinch.max - pinch.min) * pinch.d / d, t = pinch.min + pinch.f * (pinch.max - pinch.min);
+      newsZoomSet(box, t - pinch.f * span, t + (1 - pinch.f) * span);
+    } else if (drag){
+      const dx = e.clientX - drag.x;
+      if (!drag.moved && Math.abs(dx) < 4) return;
+      if (!drag.moved){
+        drag.moved = true;
+        try { box.setPointerCapture(e.pointerId); } catch (_e) {}
+        const pl = box.querySelector('.news-plot'); if (pl) pl.classList.add('panning');
+      }
+      const shift = -dx / drag.width * (drag.max - drag.min);
+      newsZoomSet(box, drag.min + shift, drag.max + shift);
+    }
+  });
+  const end = (e) => {
+    pts.delete(e.pointerId);
+    if (pts.size < 2) pinch = null;
+    if (!pts.size){ drag = null; const pl = box.querySelector('.news-plot'); if (pl) pl.classList.remove('panning'); }
+  };
+  box.addEventListener('pointerup', end);
+  box.addEventListener('pointercancel', end);
 }
 
 // Live market reference under the impact chart used to fall back to TradingView's free public embed
@@ -5123,7 +5481,7 @@ function renderNewsControls(){
     const chip = document.createElement('span');
     chip.className = 'opt' + (newsUI.product === p ? ' on' : '');
     chip.textContent = p;
-    chip.addEventListener('click', () => { if (newsUI.product !== p){ newsUI.product = p; refreshNewsLanes(); } });
+    chip.addEventListener('click', () => { if (newsUI.product !== p){ newsUI.product = p; newsResetLanePages(); refreshNewsLanes(); } });
     seg.appendChild(chip);
   }
   segWrap.appendChild(seg);
@@ -5132,7 +5490,7 @@ function renderNewsControls(){
   min.className = 'toggle-pill' + (newsUI.minImpactOn ? ' on' : '');
   min.textContent = `${newsFmtImpact(NEWS_MIN_IMPACT)}+`;
   min.title = `Only events with impact ≥ ${newsFmtImpact(NEWS_MIN_IMPACT)}`;
-  min.addEventListener('click', () => { newsUI.minImpactOn = !newsUI.minImpactOn; refreshNewsLanes(); });
+  min.addEventListener('click', () => { newsUI.minImpactOn = !newsUI.minImpactOn; newsResetLanePages(); refreshNewsLanes(); });
   bar.appendChild(min);
   const sw = document.createElement('label');
   sw.className = 'glass news-search-wrap';
@@ -5142,17 +5500,34 @@ function renderNewsControls(){
   search.placeholder = 'Filter headlines…';
   search.className = 'news-search';
   search.value = newsUI.search;
-  search.addEventListener('input', () => { newsUI.search = search.value; applyNewsFilter(); });
+  search.addEventListener('input', () => {
+    newsUI.search = search.value;
+    clearTimeout(newsSearchTimer);
+    newsSearchTimer = setTimeout(() => { newsResetLanePages(); refreshNewsLaneLists(false); }, 140);
+  });
   sw.appendChild(search);
   bar.appendChild(sw);
   return bar;
 }
 
+// 2026-10-05 (Mete: "the site got heavy"). Each lane used to build a card for EVERY story of the last
+// 30 days — by now well over a thousand cards (thumbnail, icons, shadows each), rebuilt in full on
+// every live update. A lane now builds NEWS_LANE_PAGE cards and adds the next page when its list is
+// scrolled near the end (or "Show more" is pressed). The header count is still the full number, and
+// the search box filters the stories themselves, so it finds headlines that are not on screen yet.
+const NEWS_LANE_PAGE = 20;
+const newsLaneShown = {};          // lane key -> how many cards are currently built
+function newsSearchText(s){
+  return `${s.headline} ${s.headlineOrig || ''} ${s.summary || ''} ${s.source || ''} ${s.country || ''} ${s.category || ''} ${(s.sources || []).join(' ')}`.toLowerCase();
+}
+function newsResetLanePages(){ for (const k of Object.keys(newsLaneShown)) delete newsLaneShown[k]; }
 function renderNewsLane(lane){
   const box = document.createElement('div');
   box.className = 'glass news-lane-box';
   let rows = newsForProduct(newsUI.product).filter(s => lane.match(s) && newsVisible(s));
   if (newsUI.minImpactOn) rows = rows.filter(s => s.impact >= NEWS_MIN_IMPACT);
+  const q = newsUI.search.trim().toLowerCase();
+  if (q) rows = rows.filter(s => newsSearchText(s).includes(q));
   rows = rows.slice().sort((a, b) => b.ms - a.ms);
   const head = document.createElement('div');
   head.className = 'news-box-head';
@@ -5168,7 +5543,25 @@ function renderNewsLane(lane){
   if (!rows.length){
     list.innerHTML = '<div class="note">Nothing in this lane for the current filter.</div>';
   }
-  for (const s of rows) list.appendChild(renderNewsRow(s));
+  let shown = 0;
+  const more = document.createElement('button');
+  more.type = 'button'; more.className = 'news-more';
+  const addPage = (upTo) => {
+    const frag = document.createDocumentFragment();
+    for (; shown < Math.min(upTo, rows.length); shown++) frag.appendChild(renderNewsRow(rows[shown]));
+    list.insertBefore(frag, more.parentNode === list ? more : null);
+    newsLaneShown[lane.key] = shown;
+    if (shown >= rows.length) more.remove();
+    else { more.textContent = `Show more · ${rows.length - shown} older`; if (more.parentNode !== list) list.appendChild(more); }
+  };
+  addPage(Math.max(NEWS_LANE_PAGE, newsLaneShown[lane.key] || 0));
+  more.addEventListener('click', () => addPage(shown + NEWS_LANE_PAGE));
+  let ticking = false;
+  list.addEventListener('scroll', () => {
+    if (ticking || shown >= rows.length) return;
+    ticking = true;
+    requestAnimationFrame(() => { ticking = false; if (list.scrollTop + list.clientHeight > list.scrollHeight - 500) addPage(shown + NEWS_LANE_PAGE); });
+  }, { passive: true });
   box.appendChild(list);
   return box;
 }
@@ -5401,7 +5794,8 @@ function renderNewsRow(s){
   top.className = 'news-card-top';
   const img = document.createElement('img');
   img.className = 'news-thumb';
-  img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
+  img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.referrerPolicy = 'no-referrer';
+  img.width = 68; img.height = 68;
   const fallback = newsThumbFallback(s);
   img.addEventListener('error', () => { if (!img.dataset.fb){ img.dataset.fb = '1'; img.src = fallback; } });
   img.src = s.imageUrl || fallback;
@@ -5413,6 +5807,7 @@ function renderNewsRow(s){
   a.href = s.url || '#'; a.target = '_blank'; a.rel = 'noopener';
   if (!s.url) a.addEventListener('click', (e) => e.preventDefault());
   a.textContent = s.headline;
+  if (s.headlineOrig) a.title = s.headlineOrig;       // collector.py translates non-English headlines; the original is kept
   main.appendChild(a);
   if (s.summary){
     const sum = document.createElement('p');
@@ -5424,7 +5819,7 @@ function renderNewsRow(s){
   row.appendChild(top);
 
   const badges = document.createElement('div');
-  badges.className = 'news-badges';
+  badges.className = 'news-badges' + (s.breaking === true ? ' has-breaking' : '');   // phones: one line unless BREAKING
   const add = (cls, html, title) => { const el = document.createElement('span'); el.className = cls; el.innerHTML = html; if (title) el.title = title; badges.appendChild(el); return el; };
   if (s.breaking === true) add('tag-breaking', 'BREAKING');
   add('orb ' + dirClass, NEWS_ICON[dirClass], s.direction || 'NEUTRAL');
@@ -5551,19 +5946,19 @@ async function voteNews(s, kind){
   }
 }
 
-function applyNewsFilter(){
-  const q = newsUI.search.trim().toLowerCase();
-  document.querySelectorAll('.news-lane-list').forEach(list => {
-    let shown = 0;
-    list.querySelectorAll('.news-row').forEach(row => {
-      const hit = !q || row.dataset.text.includes(q);
-      row.style.display = hit ? '' : 'none';
-      if (hit) shown++;
-    });
-    const c = document.querySelector(`[data-lane-count="${list.dataset.lane}"]`);
-    if (c) c.textContent = shown;
-  });
+function applyNewsFilter(){ /* 2026-10-05: the search is applied to the stories in renderNewsLane(); nothing to do on the DOM */ }
+// Rebuild only the three lane boxes (search typing, a vote): the filter bar keeps focus, the hero is
+// untouched, and each lane keeps its scroll position unless the result set itself was reset.
+function refreshNewsLaneLists(keepScroll){
+  const oldLanes = document.querySelector('#newsBody .news-lanes');
+  if (!oldLanes) return renderNewsBody();
+  const scrolls = {};
+  if (keepScroll) oldLanes.querySelectorAll('.news-lane-list').forEach(l => { scrolls[l.dataset.lane] = l.scrollTop; });
+  const lanes = buildNewsLanes();
+  oldLanes.replaceWith(lanes);
+  lanes.querySelectorAll('.news-lane-list').forEach(l => { if (scrolls[l.dataset.lane]) l.scrollTop = scrolls[l.dataset.lane]; });
 }
+let newsSearchTimer = null;
 
 // ── Desktop ding (2026-09-14, Mete's request) ───────────────────────────────
 // FCM push (below) already reaches phones reliably. On a desktop tab that's just sitting open on
