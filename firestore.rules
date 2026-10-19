@@ -17,11 +17,26 @@ service cloud.firestore {
         && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
+    // 2026-10-19, Mete: two roles. An editor has a document roles/{email} with role == 'editor'
+    // (created by hand in the Firebase Console). Every other signed-in user is a viewer: reads
+    // everything, writes nothing shared. Email = lower-case sign-in email, used as the document id.
+    function isEditor() {
+      return isAuthed()
+        && exists(/databases/$(database)/documents/roles/$(request.auth.token.email))
+        && get(/databases/$(database)/documents/roles/$(request.auth.token.email)).data.role == 'editor';
+    }
+    match /roles/{email} {
+      allow read: if isAuthed() && request.auth.token.email == email;
+      allow write: if false;
+    }
+
     match /app_data/main {
-      allow read, write: if isAuthed();
+      allow read: if isAuthed();
+      allow write: if isEditor();
     }
     match /logs/{date} {
-      allow read, write: if isAuthed();
+      allow read: if isAuthed();
+      allow write: if isEditor();
     }
     // Newsfeed events: the page mostly READS. Writes come from the GitHub Actions collector, which
     // uses a service account and therefore bypasses these rules entirely (that's why "write" was
@@ -37,14 +52,30 @@ service cloud.firestore {
     // but can never edit or remove an existing one (their own included) straight from the page.
     match /news/{id} {
       allow read: if isAuthed();
-      allow create: if isAuthed()
+      allow create: if isEditor()
         && request.resource.data.manual == true
         && request.resource.data.product in ['WHEAT', 'CORN', 'SBM', 'FREIGHT']
         && request.resource.data.direction in ['BULLISH', 'BEARISH', 'NEUTRAL']
         && request.resource.data.category in ['POLITICS', 'AGRI', 'REPORTS']
         && request.resource.data.impact is number
         && request.resource.data.impact >= 0 && request.resource.data.impact <= 100;
-      allow update, delete: if false;
+      // 2026-10-02, Mete: "Edit classification" on a news card (index.html, openNewsEdit) — a signed-in
+      // user may correct what the classifier decided on ANY story, but only these fields: direction,
+      // impact, category, country, source, plus the edited/editedMs markers. Headline, url, time,
+      // product, trend and everything else stay exactly as the collector wrote them, and nothing can
+      // be deleted from the page. collector.py never rewrites an existing story's own fields (it only
+      // merges `trend`/`sources` when another publisher picks the story up), so a correction sticks.
+      allow update: if isEditor()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['direction', 'impact', 'category', 'country', 'source', 'edited', 'editedMs'])
+        && request.resource.data.edited == true
+        && request.resource.data.direction in ['BULLISH', 'BEARISH', 'NEUTRAL']
+        && request.resource.data.impact is number
+        && request.resource.data.impact >= 0 && request.resource.data.impact <= 100
+        && request.resource.data.category is string
+        && request.resource.data.country is string
+        && request.resource.data.source is string;
+      allow delete: if false;
     }
     match /news_meta/{id} {
       allow read: if isAuthed();
@@ -52,7 +83,11 @@ service cloud.firestore {
     }
     // Desk votes (👍 / 👎) and push-alert device registrations: written from the page.
     match /news_feedback/{id} {
-      allow read, write: if isAuthed();
+      allow read: if isAuthed();
+      // votes (👍/👎, which hide stories for everyone): editors only.
+      // anomaly_* records are written automatically by every open page (analysis log) → any signed-in user.
+      allow write: if isEditor()
+        || (isAuthed() && id.matches('anomaly_.*') && request.resource.data.type == 'anomaly_fired');
     }
     match /news_devices/{token} {
       allow read: if false;

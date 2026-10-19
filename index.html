@@ -54,7 +54,7 @@
     --mono:var(--sans);
   }
   /* darker photos (Input, History) get a lighter veil and denser glass so the page still reads bright */
-  body[data-tab="inputtab"]{ --veil-a:.44; --glass-a:.66; --glass-strong-a:.76; }
+  body[data-tab="inputtab"], body[data-tab="sandbox"]{ --veil-a:.44; --glass-a:.66; --glass-strong-a:.76; }
   body[data-tab="historytab"]{ --veil-a:.56; --glass-a:.70; --glass-strong-a:.80; }
   body[data-tab="vnsupply"], body[data-tab="malaysia"]{ --veil-a:.16; --glass-a:.56; --glass-strong-a:.68; }
   body[data-tab="indonesia"], body[data-tab="vietnam"]{ --veil-a:.10; --glass-a:.54; --glass-strong-a:.66; }
@@ -220,6 +220,14 @@
   .history-row:hover{ transform:translateY(-1px); background:rgba(255,255,255,.72); box-shadow:inset 0 1px 0 #fff, 0 12px 24px -16px rgba(40,26,12,.5); }
   .history-date{ font-size:13.5px; font-weight:700; color:var(--ink); }
   .history-note{ font-size:12px; color:var(--ink-2); text-align:right; }
+  .history-right{ display:flex; align-items:center; gap:10px; min-width:0; }
+  body.role-viewer #importBtn, body.role-viewer .vns-import-row, body.role-viewer .news-votes, body.role-viewer #traderNewsAddBtn,
+  body.role-viewer .history-del, body.role-viewer #logTodayBtn, body.role-viewer #historyNoteInput{ display:none !important; }
+  body.role-viewer #inputtab input, body.role-viewer #inputtab select, body.role-viewer #inputtab textarea{ pointer-events:none; }
+  body.role-viewer input.cell[readonly]{ background:rgba(255,255,255,.35); box-shadow:none; }
+  .role-badge{ display:flex; align-items:center; padding:0 14px; font-size:12px; font-weight:700; color:var(--ink-2); white-space:nowrap; }
+  .history-del{ flex:none; display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:999px; border:1px solid var(--edge); background:rgba(255,255,255,.6); color:var(--ink-3); cursor:pointer; padding:0; }
+  .history-del:hover{ color:var(--bad, #c2410c); border-color:rgba(194,65,12,.4); background:#fff; }
   .archive-banner{ background:var(--orange-soft); border:1px solid rgba(242,96,12,.35); color:#b54400; font-size:12.5px; padding:12px 16px; border-radius:var(--r-md); margin-bottom:12px; }
   #historytab input[type="text"], #historytab input[type="date"]{ background:rgba(255,255,255,.74) !important; border:1px solid var(--edge) !important; color:var(--ink) !important; border-radius:999px !important; padding:10px 16px !important; font-weight:600; box-shadow:inset 0 1px 2px rgba(40,26,12,.08); }
   #historytab input:focus{ outline:none; box-shadow:0 0 0 3px var(--orange-soft), inset 0 0 0 1px var(--orange); }
@@ -518,6 +526,60 @@
       -webkit-appearance:none; appearance:none; box-shadow:inset 0 1px 2px rgba(40,26,12,.08); }
   }
 
+
+  /* ===== 2026-10-15, Mete: Sandbox tab — what-if calculator for one combination. */
+  .sb-bar{ display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; margin:6px 0 4px; }
+  .sb-bar label{ display:block; font-size:10.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-3); margin:0 0 4px 12px; }
+  .sb-select{ display:block; width:100%; box-sizing:border-box; padding:10px 36px 10px 14px; font:inherit; font-size:14px; font-weight:600; color:var(--ink); border-radius:999px; border:1px solid var(--edge);
+    background:rgba(255,255,255,.66) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23f2600c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 14px center / 12px 8px;
+    -webkit-appearance:none; appearance:none; box-shadow:inset 0 1px 2px rgba(40,26,12,.08); cursor:pointer; }
+  .sb-select:focus{ outline:none; box-shadow:0 0 0 3px var(--orange-soft), inset 0 0 0 1px var(--orange); }
+  .sb-grid{ display:grid; grid-template-columns:minmax(0, 1.55fr) minmax(0, 1fr); gap:16px; align-items:start; }
+  .sb-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; max-width:100%; }
+  .sb-grid > *{ min-width:0; }
+  .sb-card{ background:rgba(255,255,255,.46); border:1px solid var(--edge); border-radius:var(--r-md, 14px); padding:12px 14px; }
+  .sb-table{ width:100%; border-collapse:separate; border-spacing:0; font-size:13px; }
+  .sb-table th{ color:var(--ink-3); font-weight:700; font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; text-align:right; padding:6px 6px; border-bottom:1px solid var(--hair); white-space:nowrap; }
+  .sb-table td{ padding:6px 6px; text-align:right; border-bottom:1px solid var(--hair); white-space:nowrap; font-weight:500; }
+  .sb-table th:first-child, .sb-table td:first-child{ text-align:left; }
+  .sb-table tr:last-child td{ border-bottom:none; }
+  .sb-table td.sb-lbl{ font-weight:700; color:var(--ink); }
+  .sb-role{ display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px; font-size:10px; font-weight:700; letter-spacing:.04em; background:rgba(42,36,32,.07); color:var(--ink-2); }
+  .sb-role.main{ background:var(--orange-soft); color:var(--orange); }
+  .sb-table input.cell{ width:74px; }
+  input.cell.sb-ovr{ background:#fff3d6; border-color:rgba(242,96,12,.55); }
+  .sb-reset{ cursor:pointer; color:var(--orange); font-weight:700; margin-left:4px; font-size:12px; user-select:none; }
+  .sb-unit{ color:var(--ink-3); font-size:11px; margin-left:3px; }
+  .sb-result{ text-align:center; padding:10px 6px 4px; }
+  .sb-result .sb-big{ font-size:34px; font-weight:800; letter-spacing:-.02em; color:var(--ink); line-height:1.1; }
+  .sb-result .sb-cap{ font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-3); }
+  .sb-kv{ display:flex; justify-content:space-between; gap:10px; padding:7px 2px; border-top:1px solid var(--hair); font-size:13px; }
+  .sb-kv b{ font-weight:700; }
+  .sb-pos{ color:var(--good, #1f8a4c); } .sb-neg{ color:var(--bad, #c2410c); }
+  .sb-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  .sb-btn{ cursor:pointer; border:1px solid var(--edge); background:rgba(255,255,255,.7); color:var(--ink); font:inherit; font-size:13px; font-weight:700; padding:8px 14px; border-radius:999px; }
+  .sb-btn.primary{ background:linear-gradient(180deg, var(--orange-2), var(--orange)); color:#fff; border-color:transparent; }
+  .sb-saved{ display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .sb-chip{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; background:rgba(255,255,255,.62); border:1px solid var(--edge); font-size:12.5px; font-weight:600; cursor:pointer; }
+  .sb-chip .x{ color:var(--ink-3); font-weight:800; padding-left:2px; }
+  .sb-strip td.cur, .sb-strip th.cur{ outline:2px solid var(--orange); outline-offset:-2px; }
+  @media (max-width:900px){ .sb-grid{ grid-template-columns:minmax(0, 1fr); } }
+  @media (max-width:640px){
+    .sb-bar{ grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; }
+    .sb-select{ font-size:13.5px; padding:10px 32px 10px 12px; }
+    .sb-table{ font-size:12.5px; } .sb-table input.cell{ width:60px; } .sb-role{ display:none; } .sb-table td.sb-lbl{ white-space:normal; min-width:96px; }
+    .sb-result .sb-big{ font-size:30px; }
+    .sb-legs tr:first-child{ display:none; }
+    .sb-legs tr{ display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:6px 10px; padding:10px 0; border-bottom:1px solid var(--hair); }
+    .sb-legs tr:last-child{ border-bottom:none; }
+    .sb-legs td{ border:none; padding:0; text-align:left; white-space:normal; }
+    .sb-legs td.sb-lbl{ grid-column:1 / -1; }
+    .sb-legs td.sb-na{ display:none; }
+    .sb-legs td::before{ content:attr(data-l); display:block; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3); margin-bottom:3px; }
+    .sb-legs td.sb-lbl::before{ content:none; }
+    .sb-legs input.cell{ width:100%; box-sizing:border-box; }
+  }
+
   /* ===== 2026-10-05 (2), Mete: speed. The expensive part of a glass UI is backdrop blur over LARGE
      areas — the browser re-blurs everything behind the surface on every scrolled frame. Small,
      fixed-size pieces (top bar, tiles, clocks, chart card, pills) keep their blur; the page-tall
@@ -526,7 +588,7 @@
   main > section:not(#newstab){ -webkit-backdrop-filter:none; backdrop-filter:none; background:rgba(250,246,240,.80); }
   .news-lane-box{ -webkit-backdrop-filter:none; backdrop-filter:none; background:rgba(250,246,240,.60); }
   .results-table th.rowlabel, .results-table td.rowlabel{ -webkit-backdrop-filter:none; backdrop-filter:none; background:rgb(250,247,242); }
-  body[data-tab="inputtab"] main > section:not(#newstab), body[data-tab="historytab"] main > section:not(#newstab){ background:rgba(250,246,240,.86); }
+  body[data-tab="inputtab"] main > section:not(#newstab), body[data-tab="historytab"] main > section:not(#newstab), body[data-tab="sandbox"] main > section:not(#newstab){ background:rgba(250,246,240,.86); }
   .news-thumb{ contain:strict; }
   .news-more{ all:unset; cursor:pointer; flex:none; text-align:center; padding:10px; border-radius:16px; font-size:12px; font-weight:700; color:var(--ink-2); background:rgba(255,255,255,.5); border:1px dashed var(--edge); }
   .news-more:hover{ color:var(--orange); }
@@ -555,6 +617,7 @@
     <div class="glass pill tabs" data-liq="tabs">
       <div class="tab active" data-tab="newstab">News</div>
       <div class="tab" data-tab="vnsupply">VN Supply</div>
+      <div class="tab" data-tab="sandbox">Sandbox</div>
       <div class="tab" data-tab="vietnam">Vietnam</div>
       <div class="tab" data-tab="malaysia">Malaysia</div>
       <div class="tab" data-tab="indonesia">Indonesia</div>
@@ -562,6 +625,7 @@
       <div class="tab" data-tab="historytab">History</div>
     </div>
     <div class="glass pill live-indicator" id="liveIndicator" title="Connecting…"><span class="live-dot" id="liveDot"></span>Live</div>
+    <div class="glass pill role-badge" id="roleBadge" style="display:none" title="View only — ask an editor to change data">View only</div>
     <button class="glass icon-btn" id="exportBtn" title="Save all data to a backup file" aria-label="Save backup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg></button>
     <button class="glass icon-btn" id="importBtn" title="Load data from a backup file" aria-label="Load backup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 16.9A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/><path d="M12 12v9M8 17l4 4 4-4"/></svg></button>
     <input type="file" id="importFile" accept="application/json" style="display:none;">
@@ -571,6 +635,7 @@
   <main>
     <section id="newstab" class="active"></section>
     <section id="vnsupply"></section>
+    <section id="sandbox"></section>
     <section id="vietnam"></section>
     <section id="malaysia"></section>
     <section id="indonesia"></section>
@@ -1816,6 +1881,7 @@ function loadState(){
 
 let saveTimeout;
 function scheduleSave(){
+  if (!cteIsEditor()) return;            // viewers: view-only, nothing is written (month chips etc. stay local)
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(async () => {
     try{
@@ -1846,7 +1912,9 @@ function numInput(value, onChange, extraClass){
   inp.spellcheck = false;
   inp.className = 'cell' + (extraClass ? ' ' + extraClass : '');
   inp.value = (value === null || value === undefined) ? '' : value;
+  if (!cteIsEditor()){ inp.readOnly = true; inp.tabIndex = -1; }
   inp.addEventListener('change', e => {
+    if (!cteIsEditor()) return;
     const raw = e.target.value.replace(',', '.').trim();
     let v = null;
     if (raw !== '' && raw !== '-'){
@@ -2121,7 +2189,7 @@ function monthChipShouldPop(i){ return !!monthChipPop && monthChipPop.m === i &&
 // One full-bleed photo per tab, cross-faded between two stacked layers.
 const TAB_BG = {
   newstab: 'assets/bg-news.jpg', vnsupply: 'assets/bg-vnsupply.jpg', vietnam: 'assets/bg-vietnam.jpg', malaysia: 'assets/bg-malaysia.jpg',
-  indonesia: 'assets/bg-indonesia.jpg', inputtab: 'assets/bg-input.jpg', historytab: 'assets/bg-history.jpg',
+  indonesia: 'assets/bg-indonesia.jpg', inputtab: 'assets/bg-input.jpg', historytab: 'assets/bg-history.jpg', sandbox: 'assets/bg-input.jpg',
 };
 let bgFlip = 0;
 function setTabBackground(tabId){
@@ -2639,6 +2707,7 @@ function escapeHtml(s){
 function escapeAttr(s){ return escapeHtml(s).replace(/"/g, '&quot;'); }
 
 async function logTodaySnapshot(){
+  if (!cteIsEditor()) return;
   const noteInput = document.getElementById('historyNoteInput');
   const note = noteInput ? noteInput.value.trim() : '';
   const key = todayDateKey();
@@ -2710,8 +2779,23 @@ function renderHistoryList(){
     const row = document.createElement('div');
     row.className = 'history-row';
     row.innerHTML = `<span class="history-date">${formatDateKeyLong(entry.key)}</span>` +
-      (entry.note ? `<span class="history-note">${escapeHtml(entry.note)}</span>` : '');
+      `<span class="history-right">${entry.note ? `<span class="history-note">${escapeHtml(entry.note)}</span>` : ''}` +
+      `<button class="history-del" title="Delete this snapshot" aria-label="Delete this snapshot"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></span>`;
     row.addEventListener('click', () => openHistoryDate(entry.key));
+    row.querySelector('.history-del').addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      if (!confirm(`Delete the snapshot of ${formatDateKeyLong(entry.key)}? This cannot be undone.`)) return;
+      try{
+        await deleteDoc(doc(db, 'logs', entry.key));
+        historyDatesCache = historyDatesCache.filter(x => x.key !== entry.key);
+        const det = document.getElementById('historyDetail');
+        if (det && det.dataset.key === entry.key){ det.style.display = 'none'; }
+        renderHistoryList();
+      }catch(e){
+        console.error('history delete failed', e);
+        alert('Could not delete this snapshot. Check your connection and try again.');
+      }
+    });
     listEl.appendChild(row);
   });
 }
@@ -3094,7 +3178,26 @@ function renderPlaceholder(id, title){
 let vnSupplyUI = { cargo: 'Corn', month: null, region: 'All' };
 
 // ---- data accessors ------------------------------------------------------
-function vnSupplyData(){ return (state.vnSupply && Array.isArray(state.vnSupply.cargoes)) ? state.vnSupply : defaultState.vnSupply; }
+// 2026-10-06: the saved supply block is checked before it is used. On 5-Oct an Input-tab Excel
+// import wrote 12-cell rows over vnSupply.asOf / months / cargoes / origins / buyers (see
+// handleExcelImport) and this tab then died on its first line, import button included. A block
+// that is not shaped like a real import now falls back to the built-in figures, so the tab always
+// opens and the supply Excel can simply be imported again.
+function vnSupplyValid(v){
+  const arr12 = a => Array.isArray(a) && a.length === 12;
+  return !!v && typeof v.asOf === 'string' && arr12(v.months) && v.months.every(m => typeof m === 'string') &&
+    Array.isArray(v.cargoes) && v.cargoes.length > 0 &&
+    v.cargoes.every(c => c && typeof c.name === 'string' && arr12(c.arrivedNorth) && arr12(c.arrivedSouth)) &&
+    Array.isArray(v.origins) && v.origins.every(o => o && typeof o.origin === 'string' && arr12(o.north) && arr12(o.south)) &&
+    Array.isArray(v.buyers) && v.buyers.every(b => b && typeof b.buyer === 'string' && arr12(b.north) && arr12(b.south));
+}
+let vnSupplyCheck = { ref: null, ok: false };
+function vnSupplyData(){
+  const v = state.vnSupply;
+  if (vnSupplyCheck.ref !== v) vnSupplyCheck = { ref: v, ok: vnSupplyValid(v) };
+  return vnSupplyCheck.ok ? v : defaultState.vnSupply;
+}
+function vnSupplyBroken(){ return !!state.vnSupply && vnSupplyData() !== state.vnSupply; }
 function vnSupplyCargoRow(name){ return vnSupplyData().cargoes.find(c => c.name === name); }
 function vnSupplyMonths(){ return vnSupplyData().months; }
 function vnSupplyCutoffMonthIdx(){
@@ -3766,6 +3869,7 @@ function parseVnSupplyWorkbook(wb){
 }
 
 function handleVnSupplyImport(e, statusEl){
+  if (!cteIsEditor()) return;
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
@@ -3808,6 +3912,13 @@ function renderVnSupplyTab(){
   meta.innerHTML = `<span>Supply report as of <b>${formatDDMMYYYY(vs.asOf)}</b></span>`;
   el.appendChild(meta);
 
+  if (vnSupplyBroken()){
+    const warn = document.createElement('div');
+    warn.className = 'note';
+    warn.style.cssText = 'margin:0 0 14px; color:var(--bear); font-weight:600;';
+    warn.textContent = 'The saved supply data is damaged, so the built-in figures are shown. Use "Import Excel" at the bottom of this page with the latest VN Supply report to restore it.';
+    el.appendChild(warn);
+  }
   vnSupplyControls(el);
   vnSupplyComparisonBox(el);
   vnSupplyMainChartSection(el);
@@ -3818,11 +3929,304 @@ function renderVnSupplyTab(){
   liquidAll(el);
 }
 
+
+// ============================================================================================
+// SANDBOX (2026-10-15, Mete): pick market + month + combination from dropdowns; every price is
+// pre-filled from the live Input data and can be overwritten here without touching the live data.
+// Rules agreed with Mete: the FIRST leg of a combination (the upriver / first-port load) is the
+// main product whose net CFR is calculated; every later leg is a top-off whose profit/loss
+// (sale price − its own CFR) is credited back to the main product, exactly like the Vietnam /
+// Malaysia / Indonesia tables. Freight comes from the chosen combination's freight line and can
+// be typed over. Saved scenarios live only in this browser (localStorage) — no Firestore cost.
+// ============================================================================================
+const SB_PRODUCTS = {
+  SBM:     { label: 'SBM (ARG)',          kind: 'sbm',   indexed: true,  fob: i => state.fob.ASBM[i] },
+  BRZSBM:  { label: 'SBM (BRA, 7M)',      kind: 'sbm',   indexed: true,  fob: i => state.fob.BRZSBMP[i] + 25 - 13 },
+  UPR:     { label: 'Corn Upriver',       kind: 'corn',  indexed: true,  fob: i => state.fob.UPRCORN[i] },
+  ARGCORN: { label: 'Corn PMX ARG',       kind: 'corn',  indexed: true,  fob: i => state.fob.ARGCORN[i] },
+  BRACORN: { label: 'Corn PMX BRA',       kind: 'corn',  indexed: true,  fob: i => state.fob.BRACORN[i] },
+  BBNC:    { label: 'Corn BB/NC top-off', kind: 'corn',  indexed: false, fob: i => state.fob.BBNCCORN[i] },
+  WHEAT:   { label: 'Wheat top-off',      kind: 'wheat', indexed: false, fob: i => state.fob.WHEAT[i] },
+};
+const SB_UNIT = { sbm: '$/st', corn: '¢/bu', wheat: '$/t' };
+const SB_T = (legs, fk) => ({ legs, fk });
+const SB_SBM_VN = {
+  '5M2C': SB_T([['SBM', 45000], ['BBNC', 21000]], '5M2C'),
+  '5M2W': SB_T([['SBM', 45000], ['WHEAT', 23000]], '5M2W'),
+  '4M3C': SB_T([['SBM', 36000], ['UPR', 9000], ['BBNC', 22500]], '4M3C'),
+  '3M4C': SB_T([['SBM', 27000], ['UPR', 18000], ['BBNC', 24000]], '3M4C'),
+  '4M1C': SB_T([['SBM', 41000], ['BBNC', 12000]], '4M1C'),
+  '3M2C': SB_T([['SBM', 31500], ['UPR', 12000], ['BBNC', 12000]], '3M2C'),
+  '2M3C': SB_T([['SBM', 21000], ['UPR', 22500], ['BBNC', 12000]], '2M3C'),
+};
+const SB_CORN = {
+  '7C ARG': SB_T([['ARGCORN', 63000]], '7CARG'), '5C ARG': SB_T([['ARGCORN', 47000]], '5CARG'),
+  '7C BRA': SB_T([['BRACORN', 63000]], '7CBRA'), '5C BRA': SB_T([['BRACORN', 47000]], '5CBRA'),
+};
+const SB_MARKETS = {
+  vietnam: {
+    label: 'Vietnam', freight: (k, i) => getVNFreight(k, i),
+    cornSale: i => { const v = state.cornIndication[i]; return (v === null || v === undefined) ? 224 : v; },
+    wheatSale: i => state.wheatSale[i],
+    combos: Object.assign({}, SB_SBM_VN, SB_CORN),
+    repl: { sbm: [computeMonth, computeMonthCarry], corn: [computeCorn, computeCornCarry] },
+    ind: { sbm: i => state.indication[i], corn: i => state.cornIndication[i] },
+  },
+  malaysia: {
+    label: 'Malaysia', freight: (k, i) => getMYFreight(k, i),
+    cornSale: i => { const v = state.malaysia.cornIndication[i]; return (v === null || v === undefined) ? 225 : v; },
+    wheatSale: () => null,
+    combos: Object.assign({}, (({ '5M2C': a, '4M3C': b, '3M4C': c, '4M1C': d, '3M2C': e, '2M3C': f }) => ({ '5M2C': a, '4M3C': b, '3M4C': c, '4M1C': d, '3M2C': e, '2M3C': f }))(SB_SBM_VN), SB_CORN),
+    repl: { sbm: [computeMY, computeMYCarry], corn: [computeMYCorn, computeMYCornCarry] },
+    ind: { sbm: i => state.malaysia.indication[i], corn: i => state.malaysia.cornIndication[i] },
+  },
+  indonesia: {
+    label: 'Indonesia', freight: (k, i) => getIDFreight(k, i),
+    cornSale: i => effectiveIndonesiaCornSale(i),
+    wheatSale: i => state.indonesia.wheatSale[i],
+    combos: {
+      '5M2C': SB_SBM_VN['5M2C'], '5M2W': SB_SBM_VN['5M2W'], '4M1W': SB_T([['SBM', 41000], ['WHEAT', 12000]], '4M1W'),
+      '4M1C': SB_SBM_VN['4M1C'], '3M2C': SB_SBM_VN['3M2C'], '2M3C': SB_SBM_VN['2M3C'],
+      '7M': SB_T([['BRZSBM', 63000]], '7M'), '5M': SB_T([['SBM', 47000]], '5M'),
+    },
+    repl: { sbm: [computeID, computeIDCarry] },
+    ind: { sbm: i => state.indonesia.indication[i] },
+  },
+};
+const SB_KEY = 'cteSandbox.v1';
+function sbLoad(){ try { return JSON.parse(localStorage.getItem(SB_KEY) || 'null') || {}; } catch (_e){ return {}; } }
+function sbStore(obj){ try { localStorage.setItem(SB_KEY, JSON.stringify(obj)); return true; } catch (_e){ return false; } }
+const sbStored = sbLoad();
+let sbSel = Object.assign({ market: 'vietnam', month: new Date().getMonth(), combo: '5M2C', carry: false }, sbStored.last || {});
+let sbOv = {};                     // overrides: qty{leg}, fob{leg}, freight, cornSale, wheatSale, spSBM, spCorn
+function sbValidSel(){
+  if (!SB_MARKETS[sbSel.market]) sbSel.market = 'vietnam';
+  const m = SB_MARKETS[sbSel.market];
+  if (!m.combos[sbSel.combo]) sbSel.combo = Object.keys(m.combos)[0];
+  if (!(sbSel.month >= 0 && sbSel.month <= 11)) sbSel.month = 0;
+}
+// Pure calculation — `ov` overrides any live input. Returns every intermediate number for display.
+function sbCompute(sel, ov){
+  ov = ov || {};
+  const m = SB_MARKETS[sel.market], t = m.combos[sel.combo], i = sel.month, carry = !!sel.carry;
+  const prev = (i - 1 + 12) % 12, idxIndexed = carry ? prev : i;
+  const pick = (o, live) => (o === null || o === undefined) ? live : o;
+  const liveFreight = carry ? (m.freight(t.fk, i) + m.freight(t.fk, prev)) / 2 : m.freight(t.fk, i);
+  const freight = pick(ov.freight, liveFreight);
+  const spSBM = pick(ov.spSBM, carry ? spreadSBM(i) : 0);
+  const spCorn = pick(ov.spCorn, carry ? spreadCorn(i) : 0);
+  const cSale = pick(ov.cornSale, m.cornSale(i));
+  const wSale = pick(ov.wheatSale, m.wheatSale(i));
+  const legs = t.legs.map(([code, q], k) => {
+    const p = SB_PRODUCTS[code];
+    const liveFob = p.fob(p.indexed ? idxIndexed : i);
+    const fob = pick(ov.fob && ov.fob[k], liveFob);
+    const qty = pick(ov.qty && ov.qty[k], q);
+    const sp = p.indexed ? (p.kind === 'sbm' ? spSBM : spCorn) : 0;
+    let cfr;
+    if (p.kind === 'sbm') cfr = freight / 1.1023 + fob + sp;
+    else if (p.kind === 'corn') cfr = freight / 0.39368 + fob + sp;
+    else cfr = freight + fob;
+    let sale = null, pnl = null;
+    if (k > 0){
+      sale = p.kind === 'corn' ? cSale : (p.kind === 'wheat' ? wSale : null);
+      if (sale !== null && sale !== undefined) pnl = p.kind === 'corn' ? (sale - cfr) * qty * 0.3937 : (sale - cfr) * qty;
+    }
+    return { code, label: p.label, kind: p.kind, main: k === 0, qty, liveQty: q, fob, liveFob, sp, cfr, sale, pnl };
+  });
+  const main = legs[0];
+  const credit = legs.slice(1).reduce((a, l) => a + (l.pnl || 0), 0);
+  const conv = main.kind === 'sbm' ? 1.1023 : (main.kind === 'corn' ? 0.39368 : 1);
+  const netRaw = main.qty ? main.cfr - credit / conv / main.qty : main.cfr;
+  const net = mround(netRaw, 0.5);
+  const fam = main.kind === 'corn' ? 'corn' : 'sbm';
+  const rf = m.repl[fam];
+  const repl = rf ? rf[carry ? 1 : 0](i).replacement : null;
+  const ind = m.ind[fam] ? m.ind[fam](i) : null;
+  return { m, t, legs, main, freight, liveFreight, spSBM, spCorn, cSale, wSale, credit, net, netRaw, repl, ind, unit: SB_UNIT[main.kind], fam,
+           liveCornSale: m.cornSale(i), liveWheatSale: m.wheatSale(i), liveSpSBM: carry ? spreadSBM(i) : 0, liveSpCorn: carry ? spreadCorn(i) : 0 };
+}
+function sbFmt(v, d){ return (v === null || v === undefined || Number.isNaN(v)) ? '—' : v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function sbInput(value, live, onSet){
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.inputMode = 'decimal'; inp.autocomplete = 'off'; inp.spellcheck = false;
+  const changed = value !== live;
+  inp.className = 'cell' + (changed ? ' sb-ovr' : '');
+  inp.value = (value === null || value === undefined) ? '' : String(Math.round(value * 100) / 100);
+  inp.title = 'Live value: ' + ((live === null || live === undefined) ? '—' : Math.round(live * 100) / 100);
+  inp.addEventListener('change', e => {
+    const raw = e.target.value.replace(',', '.').trim();
+    const v = raw === '' ? null : parseFloat(raw);
+    onSet(Number.isNaN(v) ? null : v);
+    renderSandbox();
+  });
+  const wrap = document.createElement('span');
+  wrap.appendChild(inp);
+  if (changed){
+    const r = document.createElement('span');
+    r.className = 'sb-reset'; r.textContent = '↺'; r.title = 'Back to the live value';
+    r.addEventListener('click', () => { onSet(null); renderSandbox(); });
+    wrap.appendChild(r);
+  }
+  return wrap;
+}
+function sbSelect(label, options, value, onChange){
+  const box = document.createElement('div');
+  const l = document.createElement('label'); l.textContent = label; box.appendChild(l);
+  const sel = document.createElement('select');
+  sel.className = 'sb-select';
+  options.forEach(([v, t]) => { const o = document.createElement('option'); o.value = String(v); o.textContent = t; if (String(v) === String(value)) o.selected = true; sel.appendChild(o); });
+  sel.addEventListener('change', () => onChange(sel.value));
+  box.appendChild(sel);
+  return box;
+}
+function renderSandbox(){
+  const el = document.getElementById('sandbox');
+  if (!el) return;
+  sbValidSel();
+  const R = sbCompute(sbSel, sbOv);
+  el.innerHTML = '';
+  el.appendChild(sectionTitle('Sandbox'));
+  // --- dropdowns
+  const bar = document.createElement('div');
+  bar.className = 'sb-bar';
+  const reset = () => { sbOv = {}; };
+  bar.appendChild(sbSelect('Market', Object.entries(SB_MARKETS).map(([k, m]) => [k, m.label]), sbSel.market, v => { sbSel.market = v; reset(); sbValidSel(); sbRemember(); renderSandbox(); }));
+  bar.appendChild(sbSelect('Month', MONTHS_FULL.map((n, k) => [k, n]), sbSel.month, v => { sbSel.month = +v; reset(); sbRemember(); renderSandbox(); }));
+  bar.appendChild(sbSelect('Combination', Object.keys(SB_MARKETS[sbSel.market].combos).map(k => [k, k]), sbSel.combo, v => { sbSel.combo = v; reset(); sbRemember(); renderSandbox(); }));
+  bar.appendChild(sbSelect('Basis', [['0', 'Same month'], ['1', 'Carry']], sbSel.carry ? '1' : '0', v => { sbSel.carry = v === '1'; reset(); sbRemember(); renderSandbox(); }));
+  el.appendChild(bar);
+
+  const grid = document.createElement('div');
+  grid.className = 'sb-grid';
+  // --- left: legs + inputs
+  const left = document.createElement('div');
+  left.className = 'sb-card';
+  const tbl = document.createElement('table');
+  tbl.className = 'sb-table sb-legs';
+  tbl.innerHTML = '<tr><th>Leg</th><th>Qty (MT)</th><th>FOB</th><th>CFR</th><th>Sale</th><th>P&amp;L ($)</th></tr>';
+  R.legs.forEach((l, k) => {
+    const tr = document.createElement('tr');
+    const td0 = document.createElement('td'); td0.className = 'sb-lbl';
+    td0.innerHTML = `${l.label}<span class="sb-role${l.main ? ' main' : ''}">${l.main ? 'MAIN' : 'TOP-OFF'}</span>`;
+    tr.appendChild(td0);
+    const tdQ = document.createElement('td'); tdQ.dataset.l = 'Qty (MT)';
+    tdQ.appendChild(sbInput(l.qty, l.liveQty, v => { sbOv.qty = sbOv.qty || {}; sbOv.qty[k] = v; }));
+    tr.appendChild(tdQ);
+    const tdF = document.createElement('td'); tdF.dataset.l = 'FOB';
+    tdF.appendChild(sbInput(l.fob, l.liveFob, v => { sbOv.fob = sbOv.fob || {}; sbOv.fob[k] = v; }));
+    tr.appendChild(tdF);
+    const tdC = document.createElement('td'); tdC.dataset.l = 'CFR'; tdC.innerHTML = `${sbFmt(l.cfr, 2)}<span class="sb-unit">${SB_UNIT[l.kind]}</span>`; tr.appendChild(tdC);
+    const tdS = document.createElement('td'); tdS.dataset.l = 'Sale'; if (l.main) tdS.classList.add('sb-na'); tdS.textContent = l.main ? '—' : sbFmt(l.sale, 1); tr.appendChild(tdS);
+    const tdP = document.createElement('td'); tdP.dataset.l = 'P&L ($)';
+    if (l.main){ tdP.textContent = '—'; tdP.classList.add('sb-na'); }
+    else { tdP.textContent = (l.pnl > 0 ? '+' : '') + sbFmt(l.pnl, 0); tdP.className = l.pnl >= 0 ? 'sb-pos' : 'sb-neg'; }
+    tr.appendChild(tdP);
+    tbl.appendChild(tr);
+  });
+  const sc1 = document.createElement('div'); sc1.className = 'sb-scroll'; sc1.appendChild(tbl); left.appendChild(sc1);
+  // assumptions
+  const tbl2 = document.createElement('table');
+  tbl2.className = 'sb-table';
+  tbl2.style.marginTop = '10px';
+  tbl2.innerHTML = '<tr><th>Assumption</th><th>Value</th><th></th></tr>';
+  const addRow = (label, val, live, setter, unit) => {
+    const tr = document.createElement('tr');
+    const a = document.createElement('td'); a.className = 'sb-lbl'; a.textContent = label; tr.appendChild(a);
+    const b = document.createElement('td'); b.appendChild(sbInput(val, live, setter)); tr.appendChild(b);
+    const c = document.createElement('td'); c.innerHTML = `<span class="sb-unit">${unit}</span>`; tr.appendChild(c);
+    tbl2.appendChild(tr);
+  };
+  addRow(`Freight (${R.t.fk}${sbSel.carry ? ', avg. with prev. month' : ''})`, R.freight, R.liveFreight, v => { sbOv.freight = v; }, '$/t');
+  const kinds = new Set(R.legs.map(l => l.kind));
+  const tops = new Set(R.legs.slice(1).map(l => l.kind));
+  if (tops.has('corn')) addRow('Corn sale price', R.cSale, R.liveCornSale, v => { sbOv.cornSale = v; }, '¢/bu basis');
+  if (tops.has('wheat')) addRow('Wheat sale price', R.wSale, R.liveWheatSale, v => { sbOv.wheatSale = v; }, '$/t');
+  if (sbSel.carry){
+    if (R.legs.some(l => l.kind === 'sbm' && SB_PRODUCTS[l.code].indexed)) addRow('SBM futures spread (prev. − this month)', R.spSBM, R.liveSpSBM, v => { sbOv.spSBM = v; }, '$/st');
+    if (R.legs.some(l => l.kind === 'corn' && SB_PRODUCTS[l.code].indexed)) addRow('Corn futures spread (prev. − this month)', R.spCorn, R.liveSpCorn, v => { sbOv.spCorn = v; }, '¢/bu');
+  }
+  const sc2 = document.createElement('div'); sc2.className = 'sb-scroll'; sc2.appendChild(tbl2); left.appendChild(sc2);
+  grid.appendChild(left);
+
+  // --- right: result
+  const right = document.createElement('div');
+  right.className = 'sb-card';
+  const nOv = Object.keys(sbOv).length;
+  right.innerHTML = `<div class="sb-result"><div class="sb-cap">Net ${R.main.label} CFR · ${SB_MARKETS[sbSel.market].label} · ${MONTHS_FULL[sbSel.month]}${sbSel.carry ? ' (carry)' : ''}</div>`
+    + `<div class="sb-big">${sbFmt(R.net, 1)}<span class="sb-unit" style="font-size:14px">${R.unit}</span></div>`
+    + `<div class="sb-cap" style="margin-top:4px">${sbSel.combo}${nOv ? ' · scenario' : ' · live data'}</div></div>`;
+  const kv = (k, v, cls) => { const d = document.createElement('div'); d.className = 'sb-kv'; d.innerHTML = `<span>${k}</span><b class="${cls || ''}">${v}</b>`; right.appendChild(d); };
+  kv('Main leg CFR (before credits)', sbFmt(R.main.cfr, 2) + ' ' + R.unit);
+  if (R.legs.length > 1) kv('Top-off credit', ((R.netRaw - R.main.cfr) <= 0 ? '−' : '+') + sbFmt(Math.abs(R.netRaw - R.main.cfr), 2) + ' ' + R.unit, (R.netRaw - R.main.cfr) <= 0 ? 'sb-pos' : 'sb-neg');
+  if (R.repl !== null && R.repl !== undefined){
+    const d = R.net - R.repl;
+    kv('Best replacement', sbFmt(R.repl, 1));
+    kv('This scenario vs best replacement', (d > 0 ? '+' : '') + sbFmt(d, 1), d <= 0 ? 'sb-pos' : 'sb-neg');
+  }
+  // actions
+  const act = document.createElement('div'); act.className = 'sb-actions';
+  const bSave = document.createElement('button'); bSave.className = 'sb-btn primary'; bSave.textContent = 'Save scenario';
+  bSave.addEventListener('click', () => {
+    const name = (prompt('Scenario name', `${SB_MARKETS[sbSel.market].label} ${MONTHS_FULL[sbSel.month]} ${sbSel.combo}`) || '').trim();
+    if (!name) return;
+    const st = sbLoad(); st.saved = st.saved || [];
+    st.saved = st.saved.filter(x => x.name !== name);
+    st.saved.unshift({ name, sel: Object.assign({}, sbSel), ov: JSON.parse(JSON.stringify(sbOv)), at: Date.now() });
+    st.saved = st.saved.slice(0, 40);
+    st.last = Object.assign({}, sbSel);
+    if (!sbStore(st)) alert('This browser does not allow saving (private mode?). The scenario is not stored.');
+    renderSandbox();
+  });
+  const bReset = document.createElement('button'); bReset.className = 'sb-btn'; bReset.textContent = 'Reset to live data';
+  bReset.addEventListener('click', () => { sbOv = {}; renderSandbox(); });
+  act.appendChild(bSave); act.appendChild(bReset);
+  right.appendChild(act);
+  const saved = (sbLoad().saved || []);
+  if (saved.length){
+    const sv = document.createElement('div'); sv.className = 'sb-saved';
+    saved.forEach(x => {
+      const c = document.createElement('span'); c.className = 'sb-chip'; c.title = 'Open this scenario';
+      c.textContent = x.name;
+      c.addEventListener('click', () => { sbSel = Object.assign({}, x.sel); sbOv = JSON.parse(JSON.stringify(x.ov || {})); sbValidSel(); sbRemember(); renderSandbox(); });
+      const del = document.createElement('span'); del.className = 'x'; del.textContent = '×'; del.title = 'Delete';
+      del.addEventListener('click', e => { e.stopPropagation(); const st = sbLoad(); st.saved = (st.saved || []).filter(y => y.name !== x.name); sbStore(st); renderSandbox(); });
+      c.appendChild(del); sv.appendChild(c);
+    });
+    right.appendChild(sv);
+  }
+  grid.appendChild(right);
+  el.appendChild(grid);
+
+  if (typeof liquidAll === 'function') liquidAll(el);
+}
+function sbRemember(){ const st = sbLoad(); st.last = Object.assign({}, sbSel); sbStore(st); }
+// Self-check used by the test harness: with no overrides the sandbox must reproduce every combo value
+// shown on the Vietnam / Malaysia / Indonesia tabs, for every month, same-month and carry.
+window.cteSandboxCheck = function(){
+  const bad = []; let n = 0;
+  for (const [mk, m] of Object.entries(SB_MARKETS)){
+    for (const combo of Object.keys(m.combos)){
+      const fam = m.combos[combo].legs[0][0].includes('CORN') ? 'corn' : 'sbm';
+      for (let i = 0; i < 12; i++){
+        for (const carry of [false, true]){
+          const r = sbCompute({ market: mk, month: i, combo, carry }, {});
+          const ref = m.repl[fam][carry ? 1 : 0](i).vals[combo];
+          n++;
+          if (Math.abs(r.net - ref) > 1e-9) bad.push([mk, combo, i, carry, r.net, ref]);
+        }
+      }
+    }
+  }
+  return { checked: n, mismatches: bad };
+};
+
 function renderAll(){
   renderResults();
   renderMYResults();
   renderIDResults();
   renderGlobalInputs();
+  if (document.body.dataset.tab === 'sandbox') renderSandbox();
 }
 
 document.querySelectorAll('.tab').forEach(tab => {
@@ -3836,6 +4240,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (tab.dataset.tab === 'historytab') renderHistoryTab();
     if (tab.dataset.tab === 'newstab') renderNewsTab();
     if (tab.dataset.tab === 'vnsupply') renderVnSupplyTab();
+    if (tab.dataset.tab === 'sandbox') renderSandbox();
     liquidAll(document.getElementById(tab.dataset.tab));
   });
 });
@@ -3880,6 +4285,7 @@ document.getElementById('importBtn').addEventListener('click', () => {
 });
 
 document.getElementById('importFile').addEventListener('change', (e) => {
+  if (!cteIsEditor()) return;
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
@@ -3912,11 +4318,19 @@ document.getElementById('importFile').addEventListener('change', (e) => {
 
 // --- Excel (.xlsx) export / import ---
 // Generic: walks the whole state tree, one row per leaf field, path like "fob.WHEAT" or "malaysia.freight.5M2C".
+// 2026-10-06: vnSupply is never exported or imported here. Its lists hold objects (cargoes, origins,
+// buyers), which this one-row-per-field sheet cannot carry — exporting them and importing the file
+// back replaced them with 12 empty cells and broke the VN Supply tab (5-Oct). Supply data has its
+// own import on the VN Supply tab.
+const EXCEL_IO_SKIP = ['vnSupply'];
+function excelIoSkips(path){ return EXCEL_IO_SKIP.some(k => path === k || path.startsWith(k + '.')); }
 function flattenStateForExcel(obj, prefix, rows){
   Object.keys(obj).forEach(key => {
     const val = obj[key];
     const path = prefix ? prefix + '.' + key : key;
     if (val === null || val === undefined) return;
+    if (excelIoSkips(path)) return;
+    if (Array.isArray(val) && val.some(v => v !== null && typeof v === 'object')) return;
     if (Array.isArray(val)){
       rows.push([path, ...val.map(v => (v === null || v === undefined) ? '' : v)]);
     } else if (typeof val === 'object'){
@@ -3996,6 +4410,7 @@ function handleExcelImport(e){
         const row = rows[i];
         if (!row || !row[0]) continue;
         const path = String(row[0]).trim();
+        if (excelIoSkips(path)) continue;               // older export files still carry vnSupply rows
         const values = row.slice(1);
         setStatePath(state, path, values);
       }
@@ -4264,19 +4679,22 @@ const NEWS_CHART_RANGES = [
   { key: '5Y', label: '5Y',      days: 1825, tv: '60M' },
 ];
 
-function subscribeNews(){
-  if (newsUnsub) return newsLoaded;
-  let resolveLoaded;
-  newsLoaded = new Promise(r => { resolveLoaded = r; });
-  const since = Date.now() - NEWS_HISTORY_DAYS * 24 * 3600 * 1000;
-  newsLiveCut = Date.now() - NEWS_LIVE_HOURS * 3600 * 1000;
-  // older stories: this device's own copy, topped up in the background (see the news cache above)
-  const syncArchive = () => newsSyncArchive(Date.now() - NEWS_HISTORY_DAYS * 24 * 3600 * 1000).then((changed) => { if (changed){ newsMergeDocs(); renderNewsBody(); } });
-  syncArchive();
-  setInterval(syncArchive, NEWS_RESYNC_H * 3600 * 1000);
+// 2026-10-13, Mete: on the iPhone home-screen app the News tab showed "Could not load the news feed"
+// while Android/desktop were fine. A Firestore listener that errors is dead for good, and the old
+// code never re-subscribed (newsUnsub stayed set), so one transient failure — typical when iOS
+// suspends a home-screen app and resumes it, or right after signing in inside the standalone app —
+// kept the tab broken until a full reload. The live listener now retries on its own (3 s, 6 s, …,
+// max 60 s), re-subscribes when the app comes back to the foreground, keeps whatever stories are
+// already on screen, and shows the Firestore error code so the real cause is visible if it persists.
+let newsLiveUnsub = null, newsLiveFails = 0, newsLiveRetry = null, newsLiveSince = 0;
+function newsStartLive(since, onFirst){
+  newsLiveSince = since;
+  if (newsLiveRetry){ clearTimeout(newsLiveRetry); newsLiveRetry = null; }
+  if (newsLiveUnsub){ try { newsLiveUnsub(); } catch (_e){} newsLiveUnsub = null; }
   const q = query(NEWS_COLLECTION, where('ms', '>=', newsLiveCut), orderBy('ms', 'desc'));
   let newsFirstSnapshot = true;     // don't ding/notify for the entire history on first load
-  newsUnsub = onSnapshot(q, (snap) => {
+  newsLiveUnsub = onSnapshot(q, (snap) => {
+    newsLiveFails = 0;
     newsLiveDocs = [];
     snap.forEach(d => {
       const x = d.data();
@@ -4291,14 +4709,40 @@ function subscribeNews(){
       }
     }
     newsFirstSnapshot = false;
-    resolveLoaded();
+    if (onFirst) onFirst();
     renderNewsBody();
   }, (err) => {
     console.error('news subscription failed', err);
-    resolveLoaded();
+    newsLiveUnsub = null;
+    if (onFirst) onFirst();
+    newsLiveFails += 1;
+    const code = (err && err.code) ? err.code : 'unknown';
+    const wait = Math.min(60000, 3000 * newsLiveFails);
     const body = document.getElementById('newsBody');
-    if (body) body.innerHTML = '<div class="note">Could not load the news feed. If this is the first deployment, make sure the Firestore rules allow reading the <b>news</b> collection (see newsfeed/firestore.rules).</div>';
+    if (body && !newsDocs.length){
+      body.innerHTML = '<div class="note">Could not load the news feed (' + code + '). Retrying automatically in ' + Math.round(wait / 1000) + ' s…' +
+        (code === 'permission-denied' ? ' If this keeps happening, sign out and sign in again.' : '') + '</div>';
+    }
+    newsLiveRetry = setTimeout(() => { newsLiveRetry = null; newsStartLive(newsLiveSince, null); }, wait);
   });
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !newsUnsub) return;
+  if (!newsLiveUnsub || newsLiveFails){ newsLiveFails = 0; newsStartLive(newsLiveSince, null); }
+});
+
+function subscribeNews(){
+  if (newsUnsub) return newsLoaded;
+  let resolveLoaded;
+  newsLoaded = new Promise(r => { resolveLoaded = r; });
+  const since = Date.now() - NEWS_HISTORY_DAYS * 24 * 3600 * 1000;
+  newsLiveCut = Date.now() - NEWS_LIVE_HOURS * 3600 * 1000;
+  // older stories: this device's own copy, topped up in the background (see the news cache above)
+  const syncArchive = () => newsSyncArchive(Date.now() - NEWS_HISTORY_DAYS * 24 * 3600 * 1000).then((changed) => { if (changed){ newsMergeDocs(); renderNewsBody(); } });
+  syncArchive();
+  setInterval(syncArchive, NEWS_RESYNC_H * 3600 * 1000);
+  newsUnsub = true;                 // subscribed (the live listener itself is newsLiveUnsub)
+  newsStartLive(since, resolveLoaded);
   for (const product of PRICE_PRODUCTS){
     onSnapshot(doc(db, 'prices', product), (snap) => {
       newsPrices[product] = snap.exists() ? snap.data() : undefined;
@@ -5600,6 +6044,7 @@ function fileToBase64(file){
 }
 
 function openTraderNewsModal(){
+  if (!cteIsEditor()) return;
   closeTraderNewsModal();
   let attachment = null; // { base64, mediaType, kind: 'image'|'pdf', name }
 
@@ -5870,6 +6315,7 @@ function renderNewsRow(s){
 // Needs the narrow `update` rule in firestore.rules (see that file) — and collector.py must leave
 // these fields alone on docs flagged edited:true when it merges a new publisher into a story.
 function openNewsEdit(s){
+  if (!cteIsEditor()) return;
   const old = document.getElementById('newsEditModal'); if (old) old.remove();
   let dir = s.direction || 'NEUTRAL', imp = Math.max(0, Math.min(100, Math.round(Number(s.impact) || 0)));
   const overlay = document.createElement('div');
@@ -5930,6 +6376,7 @@ function openNewsEdit(s){
 }
 
 async function voteNews(s, kind){
+  if (!cteIsEditor()) return;
   const same = newsVotes[s.id] === kind;
   try{
     if (same){
@@ -6130,9 +6577,26 @@ function showLogin(errMsg){
 // insufficient permissions" (the "Could not connect" banner). Signing out an anonymous session
 // here is a one-time, automatic cleanup: the next onAuthStateChanged call fires with user=null
 // and the real login screen shows, same as for a browser that was never signed in at all.
-onAuthStateChanged(auth, (user) => {
+// 2026-10-19, Mete: two roles. Editor = everything as before. Viewer = sees everything, can use Sandbox,
+// but cannot change shared data (Input, market CFR/indication, Excel import, backup load, news edit /
+// votes / Trader News, History log + delete). The role comes from Firestore roles/{email}
+// ({ role: 'editor' }); no document = viewer. firestore.rules enforces the same split server-side.
+let cteRole = 'viewer';
+const cteIsEditor = () => cteRole === 'editor';
+async function cteLoadRole(user){
+  cteRole = 'viewer';
+  try{
+    const email = String(user.email || '').toLowerCase();
+    const snap = await getDoc(doc(db, 'roles', email));
+    if (snap.exists() && snap.data() && snap.data().role === 'editor') cteRole = 'editor';
+  }catch(e){ console.warn('role lookup failed — treated as viewer', e); }
+  document.body.classList.toggle('role-viewer', !cteIsEditor());
+  const badge = document.getElementById('roleBadge');
+  if (badge) badge.style.display = cteIsEditor() ? 'none' : '';
+}
+onAuthStateChanged(auth, async (user) => {
   if (user && user.isAnonymous){ signOut(auth); return; }
-  if (user) showApp(); else showLogin();
+  if (user){ await cteLoadRole(user); showApp(); } else showLogin();
 });
 document.getElementById('loginForm').addEventListener('submit', (e) => {
   e.preventDefault();
