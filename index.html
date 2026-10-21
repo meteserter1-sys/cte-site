@@ -225,6 +225,9 @@
   body.role-viewer .history-del, body.role-viewer #logTodayBtn, body.role-viewer #historyNoteInput{ display:none !important; }
   body.role-viewer #inputtab input, body.role-viewer #inputtab select, body.role-viewer #inputtab textarea{ pointer-events:none; }
   body.role-viewer input.cell[readonly]{ background:rgba(255,255,255,.35); box-shadow:none; }
+  /* 2026-10-21, Mete: viewers see only News + VN Supply; every other tab is hidden for them. */
+  body.role-viewer .tab:not([data-tab="newstab"]):not([data-tab="vnsupply"]){ display:none !important; }
+  body.role-viewer main > section:not(#newstab):not(#vnsupply){ display:none !important; }
   .role-badge{ display:flex; align-items:center; padding:0 14px; font-size:12px; font-weight:700; color:var(--ink-2); white-space:nowrap; }
   .history-del{ flex:none; display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:999px; border:1px solid var(--edge); background:rgba(255,255,255,.6); color:var(--ink-3); cursor:pointer; padding:0; }
   .history-del:hover{ color:var(--bad, #c2410c); border-color:rgba(194,65,12,.4); background:#fff; }
@@ -4231,6 +4234,7 @@ function renderAll(){
 
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
+    if (!cteIsEditor() && !CTE_VIEWER_TABS.includes(tab.dataset.tab)) return;   // viewers: News + VN Supply only
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('main > section').forEach(s => s.classList.remove('active'));
     tab.classList.add('active');
@@ -4778,7 +4782,12 @@ function newsLastRunLabel(){
 }
 
 function newsSigned(s){ return s.direction === 'BULLISH' ? s.impact : s.direction === 'BEARISH' ? -s.impact : 0; }
-function newsQualifies(s){ return s.impact >= NEWS_MIN_IMPACT && s.confidence >= NEWS_MIN_CONF; }
+// 2026-10-21, Mete: Trader News (manual === true) always counts with the impact the desk gave it —
+// "benim conf 100": no confidence gate and no minimum-impact gate for manual entries.
+function newsQualifies(s){
+  if (s.manual === true) return Number(s.impact) > 0;
+  return s.impact >= NEWS_MIN_IMPACT && s.confidence >= NEWS_MIN_CONF;
+}
 function newsForProduct(product){ return product === 'ALL' ? newsDocs : newsDocs.filter(s => s.product === product); }
 function newsVisible(s){ return newsVotes[s.id] !== 'dislike'; }     // a 👎 hides the row
 
@@ -6206,7 +6215,7 @@ async function commitTraderNews(d){
     product: d.product,
     direction: d.direction,
     impact: d.impact,
-    confidence: d.confidence,
+    confidence: 100,               // desk-entered: the trader's own call, full confidence
     country: d.country || '',
     category: d.category,
     breaking: !!d.breaking,
@@ -6583,6 +6592,7 @@ function showLogin(errMsg){
 // ({ role: 'editor' }); no document = viewer. firestore.rules enforces the same split server-side.
 let cteRole = 'viewer';
 const cteIsEditor = () => cteRole === 'editor';
+const CTE_VIEWER_TABS = ['newstab', 'vnsupply'];
 async function cteLoadRole(user){
   cteRole = 'viewer';
   try{
@@ -6593,6 +6603,10 @@ async function cteLoadRole(user){
   document.body.classList.toggle('role-viewer', !cteIsEditor());
   const badge = document.getElementById('roleBadge');
   if (badge) badge.style.display = cteIsEditor() ? 'none' : '';
+  if (!cteIsEditor()){
+    const act = document.querySelector('.tab.active');
+    if (!act || !CTE_VIEWER_TABS.includes(act.dataset.tab)) document.querySelector('.tab[data-tab="newstab"]').click();
+  }
 }
 onAuthStateChanged(auth, async (user) => {
   if (user && user.isAnonymous){ signOut(auth); return; }
