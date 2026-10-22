@@ -559,6 +559,10 @@
   .sb-kv{ display:flex; justify-content:space-between; gap:10px; padding:7px 2px; border-top:1px solid var(--hair); font-size:13px; }
   .sb-kv b{ font-weight:700; }
   .sb-pos{ color:var(--good, #1f8a4c); } .sb-neg{ color:var(--bad, #c2410c); }
+  .sb-legs tr.sb-other td{ border-top:1px solid var(--hair); }
+  .sb-legs tr.sb-total td{ font-weight:800; }
+  .sb-legs tr.sb-other input.cell{ text-align:right; min-width:110px; }
+  input.cell.sb-neg{ color:var(--bad, #c2410c); }
   .sb-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
   .sb-btn{ cursor:pointer; border:1px solid var(--edge); background:rgba(255,255,255,.7); color:var(--ink); font:inherit; font-size:13px; font-weight:700; padding:8px 14px; border-radius:999px; }
   .sb-btn.primary{ background:linear-gradient(180deg, var(--orange-2), var(--orange)); color:#fff; border-color:transparent; }
@@ -1906,6 +1910,18 @@ function scheduleSave(){
   }, 400);
 }
 
+// 2026-10-22, Mete: the phone keypad opened by inputMode='decimal' has no minus key. On a TOUCH tap
+// the field switches to type=number right before it takes focus (number + symbol keyboard, with "-"),
+// and back to text on blur. Mouse/keyboard on a PC is untouched.
+function cteMinusKeyboard(inp){
+  inp.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'touch' || inp.readOnly || inp.type === 'number') return;
+    const raw = String(inp.value).replace(/,/g, '').trim();
+    inp.type = 'number'; inp.step = 'any'; inp.removeAttribute('inputmode');
+    inp.value = (raw === '' || Number.isNaN(Number(raw))) ? '' : raw;
+  });
+  inp.addEventListener('blur', () => { if (inp.type === 'number'){ inp.type = 'text'; inp.inputMode = 'decimal'; } });
+}
 function numInput(value, onChange, extraClass){
   const inp = document.createElement('input');
   inp.type = 'text';
@@ -1916,6 +1932,7 @@ function numInput(value, onChange, extraClass){
   inp.className = 'cell' + (extraClass ? ' ' + extraClass : '');
   inp.value = (value === null || value === undefined) ? '' : value;
   if (!cteIsEditor()){ inp.readOnly = true; inp.tabIndex = -1; }
+  cteMinusKeyboard(inp);
   inp.addEventListener('change', e => {
     if (!cteIsEditor()) return;
     const raw = e.target.value.replace(',', '.').trim();
@@ -4019,6 +4036,7 @@ function sbCompute(sel, ov){
   const spSBM = pick(ov.spSBM, carry ? spreadSBM(i) : 0);
   const spCorn = pick(ov.spCorn, carry ? spreadCorn(i) : 0);
   const cSale = pick(ov.cornSale, m.cornSale(i));
+  const sSale = pick(ov.sbmSale, null);          // 2026-10-22: SBM sale price — blank until the desk types one
   const wSale = pick(ov.wheatSale, m.wheatSale(i));
   const legs = t.legs.map(([code, q], k) => {
     const p = SB_PRODUCTS[code];
@@ -4030,15 +4048,20 @@ function sbCompute(sel, ov){
     if (p.kind === 'sbm') cfr = freight / 1.1023 + fob + sp;
     else if (p.kind === 'corn') cfr = freight / 0.39368 + fob + sp;
     else cfr = freight + fob;
-    let sale = null, pnl = null;
-    if (k > 0){
-      sale = p.kind === 'corn' ? cSale : (p.kind === 'wheat' ? wSale : null);
-      if (sale !== null && sale !== undefined) pnl = p.kind === 'corn' ? (sale - cfr) * qty * 0.3937 : (sale - cfr) * qty;
-    }
+    // 2026-10-22, Mete: main leg too — SBM sale / corn sale (one corn price for upriver and BB/NC) / wheat sale.
+    // P&L in USD: SBM $/st × st, corn ¢/bu → $ (39.37 bu/MT ÷ 100), wheat $/t × t. Main-leg P&L uses the
+    // CFR BEFORE top-off credits, so Total P&L never counts a top-off twice.
+    const sale = p.kind === 'corn' ? cSale : (p.kind === 'wheat' ? wSale : sSale);
+    let pnl = null;
+    if (sale !== null && sale !== undefined)
+      pnl = p.kind === 'corn' ? (sale - cfr) * qty * 0.3937 : p.kind === 'sbm' ? (sale - cfr) * qty * 1.1023 : (sale - cfr) * qty;
     return { code, label: p.label, kind: p.kind, main: k === 0, qty, liveQty: q, fob, liveFob, sp, cfr, sale, pnl };
   });
   const main = legs[0];
   const credit = legs.slice(1).reduce((a, l) => a + (l.pnl || 0), 0);
+  const otherCost = pick(ov.otherCost, null);
+  const anyPnl = legs.some(l => l.pnl !== null) || (otherCost !== null && otherCost !== undefined);
+  const totalPnl = anyPnl ? legs.reduce((a, l) => a + (l.pnl || 0), 0) + (otherCost || 0) : null;
   const conv = main.kind === 'sbm' ? 1.1023 : (main.kind === 'corn' ? 0.39368 : 1);
   const netRaw = main.qty ? main.cfr - credit / conv / main.qty : main.cfr;
   const net = mround(netRaw, 0.5);
@@ -4046,19 +4069,20 @@ function sbCompute(sel, ov){
   const rf = m.repl[fam];
   const repl = rf ? rf[carry ? 1 : 0](i).replacement : null;
   const ind = m.ind[fam] ? m.ind[fam](i) : null;
-  return { m, t, legs, main, freight, liveFreight, spSBM, spCorn, cSale, wSale, credit, net, netRaw, repl, ind, unit: SB_UNIT[main.kind], fam,
+  return { m, t, legs, main, freight, liveFreight, spSBM, spCorn, cSale, wSale, sSale, otherCost, totalPnl, credit, net, netRaw, repl, ind, unit: SB_UNIT[main.kind], fam,
            liveCornSale: m.cornSale(i), liveWheatSale: m.wheatSale(i), liveSpSBM: carry ? spreadSBM(i) : 0, liveSpCorn: carry ? spreadCorn(i) : 0 };
 }
 function sbFmt(v, d){ return (v === null || v === undefined || Number.isNaN(v)) ? '—' : v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }); }
-function sbInput(value, live, onSet){
+function sbInput(value, live, onSet, money){
   const inp = document.createElement('input');
   inp.type = 'text'; inp.inputMode = 'decimal'; inp.autocomplete = 'off'; inp.spellcheck = false;
   const changed = value !== live;
-  inp.className = 'cell' + (changed ? ' sb-ovr' : '');
-  inp.value = (value === null || value === undefined) ? '' : String(Math.round(value * 100) / 100);
+  inp.className = 'cell' + (changed ? ' sb-ovr' : '') + (money && value < 0 ? ' sb-neg' : '');
+  inp.value = (value === null || value === undefined) ? '' : (money ? sbFmt(value, 0) : String(Math.round(value * 100) / 100));
+  cteMinusKeyboard(inp);
   inp.title = 'Live value: ' + ((live === null || live === undefined) ? '—' : Math.round(live * 100) / 100);
   inp.addEventListener('change', e => {
-    const raw = e.target.value.replace(',', '.').trim();
+    const raw = money ? e.target.value.replace(/,/g, '').trim() : e.target.value.replace(',', '.').trim();
     const v = raw === '' ? null : parseFloat(raw);
     onSet(Number.isNaN(v) ? null : v);
     renderSandbox();
@@ -4120,13 +4144,30 @@ function renderSandbox(){
     tdF.appendChild(sbInput(l.fob, l.liveFob, v => { sbOv.fob = sbOv.fob || {}; sbOv.fob[k] = v; }));
     tr.appendChild(tdF);
     const tdC = document.createElement('td'); tdC.dataset.l = 'CFR'; tdC.innerHTML = `${sbFmt(l.cfr, 2)}<span class="sb-unit">${SB_UNIT[l.kind]}</span>`; tr.appendChild(tdC);
-    const tdS = document.createElement('td'); tdS.dataset.l = 'Sale'; if (l.main) tdS.classList.add('sb-na'); tdS.textContent = l.main ? '—' : sbFmt(l.sale, 1); tr.appendChild(tdS);
+    const noSale = l.sale === null || l.sale === undefined;
+    const tdS = document.createElement('td'); tdS.dataset.l = 'Sale'; if (noSale) tdS.classList.add('sb-na'); tdS.textContent = noSale ? '—' : sbFmt(l.sale, 1); tr.appendChild(tdS);
     const tdP = document.createElement('td'); tdP.dataset.l = 'P&L ($)';
-    if (l.main){ tdP.textContent = '—'; tdP.classList.add('sb-na'); }
+    if (l.pnl === null){ tdP.textContent = '—'; tdP.classList.add('sb-na'); }
     else { tdP.textContent = (l.pnl > 0 ? '+' : '') + sbFmt(l.pnl, 0); tdP.className = l.pnl >= 0 ? 'sb-pos' : 'sb-neg'; }
     tr.appendChild(tdP);
     tbl.appendChild(tr);
   });
+  {
+    // Other cost (total USD, signed: a cost is entered as a negative number) and Total P&L
+    const tr = document.createElement('tr'); tr.className = 'sb-other';
+    const a = document.createElement('td'); a.className = 'sb-lbl'; a.textContent = 'Other cost (USD)'; tr.appendChild(a);
+    for (let c = 0; c < 4; c++){ const d = document.createElement('td'); d.className = 'sb-na'; tr.appendChild(d); }
+    const d = document.createElement('td'); d.dataset.l = 'USD';
+    d.appendChild(sbInput(R.otherCost, null, v => { sbOv.otherCost = v; }, true)); tr.appendChild(d);
+    tbl.appendChild(tr);
+    const tt = document.createElement('tr'); tt.className = 'sb-total';
+    const ta = document.createElement('td'); ta.className = 'sb-lbl'; ta.textContent = 'Total P&L'; tt.appendChild(ta);
+    for (let c = 0; c < 4; c++){ const d2 = document.createElement('td'); d2.className = 'sb-na'; tt.appendChild(d2); }
+    const tv = document.createElement('td'); tv.dataset.l = 'Total P&L ($)';
+    if (R.totalPnl === null){ tv.textContent = '—'; }
+    else { tv.textContent = (R.totalPnl > 0 ? '+' : '') + sbFmt(R.totalPnl, 0); tv.className = R.totalPnl >= 0 ? 'sb-pos' : 'sb-neg'; }
+    tt.appendChild(tv); tbl.appendChild(tt);
+  }
   const sc1 = document.createElement('div'); sc1.className = 'sb-scroll'; sc1.appendChild(tbl); left.appendChild(sc1);
   // assumptions
   const tbl2 = document.createElement('table');
@@ -4143,8 +4184,9 @@ function renderSandbox(){
   addRow(`Freight (${R.t.fk}${sbSel.carry ? ', avg. with prev. month' : ''})`, R.freight, R.liveFreight, v => { sbOv.freight = v; }, '$/t');
   const kinds = new Set(R.legs.map(l => l.kind));
   const tops = new Set(R.legs.slice(1).map(l => l.kind));
-  if (tops.has('corn')) addRow('Corn sale price', R.cSale, R.liveCornSale, v => { sbOv.cornSale = v; }, '¢/bu basis');
-  if (tops.has('wheat')) addRow('Wheat sale price', R.wSale, R.liveWheatSale, v => { sbOv.wheatSale = v; }, '$/t');
+  if (kinds.has('sbm')) addRow('SBM sale price', R.sSale, null, v => { sbOv.sbmSale = v; }, '$/st basis');
+  if (kinds.has('corn')) addRow('Corn sale price', R.cSale, R.liveCornSale, v => { sbOv.cornSale = v; }, '¢/bu basis');
+  if (kinds.has('wheat')) addRow('Wheat sale price', R.wSale, R.liveWheatSale, v => { sbOv.wheatSale = v; }, '$/t');
   if (sbSel.carry){
     if (R.legs.some(l => l.kind === 'sbm' && SB_PRODUCTS[l.code].indexed)) addRow('SBM futures spread (prev. − this month)', R.spSBM, R.liveSpSBM, v => { sbOv.spSBM = v; }, '$/st');
     if (R.legs.some(l => l.kind === 'corn' && SB_PRODUCTS[l.code].indexed)) addRow('Corn futures spread (prev. − this month)', R.spCorn, R.liveSpCorn, v => { sbOv.spCorn = v; }, '¢/bu');
