@@ -138,6 +138,28 @@ GOOGLE_NEWS_QUERIES = [
     # rest once the headline is actually collected.
     ('Russia Ukraine ceasefire OR truce OR "peace deal" OR "peace plan" OR "energy targets" OR "agreed not to strike" OR "agreed not to hit" OR de-escalation',
                                                                                          'en-US', 'US', 'US:en'),
+    # 2026-10-26, Mete caught two misses live: (1) Peskov, 23-Oct: "trilateral US-Ukraine-Russia talks in Abu Dhabi
+    # in the first half of November" — no ceasefire/truce/peace-deal keyword, so the query above never saw it;
+    # (2) Lula's surprise run-off win in Brazil (25-Oct) — SBM -2%, corn -1% on Monday — and there was no Brazil/
+    # Argentina politics query at all. Five additions agreed with Mete (Indonesia/Malaysia, China, funds, dollar
+    # explicitly NOT wanted):
+    # 1. Brazil politics / macro (EN + PT)
+    ('Brazil election OR Lula OR "Brazilian real" OR "Brazil currency" agribusiness OR soybean OR soy OR farmers OR commodities',
+                                                                                         'en-US', 'US', 'US:en'),
+    ('Lula agronegócio OR eleição OR "dólar" OR câmbio soja OR milho OR "produtor rural"', 'pt-BR', 'BR', 'BR:pt-419'),
+    # 2. Argentina politics / export taxes (ES + EN)
+    ('Milei retenciones OR "derechos de exportación" OR "baja de retenciones" soja OR maíz OR trigo', 'es-419', 'AR', 'AR:es-419'),
+    ('Argentina Milei "export tax" OR "export taxes" OR retenciones soybean OR corn OR wheat OR farmers',
+                                                                                         'en-US', 'US', 'US:en'),
+    # 3. Russia-Ukraine peace talks, broad wording (no ceasefire keyword needed)
+    ('Russia Ukraine "peace talks" OR negotiations OR trilateral OR Peskov OR Witkoff OR "Abu Dhabi" OR Istanbul talks',
+                                                                                         'en-US', 'US', 'US:en'),
+    # 4. US-China trade (agriculture)
+    ('US China trade deal OR tariffs OR "trade talks" OR "trade truce" soybeans OR agriculture OR farm purchases',
+                                                                                         'en-US', 'US', 'US:en'),
+    # 5. Price-move safety net: market recaps that name the reason for a sharp futures move
+    ('"soymeal futures" OR "soybean meal futures" OR "corn futures" OR "wheat futures" OR "soybean futures" fall OR slide OR drop OR tumble OR jump OR rally OR surge',
+                                                                                         'en-US', 'US', 'US:en'),
     ('пшеница экспорт OR урожай зерна OR "зерновой коридор" OR ИКАР',                   'ru', 'RU', 'RU:ru'),
     ('соя OR "соевый шрот" OR кукуруза экспорт OR порт Новороссийск зерно',             'ru', 'RU', 'RU:ru'),
     ('експорт зерна OR пшениця OR кукурудза OR "зерновий коридор" OR порт Одеса',      'uk', 'UA', 'UA:uk'),
@@ -651,6 +673,16 @@ same order as the input, nothing else. Fields:
                  fundamentally about how much WHEAT (or CORN, if the headline is specifically about
                  corn cargoes) reaches the world market from Russia/Ukraine — classify it as WHEAT (or
                  CORN), a supply-volume story, not a freight/transit-cost one.
+                 POLITICS IN MAJOR ORIGINS (2026-10-26, Mete): an election result, change of government,
+                 export-tax / retenciones decision or currency shock in BRAZIL or ARGENTINA is NOT "general
+                 macro" — it drives farmer selling and export flows. Classify it: Brazil → SBM (CORN only
+                 when the story is specifically about corn), Argentina → SBM. Direction: weaker BRL/ARS,
+                 lower export taxes, a pro-export/pro-farmer result → more selling, BEARISH; a stronger
+                 currency, higher export taxes, export curbs → BULLISH; when the story states the market
+                 reaction, follow it. Russia-Ukraine PEACE TALKS (any wording: trilateral talks, negotiations,
+                 venue/date announced) → WHEAT, progress = BEARISH, breakdown = BULLISH. US-China trade
+                 deals / tariffs touching agriculture → SBM. A market-recap headline that reports a sharp
+                 SBM/CORN/WHEAT futures move together with its cause is classified on that cause, not SKIP.
                  SKIP = everything else, including former-FREIGHT stories (see above) and general
                         macro (Brent/energy moves, Fed rate, dollar index, VIX, bond yields, FX) that
                         isn't about SBM/CORN/WHEAT specifically — the desk no longer tracks a
