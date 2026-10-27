@@ -762,6 +762,13 @@ same order as the input, nothing else. Fields:
                  If the piece's own body says the market/price reaction has been modest or limited so far, follow
                  that over the headline and do not score impact above 40. Routine updates are false. Expect fewer
                  than 1 in 10.
+                 DECIDED POLITICAL EVENTS (2026-10-26, Mete — Lula's run-off win came in at 5.5 and not breaking):
+                 the announced RESULT of a scheduled political event in a country that counts (an election or
+                 run-off, referendum, government formation, an export-tax / trade-deal decision, a ceasefire
+                 or peace-talks date/venue being fixed) IS breaking on the day it is announced, even though the
+                 event was scheduled. Score impact on the expected market reaction: 60-80 when the result was a
+                 surprise against polls / expectations, 45-60 when it was expected. Previews, polls and
+                 "what it means" analysis pieces published AFTER the first report stay breaking=false.
   "eventType"  : one of "WEATHER","SUPPLY DEMAND","TRADE FLOW","POLICY","GEOPOLITICS","LOGISTICS","PRICE","DISEASE","ENERGY","FX","OTHER"
   "summary"    : ONE English sentence (max 28 words) stating what happened AND why it matters
                  for the importer's cost, whatever language the headline is in.
@@ -1608,6 +1615,101 @@ def maybe_send_morning_report(db):
     push_morning_report(db, report)
 
 
+# ---------------------------------------------------------------------------
+# End-of-day History snapshot (2026-10-27, Mete): "kimse save yapmasa bile sistem otomatik save alacak".
+# The page's "Log Today's Snapshot" writes logs/{YYYY-MM-DD} = {json: <the whole app state>, loggedAt,
+# note, news: <day's news reading>}. This does the same from the collector, so a day is never missing:
+#   - Monday–Friday (Vietnam calendar), in the 23:00–23:59 VN hour; plus a catch-up before 06:00 VN for
+#     the previous weekday if its run was missed (GitHub Actions can lag).
+#   - A log that already exists for that date (taken by hand) is NEVER overwritten — the manual one wins.
+#   - note = "Auto (end of day)", auto = True, so the History list shows which days were automatic.
+# The news block mirrors index.html's buildNewsSnapshot(): the 12h-full / 12h-linear-decay model.
+AUTOLOG_HOUR_VN = 23
+NEWS_PLATEAU_H, NEWS_ZERO_H = 12, 24          # must match index.html NEWS_DECAY_PLATEAU_H / NEWS_DECAY_ZERO_H
+PAGE_MIN_IMPACT, PAGE_MIN_CONF = 40, 50       # index.html NEWS_MIN_IMPACT / NEWS_MIN_CONF
+
+
+def _decay_weight(age_ms: int) -> float:
+    plateau, zero = NEWS_PLATEAU_H * 3600 * 1000, NEWS_ZERO_H * 3600 * 1000
+    if age_ms <= plateau:
+        return 1.0
+    t = (age_ms - plateau) / (zero - plateau)
+    return 0.0 if t >= 1 else 1.0 - t
+
+
+def _qualifies(d: dict) -> bool:
+    if d.get('manual') is True:                           # Trader News: always counts at the impact given
+        return float(d.get('impact') or 0) > 0
+    return (d.get('impact') or 0) >= PAGE_MIN_IMPACT and (d.get('confidence') or 0) >= PAGE_MIN_CONF
+
+
+def build_news_snapshot(db, end_ms: int) -> dict | None:
+    try:
+        snaps = list(db.collection('news').where('ms', '>=', end_ms - NEWS_ZERO_H * 3600 * 1000).stream())
+    except Exception as e:  # noqa: BLE001
+        print(f'  ! auto log: could not read news ({e})', file=sys.stderr)
+        return None
+    docs = [d for d in (sn.to_dict() for sn in snaps) if d and d.get('ms') and d['ms'] <= end_ms]
+    out = {'asOf': end_ms, 'tz': 'Asia/Ho_Chi_Minh', 'products': {}, 'top': []}
+    for p in ('WHEAT', 'CORN', 'SBM', 'FREIGHT'):
+        net = absum = 0.0
+        n = bull = bear = 0
+        for d in docs:
+            if d.get('product') != p or not _qualifies(d):
+                continue
+            w = _decay_weight(end_ms - d['ms'])
+            if w <= 0:
+                continue
+            imp = float(d.get('impact') or 0)
+            sign = 1 if d.get('direction') == 'BULLISH' else -1 if d.get('direction') == 'BEARISH' else 0
+            n += 1; net += sign * imp * w; absum += imp * w
+            bull += sign > 0; bear += sign < 0
+        out['products'][p] = {'net': net, 'bull': bull, 'bear': bear, 'n': n,
+                              'balance': round(1000 * net / absum) / 10 if absum else 0}
+    top = sorted(docs, key=lambda d: -(d.get('impact') or 0))[:5]
+    out['top'] = [{'headline': d.get('headline', ''), 'direction': d.get('direction'), 'impact': d.get('impact'),
+                   'product': d.get('product'), 'trend': d.get('trend') or 1, 'breaking': bool(d.get('breaking'))} for d in top]
+    return out
+
+
+def maybe_auto_log(db):
+    from datetime import timedelta
+    vn = _vn_now()
+    if vn.hour == AUTOLOG_HOUR_VN and vn.weekday() < 5:
+        day = vn
+    elif vn.hour < 6:
+        day = vn - timedelta(days=1)                     # catch-up for a missed 23:xx run
+        if day.weekday() >= 5:
+            return
+    else:
+        return
+    key = day.strftime('%Y-%m-%d')
+    ref = db.collection('logs').document(key)
+    try:
+        if ref.get().exists:
+            return                                        # already logged (by hand or an earlier run) — never overwrite
+        main_doc = db.collection('app_data').document('main').get()
+    except Exception as e:  # noqa: BLE001
+        print(f'  ! auto log: read failed ({e})', file=sys.stderr)
+        return
+    data = main_doc.to_dict() if main_doc.exists else None
+    if not data or not data.get('json'):
+        print('  ! auto log: app_data/main has no state — skipped', file=sys.stderr)
+        return
+    if day.date() == vn.date():
+        end_ms = int(time.time() * 1000)
+    else:                                                 # catch-up: read the news as of 23:59 VN that day
+        end_ms = int((datetime(day.year, day.month, day.day, 23, 59, tzinfo=timezone.utc)
+                      - timedelta(hours=VN_OFFSET_HOURS)).timestamp() * 1000)
+    try:
+        ref.set({'json': data['json'], 'loggedAt': datetime.now(timezone.utc).isoformat(),
+                 'note': 'Auto (end of day)', 'auto': True, 'news': build_news_snapshot(db, end_ms)})
+    except Exception as e:  # noqa: BLE001
+        print(f'  ! auto log: write failed ({e})', file=sys.stderr)
+        return
+    print(f'  auto log written for {key}')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--dry-run', action='store_true', help='do not write to Firestore')
@@ -1653,6 +1755,7 @@ def main():
             save_cache(cache)
             sync_prices(db)
             maybe_send_morning_report(db)
+            maybe_auto_log(db)
             print(f'  pruned {pruned} events older than {RETENTION_DAYS} days')
         print('nothing new. done.')
         return
@@ -1691,6 +1794,7 @@ def main():
     pruned = prune_old(db)
     sync_prices(db)
     maybe_send_morning_report(db)
+    maybe_auto_log(db)
     # Everything the model actually answered for — kept, folded or skipped — is "seen": never pay
     # for it twice. Stories from a failed batch are left out so they come back next run.
     for s in new_stories:
