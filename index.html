@@ -203,6 +203,13 @@
   .month-chip.on{ color:#fff; background:linear-gradient(180deg, var(--orange-2), var(--orange)); box-shadow:0 6px 14px -6px rgba(242,96,12,.65), inset 0 1px 0 rgba(255,255,255,.45); }
   .month-chip.pop{ animation:chip-pop .4s cubic-bezier(.3,1.4,.5,1); }
   .month-chip.dragging{ opacity:.7; box-shadow:0 10px 22px -6px rgba(40,26,12,.5); position:relative; z-index:2; }
+  .avg-picker{ display:flex; align-items:center; gap:8px; margin:-6px 0 16px; font-size:12.5px; font-weight:600; color:var(--ink-2); }
+  .avg-picker select{ font:inherit; padding:5px 8px; border-radius:10px; border:1px solid var(--edge); background:rgba(255,255,255,.7); color:var(--ink); }
+  .avg-picker-out{ color:var(--orange); font-size:14px; letter-spacing:.04em; }
+  .results-table tr.avg-row td{ border-top:2px solid rgba(242,96,12,.35); font-weight:700; background:rgba(242,96,12,.06); }
+  .results-table tr.avg-row td.rowlabel{ color:var(--orange); letter-spacing:.04em; }
+  .results-table tr.avg-row td.best{ background:radial-gradient(circle at 30% 20%, #5fd69a, var(--bull) 70%); }
+  .results-table .avg-n{ display:block; font-size:9.5px; font-weight:600; color:var(--ink-3); }
   .month-reset{ padding:7px 12px; border-radius:999px; border:1px dashed rgba(42,36,32,.22); color:var(--ink-2); font-size:11.5px; font-weight:600; cursor:pointer; }
   .month-reset:hover{ color:var(--orange); border-color:var(--orange); }
   /* single-choice groups (VN Supply product/month/region, News ranges and product filter) */
@@ -756,6 +763,10 @@ const defaultState = {
   // Sep→Jan reads in the right order). null = natural Jan→Dec order. See monthOrderArr()/
   // visibleMonthIndices() below and the drag handler in attachMonthDrag().
   monthOrder: null,
+  // 2026-10-22, Mete: period-average row under every Vietnam/Malaysia/Indonesia table. {from, to} =
+  // month indices; the period is every VISIBLE month from `from` to `to` in the table's own order
+  // (always consecutive). Shared like the month chips — the same on every device. null = not set.
+  avgPeriod: null,
 
   // Malaysia: FOB and Futures are shared with Vietnam (same market). Freight and
   // corn sale price are destination-specific, matching the source file.
@@ -2298,6 +2309,51 @@ function buildEditTable(rows, getVal, setVal){
   return wrap;
 }
 
+// ── Period average (2026-10-22) ────────────────────────────────────────────
+// The months between avgPeriod.from and avgPeriod.to among the visible months, in table order.
+function avgPeriodMonths(){
+  const vis = visibleMonthIndices();
+  const ap = state.avgPeriod;
+  if (!ap) return [];
+  const a = vis.indexOf(ap.from), b = vis.indexOf(ap.to);
+  if (a < 0 || b < 0 || a > b) return [];
+  return vis.slice(a, b + 1);
+}
+function avgPeriodLabel(months){
+  if (!months.length) return '';
+  if (months.length === 1) return MONTHS_FULL[months[0]];
+  return months.map(i => MONTHS_FULL[i][0]).join('');
+}
+function renderAvgPeriodPicker(el){
+  const vis = visibleMonthIndices();
+  const months = avgPeriodMonths();
+  const box = document.createElement('div');
+  box.className = 'avg-picker';
+  const lab = document.createElement('span'); lab.className = 'avg-picker-lbl'; lab.textContent = 'Period average'; box.appendChild(lab);
+  const mk = (cur, onPick) => {
+    const sel = document.createElement('select');
+    sel.innerHTML = '<option value="">—</option>' + vis.map(i => `<option value="${i}"${i === cur ? ' selected' : ''}>${MONTHS_FULL[i]}</option>`).join('');
+    sel.disabled = !cteIsEditor();
+    sel.addEventListener('change', () => onPick(sel.value === '' ? null : parseInt(sel.value, 10)));
+    return sel;
+  };
+  const ap = state.avgPeriod || {};
+  const set = (from, to) => {
+    if (from === null && to === null){ state.avgPeriod = null; }
+    else {
+      if (from === null) from = to; if (to === null) to = from;
+      if (vis.indexOf(to) < vis.indexOf(from)) to = from;      // always a forward, consecutive range
+      state.avgPeriod = { from, to };
+    }
+    scheduleSave(); renderAll();
+  };
+  box.appendChild(mk(months.length ? ap.from : null, v => set(v, months.length ? ap.to : null)));
+  const dash = document.createElement('span'); dash.textContent = '→'; dash.className = 'avg-picker-dash'; box.appendChild(dash);
+  box.appendChild(mk(months.length ? ap.to : null, v => set(months.length ? ap.from : null, v)));
+  const out = document.createElement('b'); out.className = 'avg-picker-out'; out.textContent = months.length ? avgPeriodLabel(months) : ''; box.appendChild(out);
+  el.appendChild(box);
+}
+
 function renderComboTable(el, opts){
   const { title, combos, labels, mainFour, computeFn, cfrArr, indArr, balArr, avgArr, localPriceFn, noteHtml } = opts;
   const visible = visibleMonthIndices();
@@ -2373,6 +2429,54 @@ function renderComboTable(el, opts){
 
     table.appendChild(tr);
   });
+
+  const per = avgPeriodMonths();
+  if (per.length){
+    const n = per.length;
+    const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+    const has = v => v !== null && v !== undefined && v !== '' && !Number.isNaN(v);
+    const rows = per.map(i => ({ i, ...computeFn(i) }));
+    const tr = document.createElement('tr');
+    tr.className = 'avg-row';
+    const comboAvg = {};
+    combos.forEach(c => { comboAvg[c] = avg(rows.map(r => r.vals[c])); });
+    const bestVal = Math.min(...mainFour.map(k => comboAvg[k]));
+    const replAvg = avg(rows.map(r => r.replacement));
+    const cnt = (k) => k < n ? `<small class="avg-n">${k}/${n}</small>` : '';
+    let html = `<td class="rowlabel" title="Average of ${per.map(i => MONTHS_FULL[i]).join(', ')}">${avgPeriodLabel(per)}</td>`;
+    combos.forEach(c => {
+      const isBest = mainFour.includes(c) && comboAvg[c] === bestVal;
+      html += `<td class="combo${isBest ? ' best' : ''}">${comboAvg[c].toFixed(1)}</td>`;
+    });
+    html += `<td class="repl">${replAvg.toFixed(1)}</td>`;
+    const cfrs = per.map(i => cfrArr[i]).filter(has);
+    html += `<td class="avg-v">${cfrs.length ? avg(cfrs).toFixed(1) + cnt(cfrs.length) : '—'}</td>`;
+    const indRows = rows.filter(r => has(indArr[r.i]));
+    html += `<td class="avg-v">${indRows.length ? avg(indRows.map(r => indArr[r.i])).toFixed(1) + cnt(indRows.length) : '—'}</td>`;
+    if (indRows.length){
+      const d = avg(indRows.map(r => indArr[r.i] - r.replacement));   // only months that carry an indication
+      html += `<td class="${d >= 0 ? 'delta-pos' : 'delta-neg'}">${(d > 0 ? '+' : '') + d.toFixed(1)}</td>`;
+    } else html += '<td>—</td>';
+    if (localPriceFn){
+      const loc = per.map(i => localPriceFn(i)).filter(v => v !== null).map(v => parseFloat(String(v).replace(/\./g, '').replace('d', '')));
+      html += `<td class="combo">${loc.length ? formatLocalPrice(avg(loc)) + cnt(loc.length) : '—'}</td>`;
+    }
+    if (balArr){
+      const bals = per.map(i => balArr[i]).filter(has);
+      const tot = bals.reduce((x, y) => x + y, 0);
+      html += `<td class="avg-v" style="color:${balColor(tot)}">${bals.length ? tot.toLocaleString('en-US') : '—'}</td>`;   // balance: total, not average
+    }
+    if (avgArr){
+      // booked price: weighted by the month's balance (|balance|); simple average if no balance is set
+      const pr = per.filter(i => has(avgArr[i]));
+      const w = pr.map(i => has(balArr && balArr[i]) ? Math.abs(balArr[i]) : 0);
+      const ws = w.reduce((x, y) => x + y, 0);
+      const v = !pr.length ? null : ws > 0 ? pr.reduce((x, i, k) => x + avgArr[i] * w[k], 0) / ws : avg(pr.map(i => avgArr[i]));
+      html += `<td class="avg-v">${v === null ? '—' : v.toFixed(1)}</td>`;
+    }
+    tr.innerHTML = html;
+    table.appendChild(tr);
+  }
 
   wrap.appendChild(table);
   el.appendChild(wrap);
@@ -2550,6 +2654,7 @@ function renderResults(){
   el.innerHTML = '';
 
   renderMonthFilter(el);
+  renderAvgPeriodPicker(el);
 
   const sbmCombos = ['5M2C','5M2W','4M3C','3M4C','4M1C','3M2C','2M3C'];
   const sbmMainFour = ['5M2C','5M2W','4M3C','3M4C'];
@@ -2612,6 +2717,7 @@ function renderMYResults(){
   el.innerHTML = '';
 
   renderMonthFilter(el);
+  renderAvgPeriodPicker(el);
 
   const myCombos = ['5M2C','4M3C','3M4C','4M1C','3M2C','2M3C'];
   const myMainTwo = ['4M3C','3M4C'];
@@ -2670,6 +2776,7 @@ function renderIDResults(){
   el.innerHTML = '';
 
   renderMonthFilter(el);
+  renderAvgPeriodPicker(el);
 
   const idCombos = ['5M2C','5M2W','4M1W','4M1C','3M2C','2M3C','7M','5M'];
   const idMainSeven = ['5M2C','5M2W','4M1W','4M1C','3M2C','7M','5M'];
@@ -4850,9 +4957,11 @@ function newsVisible(s){ return newsVotes[s.id] !== 'dislike'; }     // a 👎 h
 // 48 at hour 3, ... 6 at hour 10, 0 at hour 11 — confirmed with Mete before implementing. Nothing
 // else in the file reads a hard 24h impact window anymore; NEWS_WINDOW_MS survives only for the
 // unrelated "top headlines of the day" list in buildNewsSnapshot() below.
-const NEWS_DECAY_PLATEAU_MS = 1 * 3600 * 1000;                    // full weight for the first hour
-const NEWS_DECAY_ZERO_H = 11;                                     // fully zero (and out of the lookback) by this many hours old
-const NEWS_DECAY_RAMP_MS = (NEWS_DECAY_ZERO_H - 1) * 3600 * 1000; // the straight-line part spans this long, right after the plateau
+// 2026-10-27, Mete: 1h full + 10h ramp (zero at 11h) → 12h FULL weight, then a 12h straight-line ramp, zero at 24h.
+const NEWS_DECAY_PLATEAU_H = 12;
+const NEWS_DECAY_PLATEAU_MS = NEWS_DECAY_PLATEAU_H * 3600 * 1000;  // full weight for the first 12 hours
+const NEWS_DECAY_ZERO_H = 24;                                     // fully zero (and out of the lookback) by this many hours old
+const NEWS_DECAY_RAMP_MS = (NEWS_DECAY_ZERO_H - NEWS_DECAY_PLATEAU_H) * 3600 * 1000; // the straight-line part spans this long, right after the plateau
 const NEWS_DECAY_LOOKBACK_MS = NEWS_DECAY_ZERO_H * 3600 * 1000;   // nothing older than this contributes at all
 
 function newsDecayWeight(ageMs){
@@ -5623,8 +5732,13 @@ function renderNewsChart(){
   left.style.cssText = 'flex:1; min-width:180px;';
   let big = '—';
   if (hasPrice){
-    const last = bars[bars.length - 1].c, first = bars[0].c, chg = first ? (last - first) / first * 100 : 0;
-    big = `${newsFmtPrice(q ? q.price : last)}<small class="${chg >= 0 ? 'up' : 'down'}">${chg >= 0 ? '▲' : '▼'} ${Math.abs(chg).toFixed(1)}%</small><small style="color:var(--ink-3)">${zoomed ? 'in view' : rangeDef.label.toLowerCase()}</small>`;
+    // 2026-10-27, Mete: on Daily (not zoomed) the % is day-over-day vs the previous settlement — the same
+    // figure as the product tile; every other range / a zoomed view shows the change across what is in view.
+    const last = bars[bars.length - 1].c, first = bars[0].c;
+    const dayPct = !zoomed && rangeDef.key === '1D' && q && q.pct != null;
+    const chg = dayPct ? q.pct : (first ? (last - first) / first * 100 : 0);
+    const lbl = dayPct ? 'daily · vs prev. close' : (zoomed ? 'in view' : rangeDef.label.toLowerCase() + ' · in view');
+    big = `${newsFmtPrice(q ? q.price : last)}<small class="${chg >= 0 ? 'up' : 'down'}">${chg >= 0 ? '▲' : '▼'} ${Math.abs(chg).toFixed(1)}%</small><small style="color:var(--ink-3)">${lbl}</small>`;
   } else if (!priceOnly && now.n){
     big = `<span class="${now.net > 0 ? 'up' : now.net < 0 ? 'down' : ''}">${newsFmtSigned(now.net)}</span><small style="color:var(--ink-3)">net impact</small>`;
   }
