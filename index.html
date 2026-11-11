@@ -227,6 +227,7 @@
   .history-row:hover{ transform:translateY(-1px); background:rgba(255,255,255,.72); box-shadow:inset 0 1px 0 #fff, 0 12px 24px -16px rgba(40,26,12,.5); }
   .history-date{ font-size:13.5px; font-weight:700; color:var(--ink); }
   .history-note{ font-size:12px; color:var(--ink-2); text-align:right; }
+  .history-by{ font-size:11px; font-weight:600; color:var(--ink-3); background:rgba(42,36,32,.06); padding:2px 8px; border-radius:999px; white-space:nowrap; }
   .history-right{ display:flex; align-items:center; gap:10px; min-width:0; }
   body.role-viewer #importBtn, body.role-viewer .vns-import-row, body.role-viewer .news-votes, body.role-viewer #traderNewsAddBtn,
   body.role-viewer .history-del, body.role-viewer #logTodayBtn, body.role-viewer #historyNoteInput{ display:none !important; }
@@ -2833,6 +2834,15 @@ function escapeHtml(s){
 // marker dots (2026-09-23) to build clickable <a href="..."> links from story URLs.
 function escapeAttr(s){ return escapeHtml(s).replace(/"/g, '&quot;'); }
 
+// 2026-11-11 (Mete): History shows who saved each log. The name comes from the signed-in account's
+// email (Firebase Auth), so nobody types it; unknown editors fall back to their email prefix.
+const CTE_LOGGER_NAMES = { 'meteserter1': 'Mete S.', 'wenjun.chua': 'Wen J.', 'selcuk': 'Selcuk A.', 'ben.gliddon': 'Ben G.' };
+function cteLoggerName(){
+  const email = ((auth.currentUser && auth.currentUser.email) || '').toLowerCase();
+  const prefix = email.split('@')[0];
+  return CTE_LOGGER_NAMES[prefix] || prefix || '';
+}
+
 async function logTodaySnapshot(){
   if (!cteIsEditor()) return;
   const noteInput = document.getElementById('historyNoteInput');
@@ -2850,7 +2860,8 @@ async function logTodaySnapshot(){
       json: JSON.stringify(state),
       loggedAt: new Date().toISOString(),
       note: note || '',
-      news: newsBlock
+      news: newsBlock,
+      loggedBy: cteLoggerName()
     });
     btn.textContent = 'Saved ✓';
     setTimeout(() => { btn.textContent = original; btn.disabled = false; }, 1500);
@@ -2875,7 +2886,7 @@ async function loadHistoryList(){
     historyDatesCache = [];
     snap.forEach(d => {
       const data = d.data();
-      historyDatesCache.push({ key: d.id, note: data.note || '', loggedAt: data.loggedAt });
+      historyDatesCache.push({ key: d.id, note: data.note || '', loggedAt: data.loggedAt, by: data.auto ? 'Auto' : (data.loggedBy || '') });
     });
     renderHistoryList();
   }catch(e){
@@ -2906,7 +2917,7 @@ function renderHistoryList(){
     const row = document.createElement('div');
     row.className = 'history-row';
     row.innerHTML = `<span class="history-date">${formatDateKeyLong(entry.key)}</span>` +
-      `<span class="history-right">${entry.note ? `<span class="history-note">${escapeHtml(entry.note)}</span>` : ''}` +
+      `<span class="history-right">${entry.note && entry.note !== 'Auto (end of day)' ? `<span class="history-note">${escapeHtml(entry.note)}</span>` : ''}${entry.by ? `<span class="history-by">${escapeHtml(entry.by)}</span>` : ''}` +
       `<button class="history-del" title="Delete this snapshot" aria-label="Delete this snapshot"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></span>`;
     row.addEventListener('click', () => openHistoryDate(entry.key));
     row.querySelector('.history-del').addEventListener('click', async (ev) => {
@@ -5053,6 +5064,19 @@ function newsMarkersFor(product, xMin, xMax){
   return out;
 }
 
+// 2026-11-11 (Mete, Seçenek 2): the chart's news line is a CUMULATIVE index — it starts at 0 on the
+// left edge of the visible window and every qualifying headline steps it up (bullish) or down
+// (bearish) by its own signed impact, and it stays there (no decay). It shows which way the news
+// flow has built up over the range in view. The 12h-full + 12h-fading decay still drives the "net"
+// figure in the tiles and in the chart header (current pressure) — the two answer different questions.
+function newsCumSeries(product, xMin, xMax){
+  const asc = newsForProduct(product).filter(newsQualifies).filter(s => s.ms >= xMin && s.ms <= xMax && newsSigned(s) !== 0)
+    .slice().sort((a, b) => a.ms - b.ms);
+  let cum = 0;
+  return asc.map(s => { cum += newsSigned(s); return { ms: s.ms, cum, direction: s.direction, impact: s.impact, url: s.url, headline: s.headline, breaking: s.breaking === true }; });
+}
+function newsCumAt(ev, t){ let v = 0; for (let i = 0; i < ev.length && ev[i].ms <= t; i++) v = ev[i].cum; return v; }
+
 // ── Price-anomaly alert ("flash haber" safety net, README item 14B) ─────────────────────────────
 // 2026-09-15, Mete: "%1 artar veya azalırsa sistem alarm versin." No matter how far the collector's
 // source list grows (items 12/13/14A), some flash headline will always slip through uncollected —
@@ -5685,6 +5709,9 @@ function renderNewsChart(){
   // a small dot on it at the moment it was published (green bullish, red bearish) that opens the
   // article. FREIGHT is price-only (Brent). Same data as before: newsSmoothSeries() for the line,
   // newsMarkersFor() for the dots, Firestore prices/{product} for the price.
+  // 2026-11-11 (Mete, Seçenek 2): the two panes are merged back into ONE panel — price on the right
+  // axis, the cumulative news index (newsCumSeries) on the left axis, both auto-scaled; dots sized by
+  // impact, breaking ones with a halo. No caption under the chart.
   const product = newsUI.chartProduct;
   const box = document.createElement('div');
   box.className = 'glass news-chart';
@@ -5708,14 +5735,13 @@ function renderNewsChart(){
   }
   const zoomed = !!newsUI.chartZoom;
   const priceOnly = product === 'FREIGHT';
-  const pts = priceOnly ? [] : newsSmoothSeries(product, xMin, xMax);
-  const markers = priceOnly ? [] : newsMarkersFor(product, xMin, xMax);
+  const ev = priceOnly ? [] : newsCumSeries(product, xMin, xMax);
   const priceRec = newsPrices[product];
   const useIntraday = rangeDef.key === '1D';
   const rawBars = priceRec && Array.isArray(useIntraday ? priceRec.intraday : priceRec.bars)
     ? (useIntraday ? cleanIntraday(priceRec.intraday, priceRec.bars) : priceRec.bars) : [];
   const bars = rawBars.filter(b => b.t >= xMin && b.t <= xMax).sort((a, b) => a.t - b.t);
-  const hasPrice = bars.length >= 2, hasNet = pts.length >= 2;
+  const hasPrice = bars.length >= 2, hasNet = ev.length >= 1;
 
   // ---- header
   const zoomBar = () => {
@@ -5742,13 +5768,15 @@ function renderNewsChart(){
   } else if (!priceOnly && now.n){
     big = `<span class="${now.net > 0 ? 'up' : now.net < 0 ? 'down' : ''}">${newsFmtSigned(now.net)}</span><small style="color:var(--ink-3)">net impact</small>`;
   }
-  left.innerHTML = `<div class="news-chart-title">${product} · ${PRICE_LABELS[product] || 'price'}${priceOnly ? '' : ' and news net impact'}</div>` +
+  const cumNow = ev.length ? ev[ev.length - 1].cum : 0;
+  const sinceFmt = (xMax - xMin) <= 1.05 * 86400000 ? { hour: '2-digit', minute: '2-digit', hour12: false } : { day: '2-digit', month: 'short' };
+  left.innerHTML = `<div class="news-chart-title">${product} · ${PRICE_LABELS[product] || 'price'}${priceOnly ? '' : ' and news index'}</div>` +
     `<div class="news-chart-big">${big}</div>` +
-    (priceOnly ? '' : `<div class="news-chart-sub">net <b class="${now.net > 0 ? 'up' : now.net < 0 ? 'down' : ''}">${now.n ? newsFmtSigned(now.net) : '—'}</b> · ${now.bull} bullish / ${now.bear} bearish · ${now.n} events · ${count} in ${NEWS_HISTORY_DAYS}d</div>`);
+    (priceOnly ? '' : `<div class="news-chart-sub">news index <b class="${cumNow > 0 ? 'up' : cumNow < 0 ? 'down' : ''}">${ev.length ? newsFmtSigned(cumNow) : '0'}</b> since ${newsFmt(xMin, sinceFmt)} · net 24h <b class="${now.net > 0 ? 'up' : now.net < 0 ? 'down' : ''}">${now.n ? newsFmtSigned(now.net) : '—'}</b> · ${now.bull} bullish / ${now.bear} bearish · ${count} in ${NEWS_HISTORY_DAYS}d</div>`);
   head.appendChild(left);
   const legend = document.createElement('div');
   legend.className = 'news-legend';
-  legend.innerHTML = `<span><i style="background:var(--orange)"></i>Price</span>` + (priceOnly ? '' : `<span><i style="background:linear-gradient(90deg,var(--bull) 50%,var(--bear) 50%)"></i>Net impact</span>`);
+  legend.innerHTML = `<span><i style="background:var(--orange)"></i>Price</span>` + (priceOnly ? '' : `<span><i style="background:linear-gradient(90deg,var(--bull) 50%,var(--bear) 50%)"></i>News index</span>`);
   legend.appendChild(zoomBar());          // + / − (and reset while zoomed) sit with the legend, clear of the lines
   head.appendChild(legend);
   head.appendChild(renderNewsRangeBar());
@@ -5765,22 +5793,35 @@ function renderNewsChart(){
   }
 
   // ---- geometry (viewBox units; the svg scales uniformly to its container)
+  // One panel: price on the right axis, cumulative news index on the left axis, each auto-scaled
+  // to what is in view (the index range always includes 0).
   const host = document.getElementById('newstab');
   const full = (host && host.clientWidth) || 1000;
   const W = Math.max(340, (window.innerWidth > 1100 ? full - 330 - 12 : full) - 38);
-  const padL = 6, padR = 58, top = 14;
   const showNet = !priceOnly && hasNet;
-  const hP = hasPrice ? (showNet ? 158 : 222) : 0, gap = hasPrice && showNet ? 28 : (showNet ? 14 : 0), hN = showNet ? (hasPrice ? 66 : 200) : 0;
-  const Ht = top + hP + gap + hN + 24;
+  const padL = showNet ? 46 : 6, padR = hasPrice ? 58 : 14, top = 24;
+  const hP = 236;
+  const Ht = top + hP + 24, bot = top + hP;
   const X = t => padL + (t - xMin) / ((xMax - xMin) || 1) * (W - padL - padR);
-  let svg = '<defs><linearGradient id="newsPriceFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f2600c" stop-opacity=".30"/><stop offset="1" stop-color="#f2600c" stop-opacity="0"/></linearGradient>';
-  let P = [], N = [], YN = null, Yp = null, nt = 0, zero = 0;
+  let svg = '<defs><linearGradient id="newsPriceFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f2600c" stop-opacity=".12"/><stop offset="1" stop-color="#f2600c" stop-opacity="0"/></linearGradient>';
+  let P = [], Yp = null, YN = null, zero = 0;
   if (showNet){
-    nt = top + hP + gap; zero = nt + hN / 2;
-    svg += `<linearGradient id="newsNetFill" gradientUnits="userSpaceOnUse" x1="0" y1="${nt}" x2="0" y2="${nt + hN}"><stop offset="0" stop-color="#1f9d61" stop-opacity=".55"/><stop offset=".5" stop-color="#1f9d61" stop-opacity=".08"/><stop offset=".5" stop-color="#e0463c" stop-opacity=".08"/><stop offset="1" stop-color="#e0463c" stop-opacity=".55"/></linearGradient>` +
-      `<clipPath id="newsNetUp"><rect x="0" y="0" width="${W}" height="${zero}"/></clipPath><clipPath id="newsNetDown"><rect x="0" y="${zero}" width="${W}" height="${hN}"/></clipPath>`;
-  }
-  svg += '</defs>';
+    let lo = Math.min(0, ...ev.map(e => e.cum)), hi = Math.max(0, ...ev.map(e => e.cum));
+    if (hi - lo < 20){ const c = (hi + lo) / 2; lo = Math.min(0, c - 10); hi = Math.max(0, c + 10); }
+    const pad = (hi - lo) * 0.12; lo -= pad; hi += pad;
+    YN = v => top + (hi - v) / (hi - lo) * hP;
+    zero = YN(0);
+    svg += `<clipPath id="newsNetUp"><rect x="0" y="0" width="${W}" height="${zero.toFixed(1)}"/></clipPath><clipPath id="newsNetDown"><rect x="0" y="${zero.toFixed(1)}" width="${W}" height="${(bot - zero + 2).toFixed(1)}"/></clipPath>`;
+    svg += '</defs>';
+    // left axis: 0 plus the top / bottom of the range
+    const ticks = [0];
+    const nice = v => { const a = Math.abs(v); const st = a >= 200 ? 50 : a >= 80 ? 20 : 10; return Math.trunc(v / st) * st; };
+    const tHi = nice(hi), tLo = nice(lo);
+    if (tHi > 0 && YN(tHi) < zero - 14) ticks.push(tHi);
+    if (tLo < 0 && YN(tLo) > zero + 14) ticks.push(tLo);
+    ticks.forEach(v => { svg += `<text class="news-axis" x="${padL - 7}" y="${(YN(v) + 3.5).toFixed(1)}" text-anchor="end">${v === 0 ? '0' : newsFmtSigned(v)}</text>`; });
+    svg += `<text class="news-pane-label" x="${padL - 7}" y="12" text-anchor="end">INDEX</text>`;
+  } else svg += '</defs>';
   if (hasPrice){
     let lo = Math.min(...bars.map(b => b.c)), hi = Math.max(...bars.map(b => b.c));
     const pad = (hi - lo) * 0.12 || 1; lo -= pad; hi += pad;
@@ -5790,22 +5831,26 @@ function renderNewsChart(){
       const v = lo + (hi - lo) * i / 3, y = Yp(v);
       svg += `<line x1="${padL}" x2="${W - padR}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(42,36,32,.07)"/><text class="news-axis" x="${W - padR + 8}" y="${(y + 3.5).toFixed(1)}">${newsFmtPrice(v)}</text>`;
     }
-    const line = newsSmoothPath(P), lastP = P[P.length - 1];
-    svg += `<path d="${line}L${lastP[0].toFixed(1)} ${top + hP}L${P[0][0].toFixed(1)} ${top + hP}Z" fill="url(#newsPriceFill)"/>` +
-      `<path d="${line}" fill="none" stroke="#f2600c" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>` +
+    if (showNet) svg += `<text class="news-pane-label" x="${W - padR + 8}" y="12">PRICE</text>`;
+    svg += `<path d="${newsSmoothPath(P)}L${P[P.length - 1][0].toFixed(1)} ${bot}L${P[0][0].toFixed(1)} ${bot}Z" fill="url(#newsPriceFill)"/>`;
+  }
+  let stepD = '';
+  if (showNet){
+    stepD = `M${X(xMin).toFixed(1)} ${zero.toFixed(1)}`;
+    ev.forEach(e => { stepD += `H${X(e.ms).toFixed(1)}V${YN(e.cum).toFixed(1)}`; });
+    stepD += `H${X(xMax).toFixed(1)}`;
+    const area = `${stepD}V${zero.toFixed(1)}Z`;
+    svg += `<g clip-path="url(#newsNetUp)"><path d="${area}" fill="#1f9d61" fill-opacity=".13"/></g><g clip-path="url(#newsNetDown)"><path d="${area}" fill="#e0463c" fill-opacity=".13"/></g>` +
+      `<line x1="${padL}" x2="${W - padR}" y1="${zero.toFixed(1)}" y2="${zero.toFixed(1)}" stroke="rgba(42,36,32,.28)" stroke-dasharray="3 4"/>`;
+  }
+  if (hasPrice){
+    const lastP = P[P.length - 1];
+    svg += `<path d="${newsSmoothPath(P)}" fill="none" stroke="#f2600c" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>` +
       `<circle cx="${lastP[0].toFixed(1)}" cy="${lastP[1].toFixed(1)}" r="9" fill="#f2600c" opacity=".18"/><circle cx="${lastP[0].toFixed(1)}" cy="${lastP[1].toFixed(1)}" r="4.5" fill="#f2600c" stroke="#fff" stroke-width="2"/>`;
   }
   if (showNet){
-    const mx = Math.max(10, ...pts.map(p => Math.abs(p.net)), ...markers.map(m => Math.abs(m.net))) * 1.1;
-    YN = v => zero - v / mx * hN / 2;
-    N = pts.map(p => [X(p.ms), YN(p.net)]);
-    const nl = newsSmoothPath(N);
-    svg += `<text class="news-pane-label" x="${padL}" y="${nt - 9}">NET IMPACT</text>` +
-      `<text class="news-axis" x="${W - padR + 8}" y="${(zero + 3.5).toFixed(1)}">0</text><text class="news-axis" x="${W - padR + 8}" y="${nt + 8}">${newsFmtSigned(mx)}</text><text class="news-axis" x="${W - padR + 8}" y="${nt + hN}">${newsFmtSigned(-mx)}</text>` +
-      `<path d="${nl}L${N[N.length - 1][0].toFixed(1)} ${zero}L${N[0][0].toFixed(1)} ${zero}Z" fill="url(#newsNetFill)"/>` +
-      `<g clip-path="url(#newsNetUp)"><path d="${nl}" fill="none" stroke="#1f9d61" stroke-width="2" stroke-linecap="round"/></g>` +
-      `<g clip-path="url(#newsNetDown)"><path d="${nl}" fill="none" stroke="#e0463c" stroke-width="2" stroke-linecap="round"/></g>` +
-      `<line x1="${padL}" x2="${W - padR}" y1="${zero}" y2="${zero}" stroke="rgba(42,36,32,.22)" stroke-dasharray="2 4"/>`;
+    svg += `<g clip-path="url(#newsNetUp)"><path d="${stepD}" fill="none" stroke="#1f9d61" stroke-width="2.2" stroke-linejoin="round"/></g>` +
+      `<g clip-path="url(#newsNetDown)"><path d="${stepD}" fill="none" stroke="#e0463c" stroke-width="2.2" stroke-linejoin="round"/></g>`;
   }
   const spanDays = (xMax - xMin) / 86400000;
   const tf = spanDays <= 1.05 ? { hour: '2-digit', minute: '2-digit', hour12: false } : spanDays <= 3 ? { day: '2-digit', month: 'short', hour: '2-digit', hour12: false } : spanDays <= 120 ? { day: '2-digit', month: 'short' } : { month: 'short', year: '2-digit' };
@@ -5813,20 +5858,23 @@ function renderNewsChart(){
     const t = xMin + (xMax - xMin) * i / 4;
     svg += `<text class="news-axis" x="${X(t).toFixed(1)}" y="${Ht - 6}" text-anchor="${i === 0 ? 'start' : i === 4 ? 'end' : 'middle'}">${newsFmt(t, tf)}</text>`;
   }
-  svg += `<g class="news-cross" opacity="0"><line y1="${top}" y2="${Ht - 24}" stroke="rgba(42,36,32,.35)" stroke-dasharray="3 4"/>` +
+  svg += `<g class="news-cross" opacity="0"><line y1="${top}" y2="${bot}" stroke="rgba(42,36,32,.35)" stroke-dasharray="3 4"/>` +
     (hasPrice ? '<circle class="c1" r="5" fill="#f2600c" stroke="#fff" stroke-width="2"/>' : '') + (showNet ? '<circle class="c2" r="4.5" stroke="#fff" stroke-width="2"/>' : '') + '</g>';
   if (showNet){
-    // headline dots — a tick smaller than the price dot; a real link, so a click opens the article
-    svg += markers.filter(m => m.direction !== 'NEUTRAL').map(m => {
-      const dot = `<circle class="news-marker" cx="${X(m.ms).toFixed(1)}" cy="${YN(m.net).toFixed(1)}" r="3.8" fill="${m.direction === 'BULLISH' ? '#1f9d61' : '#e0463c'}" stroke="#fff" stroke-width="1.6">` +
-        `<title>${escapeHtml(`${newsFmtTime(m.ms)} · ${m.direction === 'BULLISH' ? '▲' : '▼'} ${newsFmtImpact(m.impact)} · ${m.headline || ''}`)}</title></circle>`;
+    // headline dots on the step, sized by impact; breaking ones get a soft halo. Click opens the article.
+    svg += ev.map(m => {
+      const col = m.direction === 'BULLISH' ? '#1f9d61' : '#e0463c';
+      const cx = X(m.ms).toFixed(1), cy = YN(m.cum).toFixed(1), r = Math.min(9, 3 + (Number(m.impact) || 0) / 18);
+      const halo = m.breaking ? `<circle cx="${cx}" cy="${cy}" r="${(r + 6).toFixed(1)}" fill="${col}" opacity=".22" pointer-events="none"/>` : '';
+      const dot = `${halo}<circle class="news-marker" cx="${cx}" cy="${cy}" r="${r.toFixed(1)}" fill="${col}" stroke="#fff" stroke-width="1.6">` +
+        `<title>${escapeHtml(`${newsFmtTime(m.ms)} · ${m.breaking ? 'BREAKING · ' : ''}${m.direction === 'BULLISH' ? '▲' : '▼'} ${newsFmtImpact(m.impact)} · ${m.headline || ''}`)}</title></circle>`;
       return m.url ? `<a href="${escapeAttr(m.url)}" target="_blank" rel="noopener">${dot}</a>` : dot;
     }).join('');
   }
-  plot.innerHTML = `<svg viewBox="0 0 ${W} ${Ht}" role="img" aria-label="${product} price${showNet ? ' and net impact' : ''}">${svg}</svg><div class="news-tip"></div>`;
+  plot.innerHTML = `<svg viewBox="0 0 ${W} ${Ht}" role="img" aria-label="${product} price${showNet ? ' and news index' : ''}">${svg}</svg><div class="news-tip"></div>`;
   Object.assign(box._zoom, { W, padL, padR });
 
-  // ---- crosshair + tooltip: nearest price bar and nearest net-impact sample to the pointer
+  // ---- crosshair + tooltip: nearest price bar, and the news index at that moment
   const svgEl = plot.querySelector('svg'), tip = plot.querySelector('.news-tip'), cross = svgEl.querySelector('.news-cross');
   const nearest = (arr, x) => { let bi = -1, bd = Infinity; for (let i = 0; i < arr.length; i++){ const d = Math.abs(arr[i][0] - x); if (d < bd){ bd = d; bi = i; } } return bi; };
   svgEl.addEventListener('pointermove', (e) => {
@@ -5834,18 +5882,20 @@ function renderNewsChart(){
     if (!r.width) return;
     const x = (e.clientX - r.left) / r.width * W;
     if (x < padL - 4 || x > W - padR + 4){ cross.setAttribute('opacity', 0); tip.style.opacity = 0; return; }
-    const pi = hasPrice ? nearest(P, x) : -1, ni = showNet ? nearest(N, x) : -1;
-    const cx = pi >= 0 ? P[pi][0] : N[ni][0];
+    const pi = hasPrice ? nearest(P, x) : -1;
+    const cx = pi >= 0 ? P[pi][0] : Math.min(W - padR, Math.max(padL, x));
+    const t = pi >= 0 ? bars[pi].t : xMin + (cx - padL) / ((W - padL - padR) || 1) * (xMax - xMin);
     cross.setAttribute('opacity', 1);
     const ln = cross.querySelector('line'); ln.setAttribute('x1', cx); ln.setAttribute('x2', cx);
-    const lines = [`<div class="t">${newsFmtTime(pi >= 0 ? bars[pi].t : pts[ni].ms)}</div>`];
+    const lines = [`<div class="t">${newsFmtTime(t)}</div>`];
     if (pi >= 0){
       const c1 = cross.querySelector('.c1'); c1.setAttribute('cx', P[pi][0]); c1.setAttribute('cy', P[pi][1]);
       lines.push(`<div class="k"><i style="background:var(--orange)"></i>Price <b>${newsFmtPrice(bars[pi].c)}</b></div>`);
     }
-    if (ni >= 0){
-      const c2 = cross.querySelector('.c2'); c2.setAttribute('cx', N[ni][0]); c2.setAttribute('cy', N[ni][1]); c2.setAttribute('fill', pts[ni].net >= 0 ? '#1f9d61' : '#e0463c');
-      lines.push(`<div class="k"><i style="background:${pts[ni].net >= 0 ? 'var(--bull)' : 'var(--bear)'}"></i>Net impact <b>${newsFmtSigned(pts[ni].net)}</b></div>`);
+    if (showNet){
+      const v = newsCumAt(ev, t);
+      const c2 = cross.querySelector('.c2'); c2.setAttribute('cx', cx); c2.setAttribute('cy', YN(v)); c2.setAttribute('fill', v >= 0 ? '#1f9d61' : '#e0463c');
+      lines.push(`<div class="k"><i style="background:${v >= 0 ? 'var(--bull)' : 'var(--bear)'}"></i>News index <b>${v ? newsFmtSigned(v) : '0'}</b></div>`);
     }
     tip.innerHTML = lines.join('');
     tip.style.left = Math.min(Math.max(cx / W * 100, 9), 88) + '%';
