@@ -160,6 +160,12 @@ GOOGLE_NEWS_QUERIES = [
     # 5. Price-move safety net: market recaps that name the reason for a sharp futures move
     ('"soymeal futures" OR "soybean meal futures" OR "corn futures" OR "wheat futures" OR "soybean futures" fall OR slide OR drop OR tumble OR jump OR rally OR surge',
                                                                                          'en-US', 'US', 'US:en'),
+    # 6. 2026-11-11, Mete: Sea of Azov / Kerch Strait passage (≈25% of Russian grain exports) — an Azov
+    # opening story never reached CTE; Mete entered it by hand via Trader News.
+    ('"Sea of Azov" OR "Azov Sea" OR "Kerch Strait" OR "Kerch bridge" grain OR wheat OR ships OR vessels OR port OR shipping OR closed OR reopened',
+                                                                                         'en-US', 'US', 'US:en'),
+    ('"Азовское море" OR "Керченский пролив" OR "Азовском море" OR "Керченском проливе" зерно OR суда OR судоходство OR порт',
+                                                                                         'ru', 'RU', 'RU:ru'),
     ('пшеница экспорт OR урожай зерна OR "зерновой коридор" OR ИКАР',                   'ru', 'RU', 'RU:ru'),
     ('соя OR "соевый шрот" OR кукуруза экспорт OR порт Новороссийск зерно',             'ru', 'RU', 'RU:ru'),
     ('експорт зерна OR пшениця OR кукурудза OR "зерновий коридор" OR порт Одеса',      'uk', 'UA', 'UA:uk'),
@@ -673,6 +679,7 @@ same order as the input, nothing else. Fields:
                  fundamentally about how much WHEAT (or CORN, if the headline is specifically about
                  corn cargoes) reaches the world market from Russia/Ukraine — classify it as WHEAT (or
                  CORN), a supply-volume story, not a freight/transit-cost one.
+                 The same applies to the SEA OF AZOV / KERCH STRAIT (see the direction rule below): WHEAT, not SKIP.
                  POLITICS IN MAJOR ORIGINS (2026-10-26, Mete): an election result, change of government,
                  export-tax / retenciones decision or currency shock in BRAZIL or ARGENTINA is NOT "general
                  macro" — it drives farmer selling and export flows. Classify it: Brazil → SBM (CORN only
@@ -708,6 +715,13 @@ same order as the input, nothing else. Fields:
                  being suspended, blocked, mined, or a vessel/port/silo tied to it being attacked is
                  BULLISH — less grain reaching the market. Do not default this to FREIGHT-style "higher
                  cost = bullish" reasoning; it is a supply-volume story like any other WHEAT/CORN item.
+                 SEA OF AZOV / KERCH STRAIT (2026-11-11, Mete — an Azov story came in at 4.5 bearish, the desk
+                 scored it 8): the Azov ports (Rostov, Azov, Yeysk, Taganrog) and the Kerch Strait carry roughly a
+                 quarter of Russia's grain exports, so passage through them is a WHEAT supply-volume story (CORN only
+                 when the headline is specifically about corn). Passage opened / restored / resumed = BEARISH; passage
+                 closed, suspended, restricted, or a port/vessel/the Kerch bridge area attacked = BULLISH. Impact
+                 70-85 (high); the FIRST report of an opening, closure or attack is breaking=true; follow-ups,
+                 analysis and recaps of it are breaking=false.
                  SYMMETRY RULE: crop/yield/rating headlines are two-sided. A record or rising crop/yield/
                  rating is BEARISH (more supply) — and its mirror image, a FALLING crop rating, a yield cut,
                  a downgraded harvest estimate, or a lower-than-expected production number, is BULLISH (less
