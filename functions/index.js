@@ -52,6 +52,12 @@ classify_manual_news with:
                         Canada, India, China, Egypt, Turkey, Pakistan and the Black Sea region. Still return your
                         best-guess fields even when product is SKIP — the desk may override product
                         by hand and keep the rest.
+                 2026-11-11, Mete: the same desk rules as the automatic collector apply here —
+                 BLACK SEA GRAIN CORRIDOR / export-lane stories and SEA OF AZOV / KERCH STRAIT passage are
+                 WHEAT (CORN only when specifically about corn), not SKIP. Brazil / Argentina politics
+                 (election result, export taxes / retenciones, currency shock) → SBM (CORN when specifically
+                 about corn). Russia-Ukraine peace talks (any wording) → WHEAT. US-China trade deals or
+                 tariffs touching agriculture → SBM.
   "direction"  : "BULLISH" | "BEARISH" | "NEUTRAL" — a PRICE ARGUMENT, not sentiment. BULLISH means
                  the message argues the CFR cost of that product UP (tighter supply, stronger
                  demand, higher freight). A record crop / rising yield / rising crush is BEARISH
@@ -59,6 +65,22 @@ classify_manual_news with:
                  BULLISH (less supply). An export ban is BULLISH. A market technical-levels note
                  with no fresh fundamental fact should reflect whatever bias the trader's own note
                  argues for (e.g. "still finds resistance at X, room to run" implied bullish tilt).
+                 Same rules as the automatic collector (2026-11-11, Mete):
+                 BLACK SEA CORRIDOR: opened / extended / safe-passage deal = BEARISH (more grain reaches the
+                 market); suspended / blocked / mined / a vessel, port or silo attacked = BULLISH.
+                 SEA OF AZOV / KERCH STRAIT (2026-11-11, Mete — an Azov story came in at 4.5 bearish, the desk
+                 scored it 8): the Azov ports (Rostov, Azov, Yeysk, Taganrog) and the Kerch Strait carry roughly a
+                 quarter of Russia's grain exports, so passage through them is a WHEAT supply-volume story (CORN only
+                 when the headline is specifically about corn). Passage opened / restored / resumed = BEARISH; passage
+                 closed, suspended, restricted, or a port/vessel/the Kerch bridge area attacked = BULLISH. Impact
+                 70-85 (high); the FIRST report of an opening, closure or attack is breaking=true; follow-ups,
+                 analysis and recaps of it are breaking=false.
+                 PEACE TALKS Russia-Ukraine: progress = BEARISH wheat, breakdown = BULLISH.
+                 BRAZIL / ARGENTINA politics: weaker BRL/ARS, lower export taxes, pro-export/pro-farmer result =
+                 BEARISH; stronger currency, higher export taxes, export curbs = BULLISH; if the message states
+                 the market reaction, follow it.
+                 CRUSH reports (NOPA etc.): crush below estimates / falling = BULLISH SBM (less meal produced).
+                 Multi-component reports (WASDE, CONAB): net production/yield and ending stocks into one direction.
   "impact"     : 0-100 integer, how much this could move the product's WORLD price. Routine
                  updates / technical-level notes are 15-35. Weather/crop shocks, policy changes,
                  big tenders, port disruptions are 55-90. Reserve 90+ for market-defining events.
@@ -71,6 +93,11 @@ classify_manual_news with:
   "breaking"   : true ONLY if this reports a discrete NEW incident/decision/data point that just
                  happened. false for analysis, recaps, technical commentary, or restating an
                  already-ongoing situation, even with dramatic wording.
+                 The announced RESULT of a scheduled political event in a country that counts (election,
+                 export-tax or trade-deal decision, ceasefire / peace-talks date or venue fixed) IS breaking
+                 on the day it is announced: impact 60-80 if it surprised the market, 45-60 if expected.
+                 The first report of an Azov / Kerch or Black Sea corridor opening, closure or attack is
+                 breaking (see above).
   "eventType"  : one of "WEATHER","SUPPLY DEMAND","TRADE FLOW","POLICY","GEOPOLITICS","LOGISTICS","PRICE","DISEASE","ENERGY","FX","OTHER"
   "summary"    : ONE English sentence (max 28 words) stating what the message says AND why it
                  matters for the importer's cost.
