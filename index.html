@@ -5776,7 +5776,7 @@ function renderNewsChart(){
   head.appendChild(left);
   const legend = document.createElement('div');
   legend.className = 'news-legend';
-  legend.innerHTML = `<span><i style="background:var(--orange)"></i>Price</span>` + (priceOnly ? '' : `<span><i style="background:linear-gradient(90deg,var(--bull) 50%,var(--bear) 50%)"></i>News index</span>`);
+  legend.innerHTML = `<span><i style="background:var(--orange)"></i>Price</span>` + (priceOnly ? '' : `<span><i style="background:#2a2420"></i>News index</span>`);
   legend.appendChild(zoomBar());          // + / − (and reset while zoomed) sit with the legend, clear of the lines
   head.appendChild(legend);
   head.appendChild(renderNewsRangeBar());
@@ -5820,7 +5820,7 @@ function renderNewsChart(){
     if (tHi > 0 && YN(tHi) < zero - 14) ticks.push(tHi);
     if (tLo < 0 && YN(tLo) > zero + 14) ticks.push(tLo);
     ticks.forEach(v => { svg += `<text class="news-axis" x="${padL - 7}" y="${(YN(v) + 3.5).toFixed(1)}" text-anchor="end">${v === 0 ? '0' : newsFmtSigned(v)}</text>`; });
-    svg += `<text class="news-pane-label" x="${padL - 7}" y="12" text-anchor="end">INDEX</text>`;
+    svg += `<text class="news-pane-label" x="${padL - 7}" y="12" text-anchor="end" style="fill:#2a2420">INDEX</text>`;
   } else svg += '</defs>';
   if (hasPrice){
     let lo = Math.min(...bars.map(b => b.c)), hi = Math.max(...bars.map(b => b.c));
@@ -5831,7 +5831,7 @@ function renderNewsChart(){
       const v = lo + (hi - lo) * i / 3, y = Yp(v);
       svg += `<line x1="${padL}" x2="${W - padR}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(42,36,32,.07)"/><text class="news-axis" x="${W - padR + 8}" y="${(y + 3.5).toFixed(1)}">${newsFmtPrice(v)}</text>`;
     }
-    if (showNet) svg += `<text class="news-pane-label" x="${W - padR + 8}" y="12">PRICE</text>`;
+    if (showNet) svg += `<text class="news-pane-label" x="${W - padR + 8}" y="12" style="fill:#f2600c">PRICE</text>`;
     svg += `<path d="${newsSmoothPath(P)}L${P[P.length - 1][0].toFixed(1)} ${bot}L${P[0][0].toFixed(1)} ${bot}Z" fill="url(#newsPriceFill)"/>`;
   }
   let stepD = '';
@@ -5849,8 +5849,8 @@ function renderNewsChart(){
       `<circle cx="${lastP[0].toFixed(1)}" cy="${lastP[1].toFixed(1)}" r="9" fill="#f2600c" opacity=".18"/><circle cx="${lastP[0].toFixed(1)}" cy="${lastP[1].toFixed(1)}" r="4.5" fill="#f2600c" stroke="#fff" stroke-width="2"/>`;
   }
   if (showNet){
-    svg += `<g clip-path="url(#newsNetUp)"><path d="${stepD}" fill="none" stroke="#1f9d61" stroke-width="2.2" stroke-linejoin="round"/></g>` +
-      `<g clip-path="url(#newsNetDown)"><path d="${stepD}" fill="none" stroke="#e0463c" stroke-width="2.2" stroke-linejoin="round"/></g>`;
+    // 2026-11-12 (Mete): the index line itself is neutral black — green/red only in the fill and the dots.
+    svg += `<path d="${stepD}" fill="none" stroke="#2a2420" stroke-width="2" stroke-linejoin="round"/>`;
   }
   const spanDays = (xMax - xMin) / 86400000;
   const tf = spanDays <= 1.05 ? { hour: '2-digit', minute: '2-digit', hour12: false } : spanDays <= 3 ? { day: '2-digit', month: 'short', hour: '2-digit', hour12: false } : spanDays <= 120 ? { day: '2-digit', month: 'short' } : { month: 'short', year: '2-digit' };
@@ -5894,8 +5894,8 @@ function renderNewsChart(){
     }
     if (showNet){
       const v = newsCumAt(ev, t);
-      const c2 = cross.querySelector('.c2'); c2.setAttribute('cx', cx); c2.setAttribute('cy', YN(v)); c2.setAttribute('fill', v >= 0 ? '#1f9d61' : '#e0463c');
-      lines.push(`<div class="k"><i style="background:${v >= 0 ? 'var(--bull)' : 'var(--bear)'}"></i>News index <b>${v ? newsFmtSigned(v) : '0'}</b></div>`);
+      const c2 = cross.querySelector('.c2'); c2.setAttribute('cx', cx); c2.setAttribute('cy', YN(v)); c2.setAttribute('fill', '#2a2420');
+      lines.push(`<div class="k"><i style="background:#2a2420"></i>News index <b>${v ? newsFmtSigned(v) : '0'}</b></div>`);
     }
     tip.innerHTML = lines.join('');
     tip.style.left = Math.min(Math.max(cx / W * 100, 9), 88) + '%';
